@@ -1,0 +1,9 @@
+{
+  "extends": "@wagon/config/tsconfig/nestjs",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "outDir": "dist"
+  },
+  "include": ["src", "prisma"],
+  "exclude": ["node_modules", "dist", "test"]
+}

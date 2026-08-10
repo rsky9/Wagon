@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: wagon-postgres
+    environment:
+      POSTGRES_USER: wagon
+      POSTGRES_PASSWORD: wagon_dev
+      POSTGRES_DB: wagon
+    ports:
+      - '5440:5432'
+    volumes:
+      - wagon_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U wagon -d wagon']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: wagon-redis
+    ports:
+      - '6380:6379'
+    volumes:
+      - wagon_redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: wagon-minio
+    command: server /data --console-address ':9001'
+    environment:
+      MINIO_ROOT_USER: wagon
+      MINIO_ROOT_PASSWORD: wagon_dev_secret
+    ports:
+      - '9010:9000'
+      - '9011:9001'
+    volumes:
+      - wagon_minio_data:/data
+
+volumes:
+  wagon_pg_data:
+  wagon_redis_data:
+  wagon_minio_data:

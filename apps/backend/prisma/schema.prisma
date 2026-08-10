@@ -1,0 +1,645 @@
+// Wagon V2 — PostgreSQL schema (fresh, no legacy migration)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  supplier
+  transporter
+  driver
+  admin
+}
+
+enum Capability {
+  supplier
+  transporter
+  driver
+}
+
+enum TruckType {
+  open
+  container
+  trailer
+}
+
+enum LoadStatus {
+  posted
+  paused
+  interested
+  accepted
+  in_transit
+  delivered
+  completed
+  cancelled
+}
+
+enum TripStatus {
+  accepted
+  in_transit
+  delivered
+  cancelled
+}
+
+enum TripStage {
+  accepted
+  enroute_pickup
+  arrived_pickup
+  loading
+  loaded
+  enroute_drop
+  arrived_drop
+  unloading
+  delivered
+}
+
+enum PaymentType {
+  escrow
+  payout
+  refund
+}
+
+enum PaymentMethod {
+  mock
+  upi
+}
+
+enum PaymentStatus {
+  pending
+  succeeded
+  failed
+}
+
+enum KycStatus {
+  not_started
+  pending
+  approved
+  rejected
+}
+
+enum KycTier {
+  basic
+  kyc_lite
+  kyc_full
+}
+
+enum DocumentKind {
+  pan
+  aadhar
+  rc
+  license
+  bank
+  selfie
+  company
+}
+
+enum CommercialModel {
+  fixed_rate
+  open_bidding
+  invite
+}
+
+model User {
+  id           String      @id @default(cuid())
+  role         UserRole
+  capabilities Capability[] @default([transporter])
+  mobile       String      @unique
+  lang         String      @default("en")
+  name         String?
+  otpHash      String?
+  tier         KycTier     @default(basic)
+  kycStatus    KycStatus   @default(not_started)
+  rating       Float?
+  tripsCount   Int         @default(0)
+  verified     Boolean     @default(false)
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  supplier     Supplier?
+  transporter  Transporter?
+  kycDocuments KycDocument[]
+  notifications Notification[]
+  fcmTokens    FcmToken[]
+  tickets      SupportTicket[]
+  notifPrefs   NotificationPreference?
+  favorites    Favorite[]
+  savedSearches SavedSearch[]
+  messages     Message[]
+  @@index([role])
+}
+
+model Supplier {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName         String?
+  gst                 String?
+  pan                 String?
+  cin                 String?
+  tan                 String?
+  billingAddress      String?
+  pickupLocations     String[]
+  frequentDestinations String[]
+  preferredPayment    String?
+  attachments         String[]
+  bankAccount         String?
+  ifsc                String?
+  acctHolder          String?
+  onboarded           Boolean  @default(false)
+  loads               Load[]
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model Transporter {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName  String?
+  ownerName    String?
+  pan          String?
+  aadhar       String?
+  selfieKey    String?
+  fleetSize    Int?
+  bankAccount  String?
+  ifsc         String?
+  acctHolder   String?
+  docImageKey  String?
+  insuranceKey String?
+  permitKey    String?
+  fitnessKey   String?
+  pollutionKey String?
+  onboarded    Boolean  @default(false)
+  vehicles     Vehicle[]
+  drivers      Driver[]
+  trucks       Truck[]
+  laneAlerts   LaneAlert[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model KycDocument {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      DocumentKind
+  storageKey String
+  mimeType  String
+  size      Int
+  status    KycStatus    @default(pending)
+  adminNote String?
+  verifiedAt DateTime?
+  createdAt DateTime     @default(now())
+  @@index([userId, kind])
+}
+
+model Vehicle {
+  id              String   @id @default(cuid())
+  transporterId   String
+  transporter     Transporter @relation(fields: [transporterId], references: [id], onDelete: Cascade)
+  rcNumber        String
+  rcVerified      Boolean  @default(false)
+  insuranceUpto   DateTime?
+  permit          String?
+  status          KycStatus @default(pending)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([transporterId])
+}
+
+model Driver {
+  id              String   @id @default(cuid())
+  transporterId   String
+  transporter     Transporter @relation(fields: [transporterId], references: [id], onDelete: Cascade)
+  name            String
+  mobile          String
+  licenseKey      String?
+  licenseVerified Boolean  @default(false)
+  status          Boolean  @default(true)
+  trucks          Truck[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([transporterId])
+}
+
+model Truck {
+  id           String    @id @default(cuid())
+  transporterId String
+  transporter  Transporter @relation(fields: [transporterId], references: [id], onDelete: Cascade)
+  truckNo      String
+  type         TruckType
+  modelId      String
+  capacityId   String?
+  driverId     String?
+  driver       Driver?   @relation(fields: [driverId], references: [id])
+  origin       String?
+  lat          Float?
+  lng          Float?
+  gpsLogin     String?
+  attachments  String[]
+  activeStatus Boolean   @default(true)
+  insuranceUpto DateTime?
+  permitUpto    DateTime?
+  fitnessUpto   DateTime?
+  pollutionUpto DateTime?
+  lastServiceAt DateTime?
+  nextServiceKm Float?
+  odometerKm    Float?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  @@index([transporterId])
+}
+
+model TruckModel {
+  id         String      @id @default(cuid())
+  type       TruckType
+  model      String
+  capacities Float[]
+  status     Boolean     @default(true)
+  rateCards  RateCard[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  @@unique([type, model])
+}
+
+model Material {
+  id        String   @id @default(cuid())
+  name      String
+  imageKey  String?
+  status    Boolean  @default(true)
+  loads     Load[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Load {
+  id          String     @id @default(cuid())
+  supplierId  String
+  supplier    Supplier   @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  pickupAddr  String
+  dropAddr    String
+  haltAddr    String?
+  pickupLat   Float
+  pickupLng   Float
+  dropLat     Float
+  dropLng     Float
+  haltLat     Float?
+  haltLng     Float?
+  date        DateTime
+  pickupDate  DateTime?
+  dropDate    DateTime?
+  truckType   TruckType
+  modelId     String
+  weight      Float
+  distanceKm  Float
+  materialId  String
+  material    Material @relation(fields: [materialId], references: [id])
+  bodyType    String?
+  description String?
+  loadingReq  String?
+  unloadingReq String?
+  specialReq  String?
+  documents   String[]
+  advanceAmount Float?
+  contactName String?
+  contactPhone String?
+  geofenceRadius Float?
+  noOfTrucks  Int        @default(1)
+  fareEstimate Float
+  payLater    Boolean    @default(false)
+  ewbNumber   String?
+  cancelReason String?
+  status      LoadStatus @default(posted)
+  // Commercial model + terms
+  commercialModel CommercialModel @default(fixed_rate)
+  referenceRate   Float?
+  biddingDeadline DateTime?
+  advancePct      Float?
+  paymentTerms    String?
+  extraCharges    String?
+  // Shortlist / negotiated selection
+  shortlistedTransporters String[]
+  bids Bid[]
+  negotiations NegotiationOffer[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  quotes      Quote[]
+  favorites   Favorite[]
+  trips       Trip[]
+  @@index([truckType, modelId])
+  @@index([date])
+  @@index([supplierId])
+}
+
+model Report {
+  id         String   @id @default(cuid())
+  reporterId String
+  reportedId String
+  tripId     String?
+  reason     String
+  status     String   @default("open")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@index([reportedId])
+}
+
+model BlockedUser {
+  id         String   @id @default(cuid())
+  blockerId  String
+  blockedId  String
+  createdAt  DateTime @default(now())
+  @@unique([blockerId, blockedId])
+}
+
+model Quote {
+  id             String     @id @default(cuid())
+  loadId         String
+  load           Load       @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  transporterId  String
+  amount         Float
+  status         String     @default("pending")
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  @@index([loadId])
+}
+
+// Structured bid: not just a price — truck, driver, pickup, advance, balance, validity.
+model Bid {
+  id              String   @id @default(cuid())
+  loadId          String
+  load            Load     @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  transporterId   String
+  truckId         String?
+  driverId        String?
+  amount          Float
+  advanceAmount   Float?
+  balanceAmount   Float?
+  pickupBy        String?
+  etaHours        Int?
+  validityHours   Int      @default(24)
+  status          String   @default("pending") // pending | shortlisted | rejected | accepted | withdrawn
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([loadId])
+  @@index([transporterId])
+}
+
+// Negotiation timeline: structured counteroffers with validity + optional conditions.
+model NegotiationOffer {
+  id           String   @id @default(cuid())
+  loadId       String
+  load         Load     @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  bidId        String
+  fromRole     String   // supplier | transporter
+  amount       Float
+  conditions   String?
+  validityHours Int     @default(24)
+  status       String   @default("offered") // offered | accepted | rejected | expired
+  createdAt    DateTime @default(now())
+  @@index([loadId])
+}
+
+model Trip {
+  id           String     @id @default(cuid())
+  loadId       String
+  load         Load       @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  transporterId String
+  driverId     String?
+  status       TripStatus @default(accepted)
+  stage        TripStage  @default(accepted)
+  podUrl       String?
+  startedAt    DateTime?
+  deliveredAt  DateTime?
+  rating       Int?
+  review       String?
+  pickupOtp    String?
+  pickupOtpAt  DateTime?
+  pickupOtpVerifiedAt DateTime?
+  deliveryOtp  String?
+  deliveryOtpAt DateTime?
+  deliveryOtpVerifiedAt DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  payments     Payment[]
+  disputes     Dispute[]
+  locations    TripLocation[]
+  booking      BookingSnapshot?
+  exceptions   TripException[]
+  messages     Message[]
+  supplierRating Int?
+  supplierReview String?
+  transporterRatedAt DateTime?
+  supplierRatedAt DateTime?
+  @@index([loadId])
+  @@index([transporterId])
+}
+
+// Real-world logistics exceptions: breakdown, accident, traffic, delay, etc.
+model TripException {
+  id        String   @id @default(cuid())
+  tripId    String
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  reporterId String
+  kind      String   // breakdown | accident | traffic | delay | destination_problem | goods_damage | other
+  title     String
+  notes     String?
+  photos    String[]
+  status    String   @default("open") // open | resolved
+  createdAt DateTime @default(now())
+  resolvedAt DateTime?
+  @@index([tripId])
+}
+
+// Saved / favorite loads for transporters.
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  loadId    String
+  load      Load     @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, loadId])
+  @@index([userId])
+}
+
+// Saved searches for transporters.
+model SavedSearch {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  query     Json?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@index([userId])
+}
+
+// Trip-contextual chat message (persistent — chat is supplementary to structured terms).
+model Message {
+  id        String   @id @default(cuid())
+  tripId    String
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime @default(now())
+  @@index([tripId])
+}
+
+// Immutable commercial snapshot — the authoritative source of truth for a booking.
+model BookingSnapshot {
+  id              String   @id @default(cuid())
+  tripId          String   @unique
+  trip            Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  rate            Float
+  advanceAmount   Float?
+  balanceAmount   Float?
+  paymentTerms    String?
+  conditions      String?
+  cancellationTerms String?
+  truckId         String?
+  driverId        String?
+  pickupWindow    String?
+  deliveryWindow  String?
+  supplierConfirmed Boolean @default(false)
+  transporterConfirmed Boolean @default(false)
+  confirmedAt     DateTime?
+  createdAt       DateTime @default(now())
+}
+
+model TripLocation {
+  id        String   @id @default(cuid())
+  tripId    String
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  lat       Float
+  lng       Float
+  speedKmh  Float?
+  recordedAt DateTime @default(now())
+  @@index([tripId, recordedAt])
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  tripId          String
+  trip            Trip          @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  type            PaymentType
+  amount          Float
+  gstAmount       Float?
+  tdsAmount       Float?
+  method          PaymentMethod @default(mock)
+  providerRef     String?
+  idempotencyKey  String        @unique
+  status          PaymentStatus @default(pending)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  @@index([tripId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String
+  isRead    Boolean  @default(false)
+  data      Json?
+  createdAt DateTime @default(now())
+  @@index([userId, isRead])
+}
+
+model FcmToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String
+  deviceId  String?
+  platform  String   @default("android")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([userId, token])
+}
+
+model LaneAlert {
+  id            String    @id @default(cuid())
+  transporterId String
+  transporter   Transporter @relation(fields: [transporterId], references: [id], onDelete: Cascade)
+  fromLane      String
+  truckType     String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  @@index([transporterId])
+}
+
+model RateCard {
+  id         String      @id @default(cuid())
+  modelId    String
+  model      TruckModel  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  weight     Float?
+  pricePerKm Float
+  status     Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+model Dispute {
+  id           String   @id @default(cuid())
+  tripId       String
+  trip         Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  raisedBy     String
+  subject      String
+  evidenceKeys String[]
+  resolution   String?
+  status       String   @default("open")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@index([tripId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String
+  action    String
+  resource  String
+  before    Json?
+  after     Json?
+  ip        String?
+  createdAt DateTime @default(now())
+  @@index([actorId])
+}
+
+model SupportTicket {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject    String
+  category   String   @default("general")
+  message    String
+  status     String   @default("open")
+  resolution String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@index([userId])
+}
+
+model NotificationPreference {
+  id          String  @id @default(cuid())
+  userId      String  @unique
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  loadAlerts  Boolean @default(true)
+  booking     Boolean @default(true)
+  trip        Boolean @default(true)
+  payment     Boolean @default(true)
+  kyc         Boolean @default(true)
+  docExpiry   Boolean @default(true)
+  promo       Boolean @default(false)
+  updatedAt   DateTime @updatedAt
+}
