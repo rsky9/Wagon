@@ -25,6 +25,11 @@ export class RatingsController {
     return this.ratings.transporterRating(userId)
   }
 
+  @Get('supplier/:userId')
+  supplier(@Param('userId') userId: string) {
+    return this.ratings.supplierRating(userId)
+  }
+
   @Get('transporter/:userId/reviews')
   reviews(@Param('userId') userId: string) {
     return this.ratings.reviewsForTransporter(userId)

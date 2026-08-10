@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { NotificationsService } from '../notifications/notifications.service'
+import { RatingsService } from '../ratings/ratings.service'
 import type { User } from '@prisma/client'
 
 export interface SubmitBidInput {
@@ -20,6 +21,7 @@ export class BiddingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly ratings: RatingsService,
   ) {}
 
   private async supplierFor(user: User) {
@@ -425,7 +427,7 @@ export class BiddingService {
   /** Transporter rates the supplier after delivery. */
   async rateSupplier(tripId: string, score: number, review: string | undefined, user: User) {
     if (!score || score < 1 || score > 5) throw new BadRequestException('Score must be 1-5')
-    const trip = await this.prisma.trip.findUnique({ where: { id: tripId } })
+    const trip = await this.prisma.trip.findUnique({ where: { id: tripId }, include: { load: true } })
     if (!trip) throw new NotFoundException('Trip not found')
     const transporter = await this.transporterFor(user)
     if (!transporter || trip.transporterId !== transporter.id) throw new BadRequestException('Not your trip')
@@ -435,6 +437,7 @@ export class BiddingService {
       where: { id: tripId },
       data: { supplierRating: score, supplierReview: review?.trim() || null, supplierRatedAt: new Date() },
     })
+    await this.ratings.recomputeSupplierRating(trip.load.supplierId)
     return { trip: updated }
   }
 

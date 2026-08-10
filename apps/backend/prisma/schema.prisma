@@ -115,6 +115,7 @@ model User {
   tier         KycTier     @default(basic)
   kycStatus    KycStatus   @default(not_started)
   rating       Float?
+  supplierRating Float?
   tripsCount   Int         @default(0)
   verified     Boolean     @default(false)
   supplierVerified  Boolean @default(false)

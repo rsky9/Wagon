@@ -8,6 +8,10 @@ allowBuilds:
   protobufjs: set this to true or false
   unrs-resolver: set this to true or false
 
+minimumReleaseAgeExclude:
+  - expo-constants@57.0.10
+  - expo-notifications@57.0.10
+
 onlyBuiltDependencies:
   - "@nestjs/core"
   - "@prisma/client"

@@ -69,6 +69,22 @@ export class RatingsService {
     return { rating: Math.round(avg * 10) / 10, count: trips.length }
   }
 
+  /** Supplier-side reputation: average of transporter ratings received on shipped loads. */
+  async supplierRating(userId: string) {
+    const supplier = await this.prisma.supplier.findUnique({ where: { userId } })
+    if (!supplier) {
+      throw new NotFoundException('Supplier not found')
+    }
+    const trips = await this.prisma.trip.findMany({
+      where: { load: { supplierId: supplier.id }, supplierRating: { not: null } },
+    })
+    if (trips.length === 0) {
+      return { rating: null, count: 0 }
+    }
+    const avg = trips.reduce((s, t) => s + (t.supplierRating ?? 0), 0) / trips.length
+    return { rating: Math.round(avg * 10) / 10, count: trips.length }
+  }
+
   private async recomputeTransporterRating(transporterId: string) {
     const trips = await this.prisma.trip.findMany({
       where: { transporterId, rating: { not: null } },
@@ -82,5 +98,19 @@ export class RatingsService {
         data: { rating: Math.round(avg * 10) / 10 },
       })
     }
+  }
+
+  /** Recompute a user's supplier-side reputation after a new transporter rating. */
+  async recomputeSupplierRating(supplierId: string) {
+    const trips = await this.prisma.trip.findMany({
+      where: { load: { supplierId }, supplierRating: { not: null } },
+    })
+    const supplier = await this.prisma.supplier.findUnique({ where: { id: supplierId } })
+    if (!supplier) return
+    const avg = trips.length ? trips.reduce((s, t) => s + (t.supplierRating ?? 0), 0) / trips.length : null
+    await this.prisma.user.update({
+      where: { id: supplier.userId },
+      data: { supplierRating: avg === null ? null : Math.round(avg * 10) / 10 },
+    })
   }
 }

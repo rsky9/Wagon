@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { setAccessToken } from './config'
 import { api } from './config'
+import { registerForPushNotifications } from './push'
 
 export interface Session {
   accessToken: string
@@ -97,6 +98,7 @@ export const authActions = {
     try {
       const res = await api.post<Session>('/auth/verify', { mobile, code })
       persist(res)
+      void registerForPushNotifications()
     } catch (e) {
       setState({ error: e instanceof Error ? e.message : 'Invalid OTP' })
     } finally {
