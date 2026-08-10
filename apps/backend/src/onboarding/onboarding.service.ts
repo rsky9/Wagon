@@ -8,7 +8,9 @@ export class OnboardingService {
 
   /** Save transporter onboarding data. */
   async completeTransporter(input: TransporterOnboarding, user: User) {
-    if (user.role !== 'transporter') throw new BadRequestException('Transporter onboarding only')
+    if (user.role !== 'transporter' && !(user.capabilities?.includes('transporter') as boolean)) {
+      throw new BadRequestException('Transporter onboarding only')
+    }
     const existing = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
     const transporter = existing
       ? await this.prisma.transporter.update({
@@ -52,7 +54,9 @@ export class OnboardingService {
 
   /** Save supplier onboarding data. */
   async completeSupplier(input: SupplierOnboarding, user: User) {
-    if (user.role !== 'supplier') throw new BadRequestException('Supplier onboarding only')
+    if (user.role !== 'supplier' && !(user.capabilities?.includes('supplier') as boolean)) {
+      throw new BadRequestException('Supplier onboarding only')
+    }
     const existing = await this.prisma.supplier.findUnique({ where: { userId: user.id } })
     const supplier = existing
       ? await this.prisma.supplier.update({

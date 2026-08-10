@@ -13,7 +13,15 @@ interface Props {
   onSelect: (capabilities: string[]) => void
 }
 
-const OPTIONS: Array<{ key: string; icon: string; title: string; sub: string; caps: string[] }> = [
+const OPTIONS: Array<{ key: string; icon: string; title: string; sub: string; caps: string[]; recommended?: boolean }> = [
+  {
+    key: 'both',
+    icon: '🔁',
+    title: 'Do both',
+    sub: 'Move your goods and haul others’ loads — one account',
+    caps: ['supplier', 'transporter'],
+    recommended: true,
+  },
   {
     key: 'supplier',
     icon: '📦',
@@ -27,13 +35,6 @@ const OPTIONS: Array<{ key: string; icon: string; title: string; sub: string; ca
     title: 'Find loads',
     sub: 'Get trips for your trucks & drivers, earn',
     caps: ['transporter'],
-  },
-  {
-    key: 'both',
-    icon: '🔁',
-    title: 'Do both',
-    sub: 'Ship your goods and haul others’ loads in one account',
-    caps: ['supplier', 'transporter'],
   },
   {
     key: 'driver',
@@ -72,7 +73,14 @@ export function CapabilitySelection({ onSelect }: Props) {
                   <Text style={styles.icon}>{o.icon}</Text>
                 </View>
                 <View style={styles.cardBody}>
-                  <Text style={styles.cardTitle}>{o.title}</Text>
+                  <View style={styles.cardTitleRow}>
+                    <Text style={styles.cardTitle}>{o.title}</Text>
+                    {o.recommended && (
+                      <View style={styles.recoBadge}>
+                        <Text style={styles.recoText}>Recommended</Text>
+                      </View>
+                    )}
+                  </View>
                   <Text style={styles.cardSub}>{o.sub}</Text>
                 </View>
               </Pressable>
@@ -128,7 +136,10 @@ const styles = StyleSheet.create({
   iconBox: { width: 48, height: 48, borderRadius: 16, backgroundColor: 'rgba(249,115,22,0.15)', alignItems: 'center', justifyContent: 'center' },
   icon: { fontSize: 26 },
   cardBody: { flex: 1 },
+  cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   cardTitle: { color: '#fff', fontSize: 19, fontWeight: '800' },
+  recoBadge: { backgroundColor: 'rgba(249,115,22,0.25)', borderRadius: radius.full, paddingHorizontal: spacing.sm, paddingVertical: 2 },
+  recoText: { color: '#FDBA74', fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   cardSub: { color: 'rgba(255,255,255,0.6)', fontSize: 13, marginTop: 3, lineHeight: 19 },
   footer: { padding: spacing.xl, gap: spacing.md },
   note: { color: 'rgba(255,255,255,0.4)', fontSize: 13, textAlign: 'center' },

@@ -57,6 +57,15 @@ export class BiddingService {
     const transporter = await this.transporterFor(user)
     if (!transporter) throw new BadRequestException('Complete transporter onboarding first')
 
+    // Self-deal guard: a user with both capabilities must never haul their own load.
+    const owner = await this.prisma.supplier.findUnique({
+      where: { id: load.supplierId },
+      select: { userId: true },
+    })
+    if (owner && owner.userId === user.id) {
+      throw new BadRequestException('You cannot bid on your own load')
+    }
+
     const existing = await this.prisma.bid.findFirst({
       where: { loadId: input.loadId, transporterId: transporter.id, status: { notIn: ['withdrawn'] } },
     })

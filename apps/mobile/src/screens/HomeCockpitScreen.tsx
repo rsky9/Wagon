@@ -3,6 +3,8 @@ import { StyleSheet, Text, View, ScrollView, Pressable, RefreshControl } from 'r
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius, formatINR, shadows } from '@wagon/design'
 import { AppLogo } from '../components/AppLogo'
+import { ModeSwitcher } from '../components/ModeSwitcher'
+import { useActiveMode } from '../mode'
 import { useAuth } from '../auth'
 import { api } from '../config'
 
@@ -53,6 +55,7 @@ interface Props {
 export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, onPostLoad }: Props) {
   const theme = useTheme()
   const { session } = useAuth()
+  const activeMode = useActiveMode()
   const [data, setData] = useState<HomeSummary | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -66,12 +69,24 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
   const caps = session?.profile.capabilities?.length ? session.profile.capabilities : [session?.profile.role ?? '']
   const isSupplier = caps.includes('supplier')
   const isTransporter = caps.includes('transporter')
+  const isBoth = isSupplier && isTransporter
+  // Default surface: active mode (persisted) else supplier if available else transporter.
+  const surface: 'supplier' | 'transporter' =
+    activeMode === 'supplier' ? 'supplier' : activeMode === 'transporter' ? 'transporter' : isSupplier ? 'supplier' : 'transporter'
+  const showSupplier = isSupplier && (surface === 'supplier' || !isBoth)
+  const showTransporter = isTransporter && (surface === 'transporter' || !isBoth)
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top', 'left', 'right']}>
       <View style={[styles.header, { backgroundColor: theme.background }]}>
         <AppLogo height={38} />
       </View>
+
+      {isBoth && (
+        <View style={styles.modeWrap}>
+          <ModeSwitcher />
+        </View>
+      )}
 
       <ScrollView
         contentContainerStyle={styles.body}
@@ -80,7 +95,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
         {loading && <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 40 }}>Loading…</Text>}
 
         {/* Transporter cockpit */}
-        {data?.transporter && (
+        {data?.transporter && showTransporter && (
           <View style={{ gap: spacing.lg }}>
             <View style={[styles.hero, { backgroundColor: '#0B1B2B' }, shadows.lg]}>
               <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '600' }}>Your fleet</Text>
@@ -118,7 +133,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
         )}
 
         {/* Supplier cockpit */}
-        {data?.supplier && (
+        {data?.supplier && showSupplier && (
           <View style={{ gap: spacing.lg }}>
             <View style={[styles.hero, { backgroundColor: theme.primary }, shadows.orange]}>
               <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600' }}>Your shipments</Text>
@@ -156,9 +171,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
       </ScrollView>
     </SafeAreaView>
   )
-}
-
-function SectionTitle({ children }: { children: React.ReactNode }) {
+}function SectionTitle({ children }: { children: React.ReactNode }) {
   const theme = useTheme()
   return <Text style={[styles.sectionTitle, { color: theme.foreground }]}>{children}</Text>
 }
@@ -194,6 +207,7 @@ function LoadCard({ load, onPress, theme }: { load: LoadRef; onPress: () => void
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   header: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.sm },
+  modeWrap: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
   logo: { fontSize: 24, fontWeight: '800', letterSpacing: -0.02 },
   body: { padding: spacing.lg, gap: spacing.lg, paddingBottom: 120 },
   hero: { borderRadius: radius.xl, padding: spacing.xl, gap: spacing.xs },

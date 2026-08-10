@@ -26,6 +26,12 @@ export class TripsService {
       throw new BadRequestException('Transporter profile not found — complete onboarding first')
     }
 
+    // Self-deal guard: a user with both capabilities must never haul their own load.
+    const owner = await this.prisma.supplier.findUnique({ where: { id: load.supplierId }, select: { userId: true } })
+    if (owner && owner.userId === user.id) {
+      throw new BadRequestException('You cannot quote on your own load')
+    }
+
     const existing = await this.prisma.quote.findFirst({
       where: { loadId, transporterId: transporter.id },
     })
@@ -56,6 +62,12 @@ export class TripsService {
     const transporter = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
     if (!transporter) {
       throw new BadRequestException('Transporter profile not found — complete onboarding first')
+    }
+
+    // Self-deal guard: a user with both capabilities must never haul their own load.
+    const owner = await this.prisma.supplier.findUnique({ where: { id: load.supplierId }, select: { userId: true } })
+    if (owner && owner.userId === user.id) {
+      throw new BadRequestException('You cannot accept your own load')
     }
 
     const trip = await this.prisma.$transaction(async (tx) => {
@@ -237,7 +249,24 @@ export class TripsService {
   }
 
   async forUser(user: User) {
-    if (user.role === 'transporter') {
+    const isTransporter = (user.capabilities?.includes('transporter') as boolean) || user.role === 'transporter'
+    const isSupplier = (user.capabilities?.includes('supplier') as boolean) || user.role === 'supplier'
+    if (isTransporter && isSupplier) {
+      const transporter = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
+      const supplier = await this.prisma.supplier.findUnique({ where: { userId: user.id } })
+      const trips = await this.prisma.trip.findMany({
+        where: {
+          OR: [
+            { transporterId: transporter?.id ?? '__none__' },
+            { load: { supplierId: supplier?.id ?? '__none__' } },
+          ],
+        },
+        include: { load: { include: { material: true } } },
+        orderBy: { createdAt: 'desc' },
+      })
+      return { trips }
+    }
+    if (isTransporter) {
       const transporter = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
       const trips = await this.prisma.trip.findMany({
         where: { transporterId: transporter?.id },
@@ -246,7 +275,7 @@ export class TripsService {
       })
       return { trips }
     }
-    if (user.role === 'supplier') {
+    if (isSupplier) {
       const supplier = await this.prisma.supplier.findUnique({ where: { userId: user.id } })
       const trips = await this.prisma.trip.findMany({
         where: { load: { supplierId: supplier?.id } },

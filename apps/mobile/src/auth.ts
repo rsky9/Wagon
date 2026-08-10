@@ -14,6 +14,8 @@ export interface Session {
     name?: string
     tier: string
     verified: boolean
+    supplierVerified?: boolean
+    transporterVerified?: boolean
   }
 }
 

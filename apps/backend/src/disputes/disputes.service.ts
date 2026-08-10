@@ -73,13 +73,15 @@ export class DisputesService {
   private async isParticipant(tripId: string, user: User) {
     const trip = await this.prisma.trip.findUnique({ where: { id: tripId }, include: { load: true } })
     if (!trip) return false
-    if (user.role === 'supplier') {
+    const isSupplier = (user.capabilities?.includes('supplier') as boolean) || user.role === 'supplier'
+    const isTransporter = (user.capabilities?.includes('transporter') as boolean) || user.role === 'transporter'
+    if (isSupplier) {
       const supplier = await this.prisma.supplier.findUnique({ where: { userId: user.id } })
-      return supplier?.id === trip.load.supplierId
+      if (supplier?.id === trip.load.supplierId) return true
     }
-    if (user.role === 'transporter') {
+    if (isTransporter) {
       const transporter = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
-      return transporter?.id === trip.transporterId
+      if (transporter?.id === trip.transporterId) return true
     }
     return false
   }

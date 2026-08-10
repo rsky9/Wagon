@@ -128,16 +128,31 @@ export class PaymentsService {
   }
 
   async passbook(user: User) {
-    const trips = await this.prisma.trip.findMany({
-      where:
-        user.role === 'transporter'
-          ? { transporterId: (await this.transporterId(user)) ?? '' }
-          : user.role === 'supplier'
-            ? { load: { supplierId: (await this.supplierId(user)) ?? '' } }
-            : {},
-      include: { payments: true, load: true },
-      orderBy: { createdAt: 'desc' },
-    })
+    const isTransporter = (user.capabilities?.includes('transporter') as boolean) || user.role === 'transporter'
+    const isSupplier = (user.capabilities?.includes('supplier') as boolean) || user.role === 'supplier'
+    // Both-capability users see trips from both sides.
+    const trips =
+      isTransporter && isSupplier
+        ? await this.prisma.trip.findMany({
+            where: {
+              OR: [
+                { transporterId: (await this.transporterId(user)) ?? '__none__' },
+                { load: { supplierId: (await this.supplierId(user)) ?? '__none__' } },
+              ],
+            },
+            include: { payments: true, load: true },
+            orderBy: { createdAt: 'desc' },
+          })
+        : await this.prisma.trip.findMany({
+            where:
+              isTransporter
+                ? { transporterId: (await this.transporterId(user)) ?? '' }
+                : isSupplier
+                  ? { load: { supplierId: (await this.supplierId(user)) ?? '' } }
+                  : {},
+            include: { payments: true, load: true },
+            orderBy: { createdAt: 'desc' },
+          })
     const entries = trips.flatMap((t) =>
       t.payments.map((p) => ({
         id: p.id,
@@ -184,12 +199,11 @@ export class PaymentsService {
       include: { load: { include: { supplier: true } }, payments: true },
     })
     if (!trip) throw new NotFoundException('Trip not found')
+    const isTransporter = (user.capabilities?.includes('transporter') as boolean) || user.role === 'transporter'
+    const isSupplier = (user.capabilities?.includes('supplier') as boolean) || user.role === 'supplier'
     const isParticipant =
-      user.role === 'transporter'
-        ? trip.transporterId === (await this.transporterId(user))
-        : user.role === 'supplier'
-          ? trip.load.supplierId === (await this.supplierId(user))
-          : false
+      (isTransporter && trip.transporterId === (await this.transporterId(user))) ||
+      (isSupplier && trip.load.supplierId === (await this.supplierId(user)))
     if (!isParticipant) throw new BadRequestException('Not a participant of this trip')
 
     const base = trip.load.fareEstimate

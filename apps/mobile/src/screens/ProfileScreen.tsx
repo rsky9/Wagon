@@ -78,6 +78,13 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
                 <Text style={{ color: theme.success, fontSize: 12, fontWeight: '700' }}>✓ Verified</Text>
               </View>
             )}
+            {!profile?.verified && (profile?.supplierVerified || profile?.transporterVerified) && (
+              <View style={[styles.verified, { backgroundColor: theme.success + '1A' }]}>
+                <Text style={{ color: theme.success, fontSize: 12, fontWeight: '700' }}>
+                  ✓ {[profile.supplierVerified && 'Supplier', profile.transporterVerified && 'Transporter'].filter(Boolean).join(' + ')} verified
+                </Text>
+              </View>
+            )}
           </View>
         </View>
 

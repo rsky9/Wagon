@@ -872,6 +872,27 @@ describe('Wagon API (e2e)', () => {
       loadId = res.body.load.id
     })
 
+    it('blocks a supplier from bidding on their own load (self-deal guard)', async () => {
+      // Give the supplier transporter capability + profile so they could act on the other side.
+      await request(app.getHttpServer())
+        .patch('/api/v1/auth/capabilities')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ capabilities: ['supplier', 'transporter'] })
+        .expect(200)
+      await request(app.getHttpServer())
+        .post('/api/v1/onboarding/transporter')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ companyName: 'Wagon Demo', pan: 'ABCDE1234F', fleetSize: 1 })
+        .expect(201)
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/bidding/bid')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ loadId, amount: 40000, advanceAmount: 12000, balanceAmount: 28000 })
+        .expect(400)
+      expect(res.body.message).toMatch(/own load/i)
+    })
+
     it('transporter submits a structured bid', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/bidding/bid')

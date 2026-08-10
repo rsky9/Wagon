@@ -112,6 +112,8 @@ export interface UserProfile {
   rating?: number
   tripsCompleted: number
   verified: boolean
+  supplierVerified?: boolean
+  transporterVerified?: boolean
 }
 
 export interface Notification {

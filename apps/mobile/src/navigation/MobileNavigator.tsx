@@ -441,7 +441,7 @@ export function MobileNavigator() {
           </ThemeContext.Provider>
         ) : !auth.session ? (
           <ThemeContext.Provider value={theme}>
-            <StatusBar style="light" />
+            <StatusBar style={isDark ? 'light' : 'dark'} />
             <LoginScreen auth={auth} />
           </ThemeContext.Provider>
         ) : needRole ? (

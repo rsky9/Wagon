@@ -67,13 +67,13 @@ export class AdminController {
   }
 
   @Post('verify/:id')
-  verify(@Param('id') id: string, @CurrentUser() actor: User) {
-    return this.admin.verify(id, actor)
+  verify(@Param('id') id: string, @Body() body: { capability?: 'supplier' | 'transporter' }, @CurrentUser() actor: User) {
+    return this.admin.verify(id, actor, body?.capability)
   }
 
   @Patch('users/:id/reject')
-  reject(@Param('id') id: string, @CurrentUser() actor: User) {
-    return this.admin.reject(id, actor)
+  reject(@Param('id') id: string, @Body() body: { capability?: 'supplier' | 'transporter' }, @CurrentUser() actor: User) {
+    return this.admin.reject(id, actor, body?.capability)
   }
 
   @Post('users/:id/suspend')

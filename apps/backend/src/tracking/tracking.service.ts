@@ -91,13 +91,15 @@ export class TrackingService {
     trip: { transporterId: string; load: { supplierId: string } },
     user: User,
   ) {
-    if (user.role === 'transporter') {
+    const isTransporter = (user.capabilities?.includes('transporter') as boolean) || user.role === 'transporter'
+    const isSupplier = (user.capabilities?.includes('supplier') as boolean) || user.role === 'supplier'
+    if (isTransporter) {
       const transporter = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
-      return transporter?.id === trip.transporterId
+      if (transporter?.id === trip.transporterId) return true
     }
-    if (user.role === 'supplier') {
+    if (isSupplier) {
       const supplier = await this.prisma.supplier.findUnique({ where: { userId: user.id } })
-      return supplier?.id === trip.load.supplierId
+      if (supplier?.id === trip.load.supplierId) return true
     }
     return false
   }

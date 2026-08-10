@@ -177,7 +177,9 @@ export class LoadsService {
     }
 
     // Suppliers see their own loads; transporters see the open feed.
-    if (user.role === 'supplier') {
+    const isSupplier = (user.capabilities?.includes('supplier') as boolean) || user.role === 'supplier'
+    const isTransporter = (user.capabilities?.includes('transporter') as boolean) || user.role === 'transporter'
+    if (isSupplier && !isTransporter) {
       const supplier = await this.prisma.supplier.findUnique({ where: { userId: user.id } })
       where.supplierId = supplier?.id
     }
@@ -195,7 +197,7 @@ export class LoadsService {
 
     // For transporters, enrich with a smart-match score based on their fleet.
     let enriched = items
-    if (user.role === 'transporter') {
+    if (isTransporter) {
       const transporter = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
       if (transporter) {
         const fleet = await this.prisma.truck.findMany({ where: { transporterId: transporter.id } })

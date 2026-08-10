@@ -195,28 +195,33 @@ export class AdminService {
     return updated
   }
 
-  async verify(userId: string, actor: User) {
+  async verify(userId: string, actor: User, capability?: 'supplier' | 'transporter') {
     const user = await this.prisma.user.findUnique({ where: { id: userId } })
     if (!user) throw new NotFoundException('User not found')
+
+    // Per-capability verification: a both-capability user can be verified on one side only.
     const updated = await this.prisma.user.update({
       where: { id: userId },
       data: {
         verified: true,
         kycStatus: 'approved',
         tier: 'kyc_full',
+        ...(capability === 'supplier' ? { supplierVerified: true } : {}),
+        ...(capability === 'transporter' ? { transporterVerified: true } : {}),
+        ...(!capability ? { supplierVerified: true, transporterVerified: true } : {}),
       },
     })
     await this.audit.log({
       actorId: actor.id,
       action: 'user.verify',
-      resource: `user:${userId}`,
+      resource: `user:${userId}${capability ? `:${capability}` : ''}`,
       before: { verified: user.verified, kycStatus: user.kycStatus },
-      after: { verified: updated.verified, kycStatus: updated.kycStatus },
+      after: { verified: updated.verified, kycStatus: updated.kycStatus, capability },
     })
     return updated
   }
 
-  async reject(userId: string, actor: User) {
+  async reject(userId: string, actor: User, capability?: 'supplier' | 'transporter') {
     const user = await this.prisma.user.findUnique({ where: { id: userId } })
     if (!user) throw new NotFoundException('User not found')
     const updated = await this.prisma.user.update({
@@ -225,14 +230,17 @@ export class AdminService {
         verified: false,
         kycStatus: 'rejected',
         tier: 'kyc_lite',
+        ...(capability === 'supplier' ? { supplierVerified: false } : {}),
+        ...(capability === 'transporter' ? { transporterVerified: false } : {}),
+        ...(!capability ? { supplierVerified: false, transporterVerified: false } : {}),
       },
     })
     await this.audit.log({
       actorId: actor.id,
       action: 'user.reject',
-      resource: `user:${userId}`,
+      resource: `user:${userId}${capability ? `:${capability}` : ''}`,
       before: { verified: user.verified, kycStatus: user.kycStatus },
-      after: { verified: updated.verified, kycStatus: updated.kycStatus },
+      after: { verified: updated.verified, kycStatus: updated.kycStatus, capability },
     })
     return updated
   }

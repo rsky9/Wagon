@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { createTheme, useTheme, spacing, radius } from '@wagon/design'
 import { useThemeMode } from '../theme'
 import { useAuth } from '../auth'
+import { useActiveMode } from '../mode'
 import { AppLogo } from '../components/AppLogo'
 import { HomeCockpitScreen } from '../screens/HomeCockpitScreen'
 import { LoadFeedScreen } from '../screens/LoadFeedScreen'
@@ -98,11 +99,14 @@ function HomeTab({ navigation }: any) {
 /** Marketplace adapts: transporters browse the feed, suppliers manage their loads. */
 function MarketplaceTab({ navigation }: any) {
   const { session } = useAuth()
+  const activeMode = useActiveMode()
   const [filters, setFilters] = useState<LoadFilters | undefined>()
   const caps = session?.profile.capabilities?.length ? session.profile.capabilities : [session?.profile.role ?? '']
   const isSupplier = caps.includes('supplier')
   const isTransporter = caps.includes('transporter')
-  const [mode, setMode] = useState<'browse' | 'myloads'>(isTransporter ? 'browse' : 'myloads')
+  // Sync the working surface with the persisted active mode.
+  const initialMode = activeMode === 'supplier' ? 'myloads' : 'browse'
+  const [mode, setMode] = useState<'browse' | 'myloads'>(isTransporter ? initialMode : 'myloads')
   const root = navigation.getParent()
 
   if (isTransporter && isSupplier) {
