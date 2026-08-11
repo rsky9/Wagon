@@ -14,6 +14,7 @@ import { api } from '../config'
 import { completeQuestWithXp } from '../gamification'
 import { uploadToPresignedUrl } from '@wagon/api-client'
 import * as ImagePicker from 'expo-image-picker'
+import { useI18n } from '@wagon/i18n'
 
 interface Props {
   onBack: () => void
@@ -36,6 +37,7 @@ interface KycDoc {
 
 export function KycScreen({ onBack }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [docs, setDocs] = useState<KycDoc[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState<string | null>(null)
@@ -93,7 +95,7 @@ export function KycScreen({ onBack }: Props) {
         <Pressable onPress={onBack} hitSlop={8}>
           <Text style={[styles.back, { color: theme.mutedForeground }]}>←</Text>
         </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.foreground }]}>Verification</Text>
+        <Text style={[styles.headerTitle, { color: theme.foreground }]}>{t('kyc.title')}</Text>
         <View style={{ width: 30 }} />
       </View>
 

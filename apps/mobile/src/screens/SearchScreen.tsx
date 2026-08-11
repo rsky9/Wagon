@@ -5,6 +5,7 @@ import { useTheme, spacing, radius, formatINR, formatWeight } from '@wagon/desig
 import { StatusChip, EmptyState, type StatusTone } from '@wagon/components'
 import { api } from '../config'
 import type { Load } from '@wagon/contracts'
+import { useI18n } from '@wagon/i18n'
 
 interface Props {
   onBack: () => void
@@ -23,6 +24,7 @@ const TONE: Record<string, StatusTone> = {
 
 export function SearchScreen({ onBack, onSelect, initialQuery }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [query, setQuery] = useState(initialQuery ?? '')
   const [results, setResults] = useState<Load[]>([])
   const [searched, setSearched] = useState(false)
@@ -56,21 +58,21 @@ export function SearchScreen({ onBack, onSelect, initialQuery }: Props) {
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
         <TextInput
           style={[styles.searchInput, { backgroundColor: theme.muted, color: theme.foreground }]}
-          placeholder="Search pickup / drop / material…"
+          placeholder={t('search.placeholder')}
           placeholderTextColor={theme.mutedForeground}
           value={query}
           onChangeText={setQuery}
           autoFocus
         />
         <Pressable onPress={saveSearch} hitSlop={8}>
-          <Text style={{ color: theme.primary, fontWeight: '800', fontSize: 14 }}>Save</Text>
+          <Text style={{ color: theme.primary, fontWeight: '800', fontSize: 14 }}>{t('search.save')}</Text>
         </Pressable>
       </View>
 
       {loading ? (
-        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 40 }}>Searching…</Text>
+        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 40 }}>{t('search.searching')}</Text>
       ) : searched && results.length === 0 ? (
-        <EmptyState title="No results" message={`No loads match "${query}"`} icon="🔍" />
+        <EmptyState title={t('search.noResults')} message={`No loads match "${query}"`} icon="🔍" />
       ) : (
         <FlatList
           data={results}

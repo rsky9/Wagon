@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 import type { Load } from '@wagon/contracts'
 
 interface Favorite {
@@ -26,6 +27,7 @@ interface Props {
 
 export function FavoritesScreen({ onBack, onOpenLoad, onRunSearch }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [favorites, setFavorites] = useState<Favorite[]>([])
   const [searches, setSearches] = useState<SavedSearch[]>([])
   const [loading, setLoading] = useState(true)
@@ -59,7 +61,7 @@ export function FavoritesScreen({ onBack, onOpenLoad, onRunSearch }: Props) {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top', 'left', 'right']}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Saved</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('favorites.title')}</Text>
         <View style={{ width: 20 }} />
       </View>
 
@@ -71,7 +73,7 @@ export function FavoritesScreen({ onBack, onOpenLoad, onRunSearch }: Props) {
         ListHeaderComponent={
           searches.length > 0 ? (
             <View style={{ gap: spacing.sm, marginBottom: spacing.md }}>
-              <Text style={[styles.section, { color: theme.foreground }]}>Saved searches</Text>
+              <Text style={[styles.section, { color: theme.foreground }]}>{t('favorites.savedSearches')}</Text>
               {searches.map((s) => (
                 <View key={s.id} style={[styles.searchRow, { backgroundColor: theme.card, borderColor: theme.border }]}>
                   <Pressable style={{ flex: 1 }} onPress={() => onRunSearch?.(s.query ?? {})}>
@@ -86,8 +88,8 @@ export function FavoritesScreen({ onBack, onOpenLoad, onRunSearch }: Props) {
           ) : null
         }
         ListEmptyComponent={
-          loading ? <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>Loading…</Text>
-          : <EmptyState title="Nothing saved yet" message="Save loads and searches to find them here" icon="🔖" />
+          loading ? <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
+          : <EmptyState title={t("favorites.nothingYet")} message={t("favorites.hint")} icon="🔖" />
         }
         renderItem={({ item }) => (
           <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -100,7 +102,7 @@ export function FavoritesScreen({ onBack, onOpenLoad, onRunSearch }: Props) {
               <Text style={[styles.meta, { color: theme.mutedForeground }]}>{item.load.weight}t · {item.load.distanceKm} km</Text>
             </Pressable>
             <Pressable style={[styles.unsave, { borderColor: theme.border }]} onPress={() => unsave(item.load.id)}>
-              <Text style={{ color: theme.mutedForeground, fontSize: 12, fontWeight: '700' }}>Remove</Text>
+              <Text style={{ color: theme.mutedForeground, fontSize: 12, fontWeight: '700' }}>{t('common.remove')}</Text>
             </Pressable>
           </View>
         )}

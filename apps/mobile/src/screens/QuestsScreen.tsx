@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
 import { loadGamification, levelFor, levelProgress, XP_PER_LEVEL, type GamificationState } from '../gamification'
+import { useI18n } from '@wagon/i18n'
 
 interface Props {
   role: 'transporter' | 'supplier'
@@ -13,6 +14,7 @@ interface Props {
 
 export function QuestsScreen({ role, onBack, onOpenQuest }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [state, setState] = useState<GamificationState | null>(null)
 
   useEffect(() => {
@@ -51,7 +53,7 @@ export function QuestsScreen({ role, onBack, onOpenQuest }: Props) {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top', 'left', 'right']}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Rewards & Quests</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('quests.title')}</Text>
         <View style={{ width: 20 }} />
       </View>
 
@@ -83,7 +85,7 @@ export function QuestsScreen({ role, onBack, onOpenQuest }: Props) {
             </Text>
           </View>
         }
-        ListEmptyComponent={<EmptyState title="No quests" message="Check back soon" icon="🎯" />}
+        ListEmptyComponent={<EmptyState title={t('quests.noQuests')} message={t('quests.noQuestsHint')} icon="🎯" />}
         renderItem={renderQuest}
       />
     </SafeAreaView>

@@ -4,6 +4,7 @@ import { StyleSheet, Text, View, FlatList, Pressable, Alert } from 'react-native
 import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 
 interface InvoiceRow {
   invoiceNo: string
@@ -26,6 +27,7 @@ interface Props {
 
 export function InvoicesScreen({ onBack }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [invoices, setInvoices] = useState<InvoiceRow[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -48,18 +50,18 @@ export function InvoicesScreen({ onBack }: Props) {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Invoices</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('invoices.title')}</Text>
         <View style={{ width: 20 }} />
       </View>
 
       {loading ? (
-        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>Loading…</Text>
+        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
       ) : (
         <FlatList
           data={invoices}
           keyExtractor={(i) => i.invoiceNo}
           contentContainerStyle={styles.list}
-          ListEmptyComponent={<EmptyState title="No invoices yet" message="Invoices are generated after delivery" icon="🧾" />}
+          ListEmptyComponent={<EmptyState title={t('invoices.none')} message={t('invoices.hint')} icon="🧾" />}
           renderItem={({ item }) => (
             <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <View style={styles.cardTop}>
@@ -70,10 +72,10 @@ export function InvoicesScreen({ onBack }: Props) {
               </View>
               <Text style={[styles.route, { color: theme.mutedForeground }]} numberOfLines={1}>{item.route}</Text>
               <View style={styles.breakdown}>
-                <Row label="Base fare" value={formatINR(item.baseAmount)} theme={theme} />
-                <Row label="GST (5%)" value={`+${formatINR(item.gstAmount)}`} theme={theme} />
-                <Row label="TDS (2%)" value={`−${formatINR(item.tdsAmount)}`} theme={theme} />
-                <Row label="Net amount" value={formatINR(item.netAmount)} theme={theme} strong />
+                <Row label={t('invoices.baseFare')} value={formatINR(item.baseAmount)} theme={theme} />
+                <Row label={t('invoices.gst')} value={`+${formatINR(item.gstAmount)}`} theme={theme} />
+                <Row label={t('invoices.tds')} value={`−${formatINR(item.tdsAmount)}`} theme={theme} />
+                <Row label={t('invoices.netAmount')} value={formatINR(item.netAmount)} theme={theme} strong />
               </View>
             </View>
           )}

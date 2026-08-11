@@ -4,6 +4,7 @@ import { StyleSheet, Text, TextInput, View, FlatList, Pressable, Linking, Keyboa
 import { useTheme, spacing, radius } from '@wagon/design'
 import { api } from '../config'
 import { useAuth } from '../auth'
+import { useI18n } from '@wagon/i18n'
 
 interface Props {
   onBack: () => void
@@ -23,6 +24,7 @@ interface Message {
 /** Trip-contextual persisted chat (chat supplements structured terms). */
 export function ChatScreen({ onBack, contactName, contactPhone, contactId, tripId }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const { session } = useAuth()
   const [messages, setMessages] = useState<Message[]>([])
   const [draft, setDraft] = useState('')
@@ -120,7 +122,7 @@ export function ChatScreen({ onBack, contactName, contactPhone, contactId, tripI
       <View style={[styles.inputBar, { borderTopColor: theme.border, backgroundColor: theme.card }]}>
         <TextInput
           style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]}
-          placeholder="Type a message…"
+          placeholder={t('chat.typeMessage')}
           placeholderTextColor={theme.mutedForeground}
           value={draft}
           onChangeText={setDraft}

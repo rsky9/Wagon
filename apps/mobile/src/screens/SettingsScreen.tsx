@@ -16,17 +16,17 @@ type Section = 'main' | 'language' | 'help' | 'privacy' | 'security' | 'account'
 
 export function SettingsScreen({ onBack, onChangeRole }: Props) {
   const theme = useTheme()
-  const { lang, setLang } = useI18n()
+  const { t, lang, setLang } = useI18n()
   const { logout } = useAuth()
   const [section, setSection] = useState<Section>('main')
 
   if (section === 'account') {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
-        <Header title="Account" onBack={() => setSection('main')} theme={theme} />
+        <Header title={t('settings.account')} onBack={() => setSection('main')} theme={theme} />
         <ScrollView contentContainerStyle={styles.body}>
           <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.cardTitle, { color: theme.foreground }]}>Manage your account</Text>
+            <Text style={[styles.cardTitle, { color: theme.foreground }]}>{t('settings.manageAccount')}</Text>
             <Text style={[styles.cardText, { color: theme.mutedForeground }]}>
               Switch between working as a transporter, supplier or driver, or log out securely.
             </Text>
@@ -37,8 +37,8 @@ export function SettingsScreen({ onBack, onChangeRole }: Props) {
           >
             <Text style={{ fontSize: 18 }}>🔄</Text>
             <View style={{ flex: 1, marginLeft: spacing.md }}>
-              <Text style={[styles.rowTitle, { color: theme.foreground }]}>Change user type</Text>
-              <Text style={[styles.rowSub, { color: theme.mutedForeground }]}>Switch between transporter, supplier or driver</Text>
+              <Text style={[styles.rowTitle, { color: theme.foreground }]}>{t('settings.changeUserType')}</Text>
+              <Text style={[styles.rowSub, { color: theme.mutedForeground }]}>{t('settings.changeUserTypeSub')}</Text>
             </View>
             <Text style={{ color: theme.mutedForeground }}>›</Text>
           </Pressable>
@@ -54,7 +54,7 @@ export function SettingsScreen({ onBack, onChangeRole }: Props) {
             <Text style={{ fontSize: 18 }}>⎋</Text>
             <View style={{ flex: 1, marginLeft: spacing.md }}>
               <Text style={[styles.rowTitle, { color: theme.danger }]}>Logout</Text>
-              <Text style={[styles.rowSub, { color: theme.mutedForeground }]}>Confirm before signing out</Text>
+              <Text style={[styles.rowSub, { color: theme.mutedForeground }]}>{t('settings.logoutConfirm')}</Text>
             </View>
             <Text style={{ color: theme.mutedForeground }}>›</Text>
           </Pressable>
@@ -81,8 +81,8 @@ export function SettingsScreen({ onBack, onChangeRole }: Props) {
           >
             <Text style={{ fontSize: 18 }}>🗑️</Text>
             <View style={{ flex: 1, marginLeft: spacing.md }}>
-              <Text style={[styles.rowTitle, { color: theme.danger }]}>Delete account</Text>
-              <Text style={[styles.rowSub, { color: theme.mutedForeground }]}>Request account deletion</Text>
+              <Text style={[styles.rowTitle, { color: theme.danger }]}>{t('settings.deleteAccount')}</Text>
+              <Text style={[styles.rowSub, { color: theme.mutedForeground }]}>{t('settings.deleteSub')}</Text>
             </View>
             <Text style={{ color: theme.mutedForeground }}>›</Text>
           </Pressable>
@@ -94,10 +94,10 @@ export function SettingsScreen({ onBack, onChangeRole }: Props) {
   if (section === 'privacy') {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
-        <Header title="Privacy" onBack={() => setSection('main')} theme={theme} />
+        <Header title={t('settings.privacy')} onBack={() => setSection('main')} theme={theme} />
         <ScrollView contentContainerStyle={styles.body}>
           <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.cardTitle, { color: theme.foreground }]}>Your privacy matters</Text>
+            <Text style={[styles.cardTitle, { color: theme.foreground }]}>{t('settings.privacyMatters')}</Text>
             <Text style={[styles.cardText, { color: theme.mutedForeground }]}>
               Wagon collects only what's needed to run the marketplace: your profile, vehicle and bank details for payouts, and location during active trips.
             </Text>
@@ -114,10 +114,10 @@ export function SettingsScreen({ onBack, onChangeRole }: Props) {
   if (section === 'security') {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
-        <Header title="Security" onBack={() => setSection('main')} theme={theme} />
+        <Header title={t('settings.security')} onBack={() => setSection('main')} theme={theme} />
         <ScrollView contentContainerStyle={styles.body}>
           <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.cardTitle, { color: theme.foreground }]}>Account security</Text>
+            <Text style={[styles.cardTitle, { color: theme.foreground }]}>{t('settings.accountSecurity')}</Text>
             <Text style={[styles.cardText, { color: theme.mutedForeground }]}>
               We use OTP-based login with no passwords. Your session is encrypted on-device.
             </Text>
@@ -133,7 +133,7 @@ export function SettingsScreen({ onBack, onChangeRole }: Props) {
   if (section === 'language') {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
-        <Header title="Language" onBack={() => setSection('main')} theme={theme} />
+        <Header title={t('settings.language')} onBack={() => setSection('main')} theme={theme} />
         <ScrollView contentContainerStyle={styles.body}>
           {SUPPORTED_LANGUAGES.map((l) => (
             <Pressable key={l.code} style={[styles.row, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => setLang(l.code)}>
@@ -149,10 +149,10 @@ export function SettingsScreen({ onBack, onChangeRole }: Props) {
   if (section === 'help') {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
-        <Header title="Help & Support" onBack={() => setSection('main')} theme={theme} />
+        <Header title={t('settings.helpSupport')} onBack={() => setSection('main')} theme={theme} />
         <ScrollView contentContainerStyle={styles.body}>
           <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.cardTitle, { color: theme.foreground }]}>Need help?</Text>
+            <Text style={[styles.cardTitle, { color: theme.foreground }]}>{t('settings.needHelp')}</Text>
             <Text style={[styles.cardText, { color: theme.mutedForeground }]}>
               Get support for loads, payments, KYC and more. Our team is available 9am–6pm.
             </Text>
@@ -160,19 +160,19 @@ export function SettingsScreen({ onBack, onChangeRole }: Props) {
           <Pressable style={[styles.row, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => Linking.openURL('tel:18001234567').catch(() => Alert.alert('Unable to call'))}>
             <Text style={{ fontSize: 18 }}>📞</Text>
             <View style={{ flex: 1, marginLeft: spacing.md }}>
-              <Text style={[styles.rowTitle, { color: theme.foreground }]}>Call support</Text>
+              <Text style={[styles.rowTitle, { color: theme.foreground }]}>{t('settings.callSupport')}</Text>
               <Text style={[styles.rowSub, { color: theme.mutedForeground }]}>1800-123-4567</Text>
             </View>
           </Pressable>
           <Pressable style={[styles.row, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => Linking.openURL('https://wa.me/919000000000').catch(() => {})}>
             <Text style={{ fontSize: 18 }}>💬</Text>
             <View style={{ flex: 1, marginLeft: spacing.md }}>
-              <Text style={[styles.rowTitle, { color: theme.foreground }]}>WhatsApp</Text>
-              <Text style={[styles.rowSub, { color: theme.mutedForeground }]}>Chat with us</Text>
+              <Text style={[styles.rowTitle, { color: theme.foreground }]}>{t('settings.whatsapp')}</Text>
+              <Text style={[styles.rowSub, { color: theme.mutedForeground }]}>{t('settings.chatWithUs')}</Text>
             </View>
           </Pressable>
           <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.cardTitle, { color: theme.foreground }]}>FAQ</Text>
+            <Text style={[styles.cardTitle, { color: theme.foreground }]}>{t('settings.faq')}</Text>
             <Faq q="How do I get paid?" a="Payouts are released after delivery + POD upload, usually within 1-2 hours." theme={theme} />
             <Faq q="Why is my KYC pending?" a="Documents are reviewed within 24 hours. Rejected docs can be re-uploaded." theme={theme} />
             <Faq q="How are fares calculated?" a="Fares use the rate card based on truck type, distance and weight." theme={theme} />
@@ -184,12 +184,12 @@ export function SettingsScreen({ onBack, onChangeRole }: Props) {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
-      <Header title="Settings" onBack={onBack} theme={theme} />
+      <Header title={t('settings.title')} onBack={onBack} theme={theme} />
       <ScrollView contentContainerStyle={styles.body}>
         <Pressable style={[styles.row, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => setSection('language')}>
           <Text style={{ fontSize: 18 }}>🌐</Text>
           <View style={{ flex: 1, marginLeft: spacing.md }}>
-            <Text style={[styles.rowTitle, { color: theme.foreground }]}>Language</Text>
+            <Text style={[styles.rowTitle, { color: theme.foreground }]}>{t('settings.language')}</Text>
             <Text style={[styles.rowSub, { color: theme.mutedForeground }]}>{SUPPORTED_LANGUAGES.find((l) => l.code === lang)?.native}</Text>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
@@ -198,37 +198,37 @@ export function SettingsScreen({ onBack, onChangeRole }: Props) {
         <Pressable style={[styles.row, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => setSection('help')}>
           <Text style={{ fontSize: 18 }}>🛟</Text>
           <View style={{ flex: 1, marginLeft: spacing.md }}>
-            <Text style={[styles.rowTitle, { color: theme.foreground }]}>Help & Support</Text>
-            <Text style={[styles.rowSub, { color: theme.mutedForeground }]}>FAQ, call and WhatsApp</Text>
+            <Text style={[styles.rowTitle, { color: theme.foreground }]}>{t('settings.helpSupport')}</Text>
+            <Text style={[styles.rowSub, { color: theme.mutedForeground }]}>{t('settings.helpSub')}</Text>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
         </Pressable>
         <Pressable style={[styles.row, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => setSection('account')}>
           <Text style={{ fontSize: 18 }}>👤</Text>
           <View style={{ flex: 1, marginLeft: spacing.md }}>
-            <Text style={[styles.rowTitle, { color: theme.foreground }]}>Account</Text>
-            <Text style={[styles.rowSub, { color: theme.mutedForeground }]}>Logout · Delete account</Text>
+            <Text style={[styles.rowTitle, { color: theme.foreground }]}>{t('settings.account')}</Text>
+            <Text style={[styles.rowSub, { color: theme.mutedForeground }]}>{t('settings.accountSub')}</Text>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
         </Pressable>
         <Pressable style={[styles.row, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => setSection('privacy')}>
           <Text style={{ fontSize: 18 }}>🕶️</Text>
           <View style={{ flex: 1, marginLeft: spacing.md }}>
-            <Text style={[styles.rowTitle, { color: theme.foreground }]}>Privacy</Text>
+            <Text style={[styles.rowTitle, { color: theme.foreground }]}>{t('settings.privacy')}</Text>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
         </Pressable>
         <Pressable style={[styles.row, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => setSection('security')}>
           <Text style={{ fontSize: 18 }}>🔐</Text>
           <View style={{ flex: 1, marginLeft: spacing.md }}>
-            <Text style={[styles.rowTitle, { color: theme.foreground }]}>Security</Text>
+            <Text style={[styles.rowTitle, { color: theme.foreground }]}>{t('settings.security')}</Text>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
         </Pressable>
         <Pressable style={[styles.row, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => Linking.openURL('https://wagon.app/privacy').catch(() => {})}>
           <Text style={{ fontSize: 18 }}>🔒</Text>
           <View style={{ flex: 1, marginLeft: spacing.md }}>
-            <Text style={[styles.rowTitle, { color: theme.foreground }]}>Privacy Policy</Text>
+            <Text style={[styles.rowTitle, { color: theme.foreground }]}>{t('settings.privacyPolicy')}</Text>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
         </Pressable>

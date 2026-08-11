@@ -13,6 +13,7 @@ import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { StatusChip, Button, StatusStepper, type StatusTone } from '@wagon/components'
 import { api } from '../config'
 import type { Load } from '@wagon/contracts'
+import { useI18n } from '@wagon/i18n'
 
 interface TripInfo {
   id: string
@@ -38,6 +39,7 @@ const TONE: Record<string, StatusTone> = {
 
 export function TripDetailScreen({ loadId, onBack, onTrack }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [trip, setTrip] = useState<TripInfo | null>(null)
   const [snapshot, setSnapshot] = useState<{ rate: number; advanceAmount?: number | null; balanceAmount?: number | null; paymentTerms?: string | null } | null>(null)
   const [loading, setLoading] = useState(true)
@@ -75,9 +77,9 @@ export function TripDetailScreen({ loadId, onBack, onTrack }: Props) {
   if (!trip) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
-        <Header onBack={onBack} title="Load details" theme={theme} />
+        <Header onBack={onBack} title={t('tripDetail.loadDetails')} theme={theme} />
         <View style={styles.center}>
-          <Text style={{ color: theme.mutedForeground, fontSize: 16 }}>No active trip for this load yet.</Text>
+          <Text style={{ color: theme.mutedForeground, fontSize: 16 }}>{t('tripDetail.noActiveTrip')}</Text>
         </View>
       </SafeAreaView>
     )
@@ -130,7 +132,7 @@ export function TripDetailScreen({ loadId, onBack, onTrack }: Props) {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
-      <Header onBack={onBack} title="Load details" theme={theme} />
+      <Header onBack={onBack} title={t('tripDetail.loadDetails')} theme={theme} />
 
       <ScrollView contentContainerStyle={styles.body}>
         <View style={styles.topRow}>
@@ -144,28 +146,28 @@ export function TripDetailScreen({ loadId, onBack, onTrack }: Props) {
         </Text>
 
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.cardTitle, { color: theme.foreground }]}>Trip status</Text>
+          <Text style={[styles.cardTitle, { color: theme.foreground }]}>{t('tripDetail.tripStatus')}</Text>
           <StatusStepper steps={steps} />
         </View>
 
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.cardTitle, { color: theme.foreground }]}>Route</Text>
+          <Text style={[styles.cardTitle, { color: theme.foreground }]}>{t('tripDetail.route')}</Text>
           <Text style={[styles.route, { color: theme.foreground }]}>
             {trip.load.pickupAddr} → {trip.load.dropAddr}
           </Text>
-          <Row label="Weight" value={`${trip.load.weight}t`} theme={theme} />
-          <Row label="Distance" value={`${trip.load.distanceKm} km`} theme={theme} />
-          <Row label="Material" value={trip.load.material?.name ?? '—'} theme={theme} />
-          {trip.podUrl && <Row label="POD" value="Uploaded ✓" theme={theme} />}
+          <Row label={t('tripDetail.weight')} value={`${trip.load.weight}t`} theme={theme} />
+          <Row label={t('tripDetail.distance')} value={`${trip.load.distanceKm} km`} theme={theme} />
+          <Row label={t('tripDetail.material')} value={trip.load.material?.name ?? '—'} theme={theme} />
+          {trip.podUrl && <Row label={t('tripDetail.pod')} value="Uploaded ✓" theme={theme} />}
         </View>
 
         {snapshot && (
           <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.cardTitle, { color: theme.foreground }]}>Booking snapshot (locked terms)</Text>
-            <Row label="Agreed rate" value={formatINR(snapshot.rate)} theme={theme} />
-            {snapshot.advanceAmount ? <Row label="Advance" value={formatINR(snapshot.advanceAmount)} theme={theme} /> : null}
-            {snapshot.balanceAmount ? <Row label="Balance" value={formatINR(snapshot.balanceAmount)} theme={theme} /> : null}
-            {snapshot.paymentTerms ? <Row label="Payment terms" value={snapshot.paymentTerms} theme={theme} /> : null}
+            <Text style={[styles.cardTitle, { color: theme.foreground }]}>{t('tripDetail.snapshot')}</Text>
+            <Row label={t('tripDetail.agreedRate')} value={formatINR(snapshot.rate)} theme={theme} />
+            {snapshot.advanceAmount ? <Row label={t('tripDetail.advance')} value={formatINR(snapshot.advanceAmount)} theme={theme} /> : null}
+            {snapshot.balanceAmount ? <Row label={t('tripDetail.balance')} value={formatINR(snapshot.balanceAmount)} theme={theme} /> : null}
+            {snapshot.paymentTerms ? <Row label={t('tripDetail.paymentTerms')} value={snapshot.paymentTerms} theme={theme} /> : null}
             <Text style={{ color: theme.mutedForeground, fontSize: 12, marginTop: 4 }}>These terms are immutable and govern the trip, payments and disputes.</Text>
           </View>
         )}
@@ -181,13 +183,13 @@ export function TripDetailScreen({ loadId, onBack, onTrack }: Props) {
         </Pressable>
 
         {trip.status === 'in_transit' && (
-          <Button label="Track live on map" onPress={() => onTrack?.(trip.id)} />
+          <Button label={t('tripDetail.trackLive')} onPress={() => onTrack?.(trip.id)} />
         )}
         {(trip.status === 'in_transit' || trip.status === 'accepted') && (
-          <Button label="Enter pickup OTP" onPress={() => verifyOtp('pickup')} variant="secondary" />
+          <Button label={t('tripDetail.enterPickupOtp')} onPress={() => verifyOtp('pickup')} variant="secondary" />
         )}
         {trip.status === 'in_transit' && (
-          <Button label="Enter delivery OTP" onPress={() => verifyOtp('delivery')} variant="secondary" />
+          <Button label={t('tripDetail.enterDeliveryOtp')} onPress={() => verifyOtp('delivery')} variant="secondary" />
         )}
 
         {canPay && (
@@ -200,7 +202,7 @@ export function TripDetailScreen({ loadId, onBack, onTrack }: Props) {
 
         {canRate && (
           <View style={[styles.rateBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.cardTitle, { color: theme.foreground }]}>Rate this transporter</Text>
+            <Text style={[styles.cardTitle, { color: theme.foreground }]}>{t('tripDetail.rateTransporter')}</Text>
             <View style={styles.stars}>
               {[1, 2, 3, 4, 5].map((n) => (
                 <Pressable key={n} onPress={() => setRating(n)} hitSlop={4}>
@@ -208,7 +210,7 @@ export function TripDetailScreen({ loadId, onBack, onTrack }: Props) {
                 </Pressable>
               ))}
             </View>
-            <Button label="Submit rating" onPress={submitRating} disabled={rating === 0} size="md" />
+            <Button label={t('tripDetail.submitRating')} onPress={submitRating} disabled={rating === 0} size="md" />
           </View>
         )}
 

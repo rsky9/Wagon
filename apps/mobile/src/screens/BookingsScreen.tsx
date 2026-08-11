@@ -5,6 +5,7 @@ import { useTheme, spacing, radius, formatINR, formatWeight } from '@wagon/desig
 import { StatusChip, EmptyState, type StatusTone } from '@wagon/components'
 import { api } from '../config'
 import type { Load } from '@wagon/contracts'
+import { useI18n } from '@wagon/i18n'
 
 interface BookingRow {
   id: string
@@ -27,6 +28,7 @@ const TONE: Record<string, StatusTone> = {
 
 export function BookingsScreen({ onBack, onSelectLoad }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [bookings, setBookings] = useState<BookingRow[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -40,18 +42,18 @@ export function BookingsScreen({ onBack, onSelectLoad }: Props) {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Bookings</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('bookings.title')}</Text>
         <View style={{ width: 20 }} />
       </View>
 
       {loading ? (
-        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>Loading…</Text>
+        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
       ) : (
         <FlatList
           data={bookings}
           keyExtractor={(b) => b.id}
           contentContainerStyle={styles.list}
-          ListEmptyComponent={<EmptyState title="No bookings yet" message="When a transporter accepts your load, it becomes a booking" icon="📅" />}
+          ListEmptyComponent={<EmptyState title={t('bookings.none')} message="When a transporter accepts your load, it becomes a booking" icon="📅" />}
           renderItem={({ item }) => (
             <Pressable style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => onSelectLoad(item.load.id)}>
               <View style={styles.cardTop}>

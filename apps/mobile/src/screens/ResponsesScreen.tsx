@@ -4,6 +4,7 @@ import { StyleSheet, Text, View, FlatList, Pressable } from 'react-native'
 import { useTheme, spacing, radius, formatINR, timeAgo } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 
 interface ResponseRow {
   quoteId: string
@@ -21,6 +22,7 @@ interface Props {
 
 export function ResponsesScreen({ onBack, onSelectLoad }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [responses, setResponses] = useState<ResponseRow[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -34,18 +36,18 @@ export function ResponsesScreen({ onBack, onSelectLoad }: Props) {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Responses</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('responses.title')}</Text>
         <View style={{ width: 20 }} />
       </View>
 
       {loading ? (
-        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>Loading…</Text>
+        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
       ) : (
         <FlatList
           data={responses}
           keyExtractor={(r) => r.quoteId}
           contentContainerStyle={styles.list}
-          ListEmptyComponent={<EmptyState title="No responses yet" message="When transporters quote on your loads, they'll appear here" icon="📨" />}
+          ListEmptyComponent={<EmptyState title={t('responses.none')} message="When transporters quote on your loads, they'll appear here" icon="📨" />}
           renderItem={({ item }) => (
             <Pressable style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => onSelectLoad(item.loadId)}>
               <View style={styles.cardTop}>

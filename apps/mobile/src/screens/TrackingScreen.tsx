@@ -17,6 +17,7 @@ import {
 import { useTheme, palette, spacing, radius, shadows } from '@wagon/design'
 import { api } from '../config'
 import { getTrackingSocket } from '../socket'
+import { useI18n } from '@wagon/i18n'
 
 const MAP_STYLE_URL = 'https://demotiles.maplibre.org/style.json'
 
@@ -34,6 +35,7 @@ interface Props {
 
 export function TrackingScreen({ tripId, onBack }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [locations, setLocations] = useState<LocationPoint[]>([])
   const [loading, setLoading] = useState(true)
   const [connected, setConnected] = useState(false)
@@ -78,7 +80,7 @@ export function TrackingScreen({ tripId, onBack }: Props) {
         <Pressable onPress={onBack} hitSlop={8}>
           <Text style={[styles.back, { color: theme.mutedForeground }]}>←</Text>
         </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.foreground }]}>Live tracking</Text>
+        <Text style={[styles.headerTitle, { color: theme.foreground }]}>{t('tracking.title')}</Text>
         <View style={[styles.dot, { backgroundColor: connected ? theme.success : theme.mutedForeground }]} />
       </View>
 
@@ -124,14 +126,14 @@ export function TrackingScreen({ tripId, onBack }: Props) {
                   <Text style={[styles.statValue, { color: theme.foreground }, { fontVariant: ['tabular-nums'] }]}>
                     {Math.round(latest.speedKmh)}
                   </Text>
-                  <Text style={[styles.statLabel, { color: theme.mutedForeground }]}>km/h</Text>
+                  <Text style={[styles.statLabel, { color: theme.mutedForeground }]}>{t('tracking.kmh')}</Text>
                 </View>
               )}
               <View style={styles.stat}>
                 <Text style={[styles.statValue, { color: theme.foreground }, { fontVariant: ['tabular-nums'] }]}>
                   {locations.length}
                 </Text>
-                <Text style={[styles.statLabel, { color: theme.mutedForeground }]}>updates</Text>
+                <Text style={[styles.statLabel, { color: theme.mutedForeground }]}>{t('tracking.updates')}</Text>
               </View>
             </View>
           </>

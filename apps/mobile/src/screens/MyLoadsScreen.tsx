@@ -14,6 +14,7 @@ import { StatusChip, EmptyState, FeedSkeleton, type StatusTone } from '@wagon/co
 import { api } from '../config'
 import { AppLogo } from '../components/AppLogo'
 import type { Load } from '@wagon/contracts'
+import { useI18n } from '@wagon/i18n'
 
 interface Props {
   onPostLoad: () => void
@@ -38,6 +39,7 @@ const TONE: Record<string, StatusTone> = {
 
 export function MyLoads({ onPostLoad, onLogout, onSelectLoad, onOpenKyc, onOpenDecisionRoom, embedded = false }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [loads, setLoads] = useState<Load[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -115,7 +117,7 @@ export function MyLoads({ onPostLoad, onLogout, onSelectLoad, onOpenKyc, onOpenD
       )}
 
       <View style={styles.toolbar}>
-        <Text style={[styles.title, { color: theme.foreground }]}>My loads</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('myLoads.title')}</Text>
       </View>
 
       {error && <Text style={[styles.error, { color: theme.danger }]}>{error}</Text>}
@@ -132,9 +134,9 @@ export function MyLoads({ onPostLoad, onLogout, onSelectLoad, onOpenKyc, onOpenD
           contentContainerStyle={styles.list}
           ListEmptyComponent={
             <EmptyState
-              title="No loads yet"
+              title={t('myLoads.noLoads')}
               message="Post your first load and trucks will come to you"
-              actionLabel="Post a load"
+              actionLabel={t('myLoads.post')}
               onAction={onPostLoad}
               icon="📦"
             />
@@ -152,6 +154,7 @@ export function MyLoads({ onPostLoad, onLogout, onSelectLoad, onOpenKyc, onOpenD
 
 function LoadRow({ load, onAction }: { load: Load; onAction: () => void }) {
   const theme = useTheme()
+  const { t } = useI18n()
   const date = new Date(load.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
   return (
     <View style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
@@ -165,14 +168,14 @@ function LoadRow({ load, onAction }: { load: Load; onAction: () => void }) {
         {load.pickupAddr} → {load.dropAddr}
       </Text>
       <View style={styles.metaRow}>
-        <Meta label="Date" value={date} theme={theme} />
-        <Meta label="Weight" value={formatWeight(load.weight)} theme={theme} />
-        <Meta label="Trucks" value={String(load.noOfTrucks)} theme={theme} />
+        <Meta label={t('myLoads.date')} value={date} theme={theme} />
+        <Meta label={t('myLoads.weight')} value={formatWeight(load.weight)} theme={theme} />
+        <Meta label={t('myLoads.trucks')} value={String(load.noOfTrucks)} theme={theme} />
       </View>
       {onAction && (
         <View style={styles.actionRow}>
           <Pressable onPress={onAction} style={[styles.actionBtn, { borderColor: theme.border }]}>
-            <Text style={{ color: theme.primary, fontSize: 13, fontWeight: '700' }}>Manage</Text>
+            <Text style={{ color: theme.primary, fontSize: 13, fontWeight: '700' }}>{t('myLoads.manage')}</Text>
           </Pressable>
         </View>
       )}

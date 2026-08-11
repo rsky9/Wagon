@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View, FlatList, Pressable } from 'react-native'
 import { useTheme, spacing, radius } from '@wagon/design'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 
 interface RateCardRow {
   modelId: string
@@ -18,6 +19,7 @@ interface Props {
 
 export function RateCardScreen({ onBack }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [cards, setCards] = useState<RateCardRow[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -35,12 +37,12 @@ export function RateCardScreen({ onBack }: Props) {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Rate Card</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('rateCard.title')}</Text>
         <View style={{ width: 20 }} />
       </View>
 
       {loading ? (
-        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>Loading…</Text>
+        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
       ) : (
         <FlatList
           data={['open', 'container', 'trailer']}
@@ -61,7 +63,7 @@ export function RateCardScreen({ onBack }: Props) {
                       </View>
                       <View style={styles.priceBox}>
                         <Text style={[styles.price, { color: theme.primary }, { fontVariant: ['tabular-nums'] }]}>₹{r.pricePerKm}</Text>
-                        <Text style={[styles.perKm, { color: theme.mutedForeground }]}>/km</Text>
+                        <Text style={[styles.perKm, { color: theme.mutedForeground }]}>{t('rateCard.perKm')}</Text>
                       </View>
                     </View>
                   ))}

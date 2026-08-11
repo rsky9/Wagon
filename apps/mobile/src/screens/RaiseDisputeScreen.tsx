@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius } from '@wagon/design'
 import { Button } from '@wagon/components'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 
 interface Props {
   onBack: () => void
@@ -14,6 +15,7 @@ const TYPES = ['Damaged goods', 'Missing goods', 'Delay', 'Payment dispute', 'PO
 
 export function RaiseDisputeScreen({ onBack, onSubmitted }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [tripId, setTripId] = useState('')
   const [subject, setSubject] = useState('')
   const [evidence, setEvidence] = useState('')
@@ -43,7 +45,7 @@ export function RaiseDisputeScreen({ onBack, onSubmitted }: Props) {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top', 'left', 'right']}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Raise a dispute</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('raiseDispute.title')}</Text>
         <View style={{ width: 20 }} />
       </View>
 
@@ -52,11 +54,11 @@ export function RaiseDisputeScreen({ onBack, onSubmitted }: Props) {
           Disputes are reviewed against the booking snapshot, negotiation history and trip events — no need to explain everything again.
         </Text>
 
-        <Field label="Trip ID (last 6 digits fine)" theme={theme}>
-          <TextInput style={inputStyle} value={tripId} onChangeText={setTripId} placeholder="Trip ID" placeholderTextColor={theme.mutedForeground + '88'} />
+        <Field label={t('raiseDispute.tripIdHint')} theme={theme}>
+          <TextInput style={inputStyle} value={tripId} onChangeText={setTripId} placeholder={t('raiseDispute.tripId')} placeholderTextColor={theme.mutedForeground + '88'} />
         </Field>
 
-        <Field label="Issue type" theme={theme}>
+        <Field label={t('raiseDispute.issueType')} theme={theme}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
             {TYPES.map((t) => (
               <Pressable key={t} onPress={() => setSubject(t)} style={{ borderRadius: radius.full, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: subject === t ? theme.primary : theme.background, borderColor: subject === t ? theme.primary : theme.border }}>
@@ -66,15 +68,15 @@ export function RaiseDisputeScreen({ onBack, onSubmitted }: Props) {
           </View>
         </Field>
 
-        <Field label="Description" theme={theme}>
-          <TextInput style={[inputStyle, { minHeight: 80, textAlignVertical: 'top' }]} value={subject && !TYPES.includes(subject) ? subject : ''} onChangeText={setSubject} placeholder="Describe what happened" multiline placeholderTextColor={theme.mutedForeground + '88'} />
+        <Field label={t('raiseDispute.description')} theme={theme}>
+          <TextInput style={[inputStyle, { minHeight: 80, textAlignVertical: 'top' }]} value={subject && !TYPES.includes(subject) ? subject : ''} onChangeText={setSubject} placeholder={t('raiseDispute.describe')} multiline placeholderTextColor={theme.mutedForeground + '88'} />
         </Field>
 
-        <Field label="Evidence key / reference (optional)" theme={theme}>
-          <TextInput style={inputStyle} value={evidence} onChangeText={setEvidence} placeholder="e.g. photo reference" placeholderTextColor={theme.mutedForeground + '88'} />
+        <Field label={t('raiseDispute.evidence')} theme={theme}>
+          <TextInput style={inputStyle} value={evidence} onChangeText={setEvidence} placeholder={t('raiseDispute.evidenceExample')} placeholderTextColor={theme.mutedForeground + '88'} />
         </Field>
 
-        <Button label="Submit dispute" onPress={submit} loading={submitting} />
+        <Button label={t('raiseDispute.submit')} onPress={submit} loading={submitting} />
       </View>
     </SafeAreaView>
   )

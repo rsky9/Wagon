@@ -14,6 +14,7 @@ import { RouteRail, StatusChip, Button, type StatusTone } from '@wagon/component
 import { api } from '../config'
 import { useAuth } from '../auth'
 import type { Load } from '@wagon/contracts'
+import { useI18n } from '@wagon/i18n'
 
 interface Props {
   load: Load
@@ -33,6 +34,7 @@ const TONE: Record<string, StatusTone> = {
 
 export function LoadDetailScreen({ load, onBack, onAccepted, onOpenBid }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const insets = useSafeAreaInsets()
   const { session } = useAuth()
   const caps = session?.profile.capabilities?.length ? session.profile.capabilities : [session?.profile.role ?? '']
@@ -89,7 +91,7 @@ export function LoadDetailScreen({ load, onBack, onAccepted, onOpenBid }: Props)
         <Pressable onPress={onBack} hitSlop={8}>
           <Text style={[styles.back, { color: theme.mutedForeground }]}>← Back</Text>
         </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.foreground }]}>Load details</Text>
+        <Text style={[styles.headerTitle, { color: theme.foreground }]}>{t('loadDetail.title')}</Text>
         <View style={{ width: 50 }} />
       </View>
 
@@ -108,19 +110,19 @@ export function LoadDetailScreen({ load, onBack, onAccepted, onOpenBid }: Props)
           <RouteRail from={load.pickupAddr} to={load.dropAddr} distanceKm={load.distanceKm} />
         </View>
 
-        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>Trip specs</Text>
+        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>{t('loadDetail.tripSpecs')}</Text>
         <View style={[styles.grid, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Spec label="Weight" value={formatWeight(load.weight)} />
-          <Spec label="Truck type" value={load.truckType} />
-          <Spec label="Material" value={load.material?.name ?? '—'} />
-          <Spec label="Trucks" value={String(load.noOfTrucks)} />
+          <Spec label={t('loadDetail.weight')} value={formatWeight(load.weight)} />
+          <Spec label={t('loadDetail.truckType')} value={load.truckType} />
+          <Spec label={t('loadDetail.material')} value={load.material?.name ?? '—'} />
+          <Spec label={t('loadDetail.trucks')} value={String(load.noOfTrucks)} />
         </View>
 
-        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>Schedule</Text>
+        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>{t('loadDetail.schedule')}</Text>
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Row label="Pickup" value={date} />
-          <Row label="Payment" value={load.payLater ? 'Pay later' : 'Advance / booking'} />
-          {load.description ? <Row label="Notes" value={load.description} /> : null}
+          <Row label={t('loadDetail.pickup')} value={date} />
+          <Row label={t('loadDetail.payment')} value={load.payLater ? 'Pay later' : 'Advance / booking'} />
+          {load.description ? <Row label={t('loadDetail.notes')} value={load.description} /> : null}
         </View>
       </ScrollView>
 
@@ -153,7 +155,7 @@ export function LoadDetailScreen({ load, onBack, onAccepted, onOpenBid }: Props)
               ])
             }
           >
-            <Text style={{ color: theme.danger, fontWeight: '700', fontSize: 15 }}>Reject Load</Text>
+            <Text style={{ color: theme.danger, fontWeight: '700', fontSize: 15 }}>{t('loadDetail.reject')}</Text>
           </Pressable>
         )}
       </View>

@@ -4,6 +4,7 @@ import { useTheme } from '@wagon/design'
 import { GamifiedOnboarding, QuestField, questInputStyle } from '@wagon/components'
 import { api } from '../config'
 import { awardXp } from '../gamification'
+import { useI18n } from '@wagon/i18n'
 
 interface Props {
   onComplete: () => void
@@ -12,6 +13,7 @@ interface Props {
 
 export function TransporterOnboarding({ onComplete, onSkip }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [companyName, setCompanyName] = useState('')
   const [ownerName, setOwnerName] = useState('')
   const [fleetSize, setFleetSize] = useState('')
@@ -47,11 +49,11 @@ export function TransporterOnboarding({ onComplete, onSkip }: Props) {
           valid: !!companyName.trim() && ownerName.trim().length >= 2,
           render: () => (
             <>
-              <QuestField label="Company / business name">
-                <TextInput style={inputStyle} value={companyName} onChangeText={setCompanyName} placeholder="e.g. Sharma Transport" placeholderTextColor={theme.mutedForeground + '88'} />
+              <QuestField label={t('onboarding.companyName')}>
+                <TextInput style={inputStyle} value={companyName} onChangeText={setCompanyName} placeholder={t('onboarding.companyExample')} placeholderTextColor={theme.mutedForeground + '88'} />
               </QuestField>
-              <QuestField label="Your name">
-                <TextInput style={inputStyle} value={ownerName} onChangeText={setOwnerName} placeholder="Full name" placeholderTextColor={theme.mutedForeground + '88'} />
+              <QuestField label={t('onboarding.yourName')}>
+                <TextInput style={inputStyle} value={ownerName} onChangeText={setOwnerName} placeholder={t('onboarding.fullName')} placeholderTextColor={theme.mutedForeground + '88'} />
               </QuestField>
             </>
           ),
@@ -63,8 +65,8 @@ export function TransporterOnboarding({ onComplete, onSkip }: Props) {
           hint: 'You can add individual trucks later.',
           valid: !!fleetSize && Number(fleetSize) >= 1,
           render: () => (
-            <QuestField label="Number of trucks you operate">
-              <TextInput style={inputStyle} value={fleetSize} onChangeText={setFleetSize} placeholder="e.g. 3" keyboardType="number-pad" placeholderTextColor={theme.mutedForeground + '88'} />
+            <QuestField label={t('onboarding.numTrucks')}>
+              <TextInput style={inputStyle} value={fleetSize} onChangeText={setFleetSize} placeholder={t('onboarding.trucksExample')} keyboardType="number-pad" placeholderTextColor={theme.mutedForeground + '88'} />
             </QuestField>
           ),
         },

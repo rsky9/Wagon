@@ -4,6 +4,7 @@ import { StyleSheet, Text, View, FlatList, Pressable } from 'react-native'
 import { useTheme, spacing, radius } from '@wagon/design'
 import { StatusChip, EmptyState, type StatusTone } from '@wagon/components'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 
 interface Alert {
   truckId: string
@@ -27,6 +28,7 @@ interface Props {
 
 export function FleetDashboardScreen({ onBack, onOpenTruck, onAddTruck }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [data, setData] = useState<FleetData | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -45,12 +47,12 @@ export function FleetDashboardScreen({ onBack, onOpenTruck, onAddTruck }: Props)
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Fleet</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('fleet.title')}</Text>
         <Pressable onPress={onAddTruck}><Text style={{ color: theme.primary, fontSize: 22, fontWeight: '800' }}>+</Text></Pressable>
       </View>
 
       {loading ? (
-        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>Loading…</Text>
+        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
       ) : (
         <FlatList
           data={data?.trucks ?? []}
@@ -59,15 +61,15 @@ export function FleetDashboardScreen({ onBack, onOpenTruck, onAddTruck }: Props)
           ListHeaderComponent={
             <View>
               <View style={styles.summaryRow}>
-                <Summary label="Active" value={data?.summary.active ?? 0} color={theme.success} theme={theme} />
-                <Summary label="Inactive" value={data?.summary.inactive ?? 0} color={theme.mutedForeground} theme={theme} />
-                <Summary label="Expiring" value={data?.summary.expiringSoon ?? 0} color={theme.warning} theme={theme} />
-                <Summary label="Expired" value={data?.summary.expired ?? 0} color={theme.danger} theme={theme} />
+                <Summary label={t('fleet.active')} value={data?.summary.active ?? 0} color={theme.success} theme={theme} />
+                <Summary label={t('fleet.inactive')} value={data?.summary.inactive ?? 0} color={theme.mutedForeground} theme={theme} />
+                <Summary label={t('fleet.expiring')} value={data?.summary.expiringSoon ?? 0} color={theme.warning} theme={theme} />
+                <Summary label={t('fleet.expired')} value={data?.summary.expired ?? 0} color={theme.danger} theme={theme} />
               </View>
 
               {(data?.alerts ?? []).length > 0 && (
                 <View style={styles.alerts}>
-                  <Text style={[styles.sectionLabel, { color: theme.mutedForeground }]}>Document expiry alerts</Text>
+                  <Text style={[styles.sectionLabel, { color: theme.mutedForeground }]}>{t('fleet.docExpiry')}</Text>
                   {data!.alerts.map((a, i) => (
                     <View key={i} style={[styles.alert, { backgroundColor: a.critical ? theme.danger + '1A' : theme.warning + '1A', borderColor: a.critical ? theme.danger + '44' : theme.warning + '44' }]}>
                       <Text style={{ color: a.critical ? theme.danger : theme.warning, fontWeight: '700', fontSize: 14 }}>{a.truckNo}</Text>
@@ -77,10 +79,10 @@ export function FleetDashboardScreen({ onBack, onOpenTruck, onAddTruck }: Props)
                 </View>
               )}
 
-              <Text style={[styles.sectionLabel, { color: theme.mutedForeground }]}>All trucks</Text>
+              <Text style={[styles.sectionLabel, { color: theme.mutedForeground }]}>{t('fleet.allTrucks')}</Text>
             </View>
           }
-          ListEmptyComponent={<EmptyState title="No trucks in fleet" message="Add your first truck" actionLabel="Add truck" onAction={onAddTruck} icon="🚛" />}
+          ListEmptyComponent={<EmptyState title={t('fleet.noTrucks')} message={t('fleet.addFirst')} actionLabel={t('fleet.add')} onAction={onAddTruck} icon="🚛" />}
           renderItem={({ item }) => (
             <Pressable style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => onOpenTruck(item.id)}>
               <View style={styles.cardTop}>

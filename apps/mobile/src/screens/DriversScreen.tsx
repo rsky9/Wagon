@@ -5,6 +5,7 @@ import { useTheme, spacing, radius } from '@wagon/design'
 import { Button, EmptyState } from '@wagon/components'
 import { api } from '../config'
 import { completeQuestWithXp } from '../gamification'
+import { useI18n } from '@wagon/i18n'
 
 interface DriverRow {
   id: string
@@ -20,6 +21,7 @@ interface Props {
 
 export function DriversScreen({ onBack }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [drivers, setDrivers] = useState<DriverRow[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -58,26 +60,26 @@ export function DriversScreen({ onBack }: Props) {
     <KeyboardAvoidingView style={[styles.safe, { backgroundColor: theme.background }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Drivers</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('drivers.title')}</Text>
         <Pressable onPress={() => setShowForm((s) => !s)}><Text style={{ color: theme.primary, fontWeight: '800', fontSize: 22 }}>{showForm ? '✕' : '+'}</Text></Pressable>
       </View>
 
       {showForm && (
         <View style={[styles.form, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <TextInput style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]} value={name} onChangeText={setName} placeholder="Driver name" placeholderTextColor={theme.mutedForeground + '88'} />
-          <TextInput style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]} value={mobile} onChangeText={setMobile} placeholder="10-digit mobile" placeholderTextColor={theme.mutedForeground + '88'} keyboardType="number-pad" maxLength={10} />
-          <Button label="Add driver" onPress={add} loading={submitting} size="md" />
+          <TextInput style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]} value={name} onChangeText={setName} placeholder={t('drivers.name')} placeholderTextColor={theme.mutedForeground + '88'} />
+          <TextInput style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]} value={mobile} onChangeText={setMobile} placeholder={t('drivers.mobile')} placeholderTextColor={theme.mutedForeground + '88'} keyboardType="number-pad" maxLength={10} />
+          <Button label={t('drivers.add')} onPress={add} loading={submitting} size="md" />
         </View>
       )}
 
       {loading ? (
-        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>Loading…</Text>
+        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
       ) : (
         <FlatList
           data={drivers}
           keyExtractor={(d) => d.id}
           contentContainerStyle={styles.list}
-          ListEmptyComponent={<EmptyState title="No drivers yet" message="Add drivers to assign them to your trucks" actionLabel="Add driver" onAction={() => setShowForm(true)} icon="👤" />}
+          ListEmptyComponent={<EmptyState title={t('drivers.noDrivers')} message="Add drivers to assign them to your trucks" actionLabel={t('drivers.add')} onAction={() => setShowForm(true)} icon="👤" />}
           renderItem={({ item }) => (
             <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <View style={styles.cardTop}>
@@ -86,7 +88,7 @@ export function DriversScreen({ onBack }: Props) {
               </View>
               <Text style={[styles.mobile, { color: theme.mutedForeground }]}>{item.mobile}</Text>
               <Pressable onPress={() => remove(item.id, item.name)} hitSlop={8} style={{ alignSelf: 'flex-end' }}>
-                <Text style={{ color: theme.danger, fontSize: 13 }}>Remove</Text>
+                <Text style={{ color: theme.danger, fontSize: 13 }}>{t('drivers.remove')}</Text>
               </Pressable>
             </View>
           )}

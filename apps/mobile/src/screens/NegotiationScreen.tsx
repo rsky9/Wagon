@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { Button, EmptyState, StatusChip, type StatusTone } from '@wagon/components'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 
 interface Offer {
   id: string
@@ -41,6 +42,7 @@ const TONE: Record<string, StatusTone> = {
 
 export function NegotiationScreen({ loadId, onBack }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [data, setData] = useState<TimelineData | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -75,7 +77,7 @@ export function NegotiationScreen({ loadId, onBack }: Props) {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top', 'left', 'right']}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Negotiation</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('negotiation.title')}</Text>
         <View style={{ width: 20 }} />
       </View>
 
@@ -88,12 +90,12 @@ export function NegotiationScreen({ loadId, onBack }: Props) {
         )}
 
         {loading ? (
-          <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>Loading…</Text>
+          <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
         ) : (
           <>
             {pending.length > 0 && (
               <>
-                <Text style={[styles.section, { color: theme.foreground }]}>Respond to offer</Text>
+                <Text style={[styles.section, { color: theme.foreground }]}>{t('negotiation.respond')}</Text>
                 {pending.map((o) => (
                   <View key={o.id} style={[styles.offerCard, { backgroundColor: theme.card, borderColor: theme.primary + '55' }]}>
                     <View style={styles.offerTop}>
@@ -103,18 +105,18 @@ export function NegotiationScreen({ loadId, onBack }: Props) {
                     {o.conditions ? <Text style={[styles.conditions, { color: theme.mutedForeground }]}>Condition: {o.conditions}</Text> : null}
                     <Text style={[styles.validity, { color: theme.mutedForeground }]}>Valid {o.validityHours}h · {new Date(o.createdAt).toLocaleString('en-IN')}</Text>
                     <View style={styles.actions}>
-                      <Button label="Accept" onPress={() => respond(o, 'accept')} />
-                      <Button label="Counter" variant="secondary" onPress={() => respond(o, 'counter')} />
-                      <Button label="Decline" variant="destructive" onPress={() => respond(o, 'reject')} />
+                      <Button label={t('negotiation.accept')} onPress={() => respond(o, 'accept')} />
+                      <Button label={t('negotiation.counter')} variant="secondary" onPress={() => respond(o, 'counter')} />
+                      <Button label={t('negotiation.decline')} variant="destructive" onPress={() => respond(o, 'reject')} />
                     </View>
                   </View>
                 ))}
               </>
             )}
 
-            <Text style={[styles.section, { color: theme.foreground }]}>Negotiation timeline</Text>
+            <Text style={[styles.section, { color: theme.foreground }]}>{t('negotiation.timeline')}</Text>
             {history.length === 0 ? (
-              <EmptyState title="No offers yet" message="Counteroffers will appear here as a timeline" icon="🤝" />
+              <EmptyState title={t('negotiation.noOffers')} message="Counteroffers will appear here as a timeline" icon="🤝" />
             ) : (
               history.map((o, i) => (
                 <View key={o.id} style={styles.timelineRow}>

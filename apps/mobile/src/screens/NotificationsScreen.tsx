@@ -4,6 +4,7 @@ import { StyleSheet, Text, View, FlatList, Pressable } from 'react-native'
 import { useTheme, spacing, radius, timeAgo } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 
 interface NotificationItem {
   id: string
@@ -42,6 +43,7 @@ const TYPE_ICON: Record<string, string> = {
 
 export function NotificationsScreen({ onBack, onNavigate }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [items, setItems] = useState<NotificationItem[]>([])
   const [loading, setLoading] = useState(true)
   const [unread, setUnread] = useState(0)
@@ -67,7 +69,7 @@ export function NotificationsScreen({ onBack, onNavigate }: Props) {
           <Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text>
         </Pressable>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-          <Text style={[styles.title, { color: theme.foreground }]}>Notifications</Text>
+          <Text style={[styles.title, { color: theme.foreground }]}>{t('notifications.title')}</Text>
           {unread > 0 && (
             <View style={[styles.badge, { backgroundColor: theme.primary }]}>
               <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>{unread}</Text>
@@ -78,14 +80,14 @@ export function NotificationsScreen({ onBack, onNavigate }: Props) {
       </View>
 
       {loading ? (
-        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>Loading…</Text>
+        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
       ) : (
         <FlatList
           data={items}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           ListEmptyComponent={
-            <EmptyState title="No notifications" message="Alerts about your loads and trips will appear here" icon="🔔" />
+            <EmptyState title={t('notifications.empty')} message={t('notifications.emptyHint')} icon="🔔" />
           }
           renderItem={({ item }) => (
             <Pressable

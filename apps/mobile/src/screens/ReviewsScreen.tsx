@@ -4,6 +4,7 @@ import { StyleSheet, Text, View, FlatList, Pressable } from 'react-native'
 import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 
 interface ReviewRow {
   tripId: string
@@ -19,6 +20,7 @@ interface Props {
 
 export function ReviewsScreen({ onBack }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [reviews, setReviews] = useState<ReviewRow[]>([])
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<{ id: string } | null>(null)
@@ -34,18 +36,18 @@ export function ReviewsScreen({ onBack }: Props) {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Reviews</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('review.title')}</Text>
         <View style={{ width: 20 }} />
       </View>
 
       {loading ? (
-        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>Loading…</Text>
+        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
       ) : (
         <FlatList
           data={reviews}
           keyExtractor={(r) => r.tripId}
           contentContainerStyle={styles.list}
-          ListEmptyComponent={<EmptyState title="No reviews yet" message="Reviews from suppliers will appear after deliveries" icon="⭐" />}
+          ListEmptyComponent={<EmptyState title={t('review.none')} message="Reviews from suppliers will appear after deliveries" icon="⭐" />}
           renderItem={({ item }) => (
             <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <View style={styles.cardTop}>

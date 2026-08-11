@@ -4,6 +4,7 @@ import { useTheme, spacing, radius } from '@wagon/design'
 import { Wizard, Field } from '@wagon/components'
 import { api } from '../config'
 import type { Material, TruckModel } from '@wagon/contracts'
+import { useI18n } from '@wagon/i18n'
 
 interface Props {
   onComplete: () => void
@@ -44,6 +45,7 @@ function isoDaysFromNow(n: number) {
 
 export function PostLoadWizard({ onComplete, onCancel }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [step, setStep] = useState(0)
   const [submitting, setSubmitting] = useState(false)
 
@@ -130,7 +132,7 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
 
   return (
     <Wizard
-      title="Post a load"
+      title={t('postLoad.title')}
       steps={STEPS}
       step={step}
       onNext={next}
@@ -142,21 +144,21 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
     >
       {step === 0 && (
         <>
-          <Field label="Where from?">
-            <TextInput style={inputStyle} value={pickup} onChangeText={setPickup} placeholder="e.g. Hyderabad, Telangana" placeholderTextColor={theme.mutedForeground + '88'} />
+          <Field label={t('postLoad.whereFrom')}>
+            <TextInput style={inputStyle} value={pickup} onChangeText={setPickup} placeholder={t('postLoad.fromExample')} placeholderTextColor={theme.mutedForeground + '88'} />
           </Field>
-          <Field label="Where to?">
-            <TextInput style={inputStyle} value={drop} onChangeText={setDrop} placeholder="e.g. Chennai, Tamil Nadu" placeholderTextColor={theme.mutedForeground + '88'} />
+          <Field label={t('postLoad.whereTo')}>
+            <TextInput style={inputStyle} value={drop} onChangeText={setDrop} placeholder={t('postLoad.toExample')} placeholderTextColor={theme.mutedForeground + '88'} />
           </Field>
-          <Field label="Distance (km) — optional, we estimate it">
-            <TextInput style={inputStyle} value={distance} onChangeText={setDistance} placeholder="e.g. 513" keyboardType="decimal-pad" placeholderTextColor={theme.mutedForeground + '88'} />
+          <Field label={t('postLoad.distance')}>
+            <TextInput style={inputStyle} value={distance} onChangeText={setDistance} placeholder={t('postLoad.distanceExample')} keyboardType="decimal-pad" placeholderTextColor={theme.mutedForeground + '88'} />
           </Field>
         </>
       )}
 
       {step === 1 && (
         <>
-          <Field label="What are you shipping?">
+          <Field label={t('postLoad.shipping')}>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
               {MATERIAL_OPTIONS.map((m) => (
                 <Pressable key={m} onPress={() => setMaterial(m)} style={{ borderRadius: radius.full, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: material === m ? theme.primary : theme.background, borderColor: material === m ? theme.primary : theme.border }}>
@@ -165,15 +167,15 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
               ))}
             </View>
           </Field>
-          <Field label="Weight (tonnes)">
-            <TextInput style={inputStyle} value={weight} onChangeText={setWeight} placeholder="e.g. 35" keyboardType="decimal-pad" placeholderTextColor={theme.mutedForeground + '88'} />
+          <Field label={t('postLoad.weight')}>
+            <TextInput style={inputStyle} value={weight} onChangeText={setWeight} placeholder={t('postLoad.weightExample')} keyboardType="decimal-pad" placeholderTextColor={theme.mutedForeground + '88'} />
           </Field>
         </>
       )}
 
       {step === 2 && (
         <>
-          <Field label="Truck type">
+          <Field label={t('postLoad.truckType')}>
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               {TRUCK_TYPES.map((t) => (
                 <Pressable key={t} onPress={() => { setTruckType(t); setModelId(models.find((m) => m.type === t)?.id ?? modelId) }} style={{ borderRadius: radius.full, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: truckType === t ? theme.primary : theme.background, borderColor: truckType === t ? theme.primary : theme.border }}>
@@ -182,7 +184,7 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
               ))}
             </View>
           </Field>
-          <Field label="Truck size">
+          <Field label={t('postLoad.truckSize')}>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
               {typeModels.map((m) => (
                 <Pressable key={m.id} onPress={() => setModelId(m.id)} style={{ borderRadius: radius.full, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: modelId === m.id ? theme.primary : theme.background, borderColor: modelId === m.id ? theme.primary : theme.border }}>
@@ -191,7 +193,7 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
               ))}
             </View>
           </Field>
-          <Field label="Body type">
+          <Field label={t('postLoad.bodyType')}>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
               {BODY_TYPES.map((b) => (
                 <Pressable key={b} onPress={() => setBodyType(b)} style={{ borderRadius: radius.full, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: bodyType === b ? theme.primary : theme.background, borderColor: bodyType === b ? theme.primary : theme.border }}>
@@ -205,7 +207,7 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
 
       {step === 3 && (
         <>
-          <Field label="Pickup date">
+          <Field label={t('postLoad.pickupDate')}>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
               {DATE_PRESETS.map((p) => {
                 const date = isoDaysFromNow(p.key === 'today' ? 0 : p.key === 'tomorrow' ? 1 : p.key === '2d' ? 2 : 7)
@@ -218,19 +220,19 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
               })}
             </View>
           </Field>
-          <Field label="Delivery date (optional)">
+          <Field label={t('postLoad.deliveryDate')}>
             <TextInput style={inputStyle} value={dropDate} onChangeText={setDropDate} placeholder={`e.g. ${isoDaysFromNow(3)}`} placeholderTextColor={theme.mutedForeground + '88'} />
           </Field>
-          <Field label="Loading notes (optional)">
-            <TextInput style={inputStyle} value={loadingReq} onChangeText={setLoadingReq} placeholder="e.g. Forklift available" placeholderTextColor={theme.mutedForeground + '88'} />
+          <Field label={t('postLoad.loadingNotes')}>
+            <TextInput style={inputStyle} value={loadingReq} onChangeText={setLoadingReq} placeholder={t('postLoad.loadingNotesExample')} placeholderTextColor={theme.mutedForeground + '88'} />
           </Field>
-          <Field label="Special handling (optional)">
-            <TextInput style={inputStyle} value={specialReq} onChangeText={setSpecialReq} placeholder="e.g. Temperature controlled" placeholderTextColor={theme.mutedForeground + '88'} />
+          <Field label={t('postLoad.specialHandling')}>
+            <TextInput style={inputStyle} value={specialReq} onChangeText={setSpecialReq} placeholder={t('postLoad.specialExample')} placeholderTextColor={theme.mutedForeground + '88'} />
           </Field>
-          <Field label="Advance payment (₹, optional)">
-            <TextInput style={inputStyle} value={advanceAmount} onChangeText={setAdvanceAmount} placeholder="e.g. 5000" keyboardType="decimal-pad" placeholderTextColor={theme.mutedForeground + '88'} />
+          <Field label={t('postLoad.advance')}>
+            <TextInput style={inputStyle} value={advanceAmount} onChangeText={setAdvanceAmount} placeholder={t('postLoad.advanceExample')} keyboardType="decimal-pad" placeholderTextColor={theme.mutedForeground + '88'} />
           </Field>
-          <Field label="Payment terms">
+          <Field label={t('postLoad.paymentTerms')}>
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               {['Advance', 'Pay later'].map((opt) => (
                 <Pressable key={opt} onPress={() => setPayLater(opt === 'Pay later')} style={{ borderRadius: radius.full, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: payLater === (opt === 'Pay later') ? theme.primary : theme.background, borderColor: theme.border }}>

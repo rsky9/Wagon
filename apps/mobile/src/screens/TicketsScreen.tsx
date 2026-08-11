@@ -4,6 +4,7 @@ import { StyleSheet, Text, TextInput, View, FlatList, Pressable, Alert, Keyboard
 import { useTheme, spacing, radius, timeAgo } from '@wagon/design'
 import { Button, EmptyState } from '@wagon/components'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 
 interface Ticket {
   id: string
@@ -22,6 +23,7 @@ const CATEGORIES = ['general', 'payment', 'kyc', 'load', 'trip', 'technical']
 
 export function TicketsScreen({ onBack }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -55,13 +57,13 @@ export function TicketsScreen({ onBack }: Props) {
     <KeyboardAvoidingView style={[styles.safe, { backgroundColor: theme.background }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Support Tickets</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('tickets.title')}</Text>
         <Pressable onPress={() => setShowForm((s) => !s)}><Text style={{ color: theme.primary, fontSize: 22, fontWeight: '800' }}>{showForm ? '✕' : '+'}</Text></Pressable>
       </View>
 
       {showForm && (
         <View style={[styles.form, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <TextInput style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]} value={subject} onChangeText={setSubject} placeholder="Subject" placeholderTextColor={theme.mutedForeground + '88'} />
+          <TextInput style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]} value={subject} onChangeText={setSubject} placeholder={t('tickets.subject')} placeholderTextColor={theme.mutedForeground + '88'} />
           <View style={styles.chips}>
             {CATEGORIES.map((c) => (
               <Pressable key={c} style={[styles.chip, { backgroundColor: category === c ? theme.primary : theme.background, borderColor: category === c ? theme.primary : theme.border }]} onPress={() => setCategory(c)}>
@@ -69,19 +71,19 @@ export function TicketsScreen({ onBack }: Props) {
               </Pressable>
             ))}
           </View>
-          <TextInput style={[styles.input, styles.multiline, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]} value={message} onChangeText={setMessage} placeholder="Describe your issue…" placeholderTextColor={theme.mutedForeground + '88'} multiline />
-          <Button label="Submit ticket" onPress={submit} loading={submitting} size="md" />
+          <TextInput style={[styles.input, styles.multiline, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]} value={message} onChangeText={setMessage} placeholder={t('tickets.describe')} placeholderTextColor={theme.mutedForeground + '88'} multiline />
+          <Button label={t('tickets.submit')} onPress={submit} loading={submitting} size="md" />
         </View>
       )}
 
       {loading ? (
-        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>Loading…</Text>
+        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
       ) : (
         <FlatList
           data={tickets}
           keyExtractor={(t) => t.id}
           contentContainerStyle={styles.list}
-          ListEmptyComponent={<EmptyState title="No tickets" message="Raise a ticket and our team will help" actionLabel="New ticket" onAction={() => setShowForm(true)} icon="🎫" />}
+          ListEmptyComponent={<EmptyState title={t('tickets.none')} message={t('tickets.hint')} actionLabel={t('tickets.newTicket')} onAction={() => setShowForm(true)} icon="🎫" />}
           renderItem={({ item }) => (
             <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <View style={styles.cardTop}>
@@ -94,7 +96,7 @@ export function TicketsScreen({ onBack }: Props) {
               <View style={styles.cardBottom}>
                 <Text style={[styles.cardMeta, { color: theme.mutedForeground }]}>{item.category} · {timeAgo(item.createdAt)}</Text>
                 {item.status === 'open' && (
-                  <Pressable onPress={() => close(item.id)}><Text style={{ color: theme.danger, fontSize: 13 }}>Close</Text></Pressable>
+                  <Pressable onPress={() => close(item.id)}><Text style={{ color: theme.danger, fontSize: 13 }}>{t('tickets.close')}</Text></Pressable>
                 )}
               </View>
             </View>

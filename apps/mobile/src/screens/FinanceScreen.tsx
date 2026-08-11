@@ -4,6 +4,7 @@ import { StyleSheet, Text, View, FlatList, Pressable } from 'react-native'
 import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { WalletHeader, EmptyState } from '@wagon/components'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 
 interface Entry {
   id: string
@@ -22,6 +23,7 @@ interface Props {
 
 export function FinanceScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [entries, setEntries] = useState<Entry[]>([])
   const [balance, setBalance] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -37,7 +39,7 @@ export function FinanceScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Finance</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('nav.finance')}</Text>
         <View style={{ width: 20 }} />
       </View>
 
@@ -49,12 +51,12 @@ export function FinanceScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
           <View>
             <WalletHeader balance={balance} primaryLabel="Withdraw" onPrimary={onOpenBank} secondaryLabel="Statement" onSecondary={onOpenInvoices} />
             <View style={styles.statsRow}>
-              <Stat label="Total earnings" value={formatINR(earnings)} color={theme.success} theme={theme} />
-              <Stat label="Pending payout" value={formatINR(pending)} color={theme.warning} theme={theme} />
+              <Stat label={t('wallet.earnings')} value={formatINR(earnings)} color={theme.success} theme={theme} />
+              <Stat label={t('wallet.pendingPayout')} value={formatINR(pending)} color={theme.warning} theme={theme} />
             </View>
-            <Text style={[styles.sectionLabel, { color: theme.mutedForeground }]}>Settlements</Text>
-            {loading && <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 20 }}>Loading…</Text>}
-            {!loading && entries.length === 0 && <EmptyState title="No transactions yet" message="Payouts for delivered loads appear here" icon="₹" />}
+            <Text style={[styles.sectionLabel, { color: theme.mutedForeground }]}>{t('wallet.settlements')}</Text>
+            {loading && <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 20 }}>{t('common.loading')}</Text>}
+            {!loading && entries.length === 0 && <EmptyState title={t('wallet.noTransactions')} message={t('wallet.noTransactionsHint')} icon="₹" />}
           </View>
         }
         renderItem={({ item }) => (

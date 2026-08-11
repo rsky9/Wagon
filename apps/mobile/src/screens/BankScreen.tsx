@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius } from '@wagon/design'
 import { Button } from '@wagon/components'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 
 interface BankInfo {
   account: string | null
@@ -17,6 +18,7 @@ interface Props {
 
 export function BankScreen({ onBack }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [bank, setBank] = useState<BankInfo | null>(null)
   const [account, setAccount] = useState('')
   const [ifsc, setIfsc] = useState('')
@@ -57,7 +59,7 @@ export function BankScreen({ onBack }: Props) {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top', 'left', 'right']}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Bank & payouts</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('bank.title')}</Text>
         <View style={{ width: 20 }} />
       </View>
 
@@ -68,17 +70,17 @@ export function BankScreen({ onBack }: Props) {
           </Text>
         </View>
 
-        <Field label="Account number" theme={theme}>
-          <TextInput style={inputStyle} value={account} onChangeText={setAccount} keyboardType="number-pad" placeholder="Bank account number" placeholderTextColor={theme.mutedForeground + '88'} />
+        <Field label={t('bank.accountNumber')} theme={theme}>
+          <TextInput style={inputStyle} value={account} onChangeText={setAccount} keyboardType="number-pad" placeholder={t('bank.bankAccountNumber')} placeholderTextColor={theme.mutedForeground + '88'} />
         </Field>
-        <Field label="IFSC" theme={theme}>
-          <TextInput style={inputStyle} value={ifsc} onChangeText={setIfsc} placeholder="e.g. SBIN0001234" autoCapitalize="characters" placeholderTextColor={theme.mutedForeground + '88'} />
+        <Field label={t('bank.ifsc')} theme={theme}>
+          <TextInput style={inputStyle} value={ifsc} onChangeText={setIfsc} placeholder={t('bank.ifscExample')} autoCapitalize="characters" placeholderTextColor={theme.mutedForeground + '88'} />
         </Field>
-        <Field label="Account holder name" theme={theme}>
-          <TextInput style={inputStyle} value={holder} onChangeText={setHolder} placeholder="Name on the account" placeholderTextColor={theme.mutedForeground + '88'} />
+        <Field label={t('bank.accountHolder')} theme={theme}>
+          <TextInput style={inputStyle} value={holder} onChangeText={setHolder} placeholder={t('bank.holderHint')} placeholderTextColor={theme.mutedForeground + '88'} />
         </Field>
 
-        <Button label="Save payout details" onPress={save} loading={saving} />
+        <Button label={t('bank.save')} onPress={save} loading={saving} />
       </View>
     </SafeAreaView>
   )

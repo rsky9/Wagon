@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { StyleSheet, Text, View, ScrollView, Pressable, Switch } from 'react-native'
 import { useTheme, spacing, radius } from '@wagon/design'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 
 interface Prefs {
   loadAlerts: boolean
@@ -30,6 +31,7 @@ const ROWS: Array<{ key: keyof Prefs; icon: string; label: string; desc: string 
 
 export function NotificationPrefsScreen({ onBack }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [prefs, setPrefs] = useState<Prefs | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -48,12 +50,12 @@ export function NotificationPrefsScreen({ onBack }: Props) {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Notification settings</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('notifications.title')}</Text>
         <View style={{ width: 20 }} />
       </View>
 
       {loading ? (
-        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>Loading…</Text>
+        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
       ) : (
         <ScrollView contentContainerStyle={styles.body}>
           <Text style={[styles.subtitle, { color: theme.mutedForeground }]}>

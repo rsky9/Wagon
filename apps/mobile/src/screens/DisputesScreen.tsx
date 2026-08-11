@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius } from '@wagon/design'
 import { EmptyState, StatusChip, type StatusTone } from '@wagon/components'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 
 interface Dispute {
   id: string
@@ -23,6 +24,7 @@ const TONE: Record<string, StatusTone> = { open: 'warning', resolved: 'success' 
 
 export function DisputesScreen({ onBack, onRaise }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [items, setItems] = useState<Dispute[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -37,8 +39,8 @@ export function DisputesScreen({ onBack, onRaise }: Props) {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top', 'left', 'right']}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Disputes</Text>
-        <Pressable onPress={onRaise} hitSlop={8}><Text style={{ color: theme.primary, fontWeight: '800', fontSize: 14 }}>Raise</Text></Pressable>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('disputes.title')}</Text>
+        <Pressable onPress={onRaise} hitSlop={8}><Text style={{ color: theme.primary, fontWeight: '800', fontSize: 14 }}>{t('disputes.raise')}</Text></Pressable>
       </View>
 
       <FlatList
@@ -47,8 +49,8 @@ export function DisputesScreen({ onBack, onRaise }: Props) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetch(); setRefreshing(false) }} tintColor={theme.primary} colors={[theme.primary]} />}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          loading ? <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>Loading…</Text>
-          : <EmptyState title="No disputes" message="Raise a dispute for damaged goods, delays, payments or other issues" icon="⚖️" actionLabel="Raise a dispute" onAction={onRaise} />
+          loading ? <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
+          : <EmptyState title={t('disputes.none')} message="Raise a dispute for damaged goods, delays, payments or other issues" icon="⚖️" actionLabel={t('disputes.raiseAction')} onAction={onRaise} />
         }
         renderItem={({ item }) => (
           <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>

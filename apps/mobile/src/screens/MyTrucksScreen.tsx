@@ -4,6 +4,7 @@ import { StyleSheet, Text, View, FlatList, Pressable, Alert } from 'react-native
 import { useTheme, spacing, radius, formatWeight } from '@wagon/design'
 import { StatusChip, EmptyState } from '@wagon/components'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 
 interface TruckRow {
   id: string
@@ -21,6 +22,7 @@ interface Props {
 
 export function MyTrucksScreen({ onBack, onAdd }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [trucks, setTrucks] = useState<TruckRow[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -43,21 +45,21 @@ export function MyTrucksScreen({ onBack, onAdd }: Props) {
         <Pressable onPress={onBack} hitSlop={8}>
           <Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text>
         </Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>My Trucks</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('trucks.title')}</Text>
         <Pressable onPress={onAdd}>
           <Text style={{ color: theme.primary, fontWeight: '800', fontSize: 22 }}>+</Text>
         </Pressable>
       </View>
 
       {loading ? (
-        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>Loading…</Text>
+        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
       ) : (
         <FlatList
           data={trucks}
           keyExtractor={(t) => t.id}
           contentContainerStyle={styles.list}
           ListEmptyComponent={
-            <EmptyState title="No trucks yet" message="Add your first truck to start taking loads" actionLabel="Add truck" onAction={onAdd} icon="🚛" />
+            <EmptyState title={t('trucks.noTrucks')} message="Add your first truck to start taking loads" actionLabel={t('trucks.add')} onAction={onAdd} icon="🚛" />
           }
           renderItem={({ item }) => (
             <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -66,12 +68,12 @@ export function MyTrucksScreen({ onBack, onAdd }: Props) {
                 <StatusChip label={item.activeStatus ? 'Active' : 'Inactive'} tone={item.activeStatus ? 'success' : 'neutral'} />
               </View>
               <View style={styles.metaRow}>
-                <Meta label="Type" value={item.type} theme={theme} />
-                <Meta label="Origin" value={item.origin ?? '—'} theme={theme} />
-                <Meta label="Driver" value={item.driver?.name ?? 'Unassigned'} theme={theme} />
+                <Meta label={t('trucks.type')} value={item.type} theme={theme} />
+                <Meta label={t('trucks.origin')} value={item.origin ?? '—'} theme={theme} />
+                <Meta label={t('trucks.driver')} value={item.driver?.name ?? 'Unassigned'} theme={theme} />
               </View>
               <Pressable onPress={() => remove(item.id, item.truckNo)} hitSlop={8} style={{ alignSelf: 'flex-end' }}>
-                <Text style={{ color: theme.danger, fontSize: 13 }}>Remove</Text>
+                <Text style={{ color: theme.danger, fontSize: 13 }}>{t('common.remove')}</Text>
               </Pressable>
             </View>
           )}

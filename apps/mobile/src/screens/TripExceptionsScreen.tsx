@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius } from '@wagon/design'
 import { Button, EmptyState, StatusChip, type StatusTone } from '@wagon/components'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 
 interface Exception {
   id: string
@@ -34,6 +35,7 @@ const TONE: Record<string, StatusTone> = { open: 'warning', resolved: 'success' 
 
 export function TripExceptionsScreen({ tripId, onBack }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [items, setItems] = useState<Exception[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -66,7 +68,7 @@ export function TripExceptionsScreen({ tripId, onBack }: Props) {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top', 'left', 'right']}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Trip exceptions</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('tripExceptions.title')}</Text>
         <View style={{ width: 20 }} />
       </View>
 
@@ -74,7 +76,7 @@ export function TripExceptionsScreen({ tripId, onBack }: Props) {
         contentContainerStyle={styles.body}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetch(); setRefreshing(false) }} tintColor={theme.primary} colors={[theme.primary]} />}
       >
-        <Text style={[styles.section, { color: theme.foreground }]}>Report an issue</Text>
+        <Text style={[styles.section, { color: theme.foreground }]}>{t('tripExceptions.report')}</Text>
         <Text style={[styles.hint, { color: theme.mutedForeground }]}>Breakdowns, delays and accidents are handled as part of the trip — no need to call support.</Text>
         <View style={styles.kindRow}>
           {KINDS.map((k) => (
@@ -85,11 +87,11 @@ export function TripExceptionsScreen({ tripId, onBack }: Props) {
           ))}
         </View>
 
-        <Text style={[styles.section, { color: theme.foreground }]}>Timeline</Text>
+        <Text style={[styles.section, { color: theme.foreground }]}>{t('tripExceptions.timeline')}</Text>
         {loading ? (
-          <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 40 }}>Loading…</Text>
+          <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 40 }}>{t('common.loading')}</Text>
         ) : items.length === 0 ? (
-          <EmptyState title="No exceptions" message="Any reported issues will appear here" icon="✅" />
+          <EmptyState title={t('tripExceptions.none')} message={t('tripExceptions.hint')} icon="✅" />
         ) : (
           items.map((e) => (
             <View key={e.id} style={[styles.exc, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -102,7 +104,7 @@ export function TripExceptionsScreen({ tripId, onBack }: Props) {
               {e.photos.length > 0 && <Text style={{ color: theme.info, fontSize: 12 }}>📷 {e.photos.length} photo(s)</Text>}
               {e.status === 'open' && (
                 <Pressable style={[styles.resolveBtn, { borderColor: theme.success + '55' }]} onPress={() => resolve(e.id)}>
-                  <Text style={{ color: theme.success, fontWeight: '700', fontSize: 13 }}>Mark resolved</Text>
+                  <Text style={{ color: theme.success, fontWeight: '700', fontSize: 13 }}>{t('tripExceptions.markResolved')}</Text>
                 </Pressable>
               )}
             </View>

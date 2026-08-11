@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { EmptyState, StatusChip } from '@wagon/components'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 
 interface DecisionBid {
   id: string
@@ -43,6 +44,7 @@ interface Props {
 
 export function DecisionRoomScreen({ loadId, onBack, onConfirmed, onNegotiate }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [data, setData] = useState<DecisionRoomData | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -83,7 +85,7 @@ export function DecisionRoomScreen({ loadId, onBack, onConfirmed, onNegotiate }:
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top', 'left', 'right']}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Decision Room</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('decisionRoom.title')}</Text>
         <View style={{ width: 20 }} />
       </View>
 
@@ -97,22 +99,22 @@ export function DecisionRoomScreen({ loadId, onBack, onConfirmed, onNegotiate }:
             <View style={[styles.summaryCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <Text style={[styles.route, { color: theme.foreground }]}>{data.load.route}</Text>
               <View style={styles.summaryRow}>
-                <Stat label="Bids" value={data.summary.totalBids} theme={theme} />
-                <Stat label="Shortlisted" value={data.summary.shortlisted} theme={theme} />
-                <Stat label="Negotiating" value={data.summary.negotiating} theme={theme} />
-                <Stat label="Best price" value={data.summary.bestPrice ? formatINR(data.summary.bestPrice) : '—'} theme={theme} small />
+                <Stat label={t('decisionRoom.bids')} value={data.summary.totalBids} theme={theme} />
+                <Stat label={t('decisionRoom.shortlisted')} value={data.summary.shortlisted} theme={theme} />
+                <Stat label={t('decisionRoom.negotiating')} value={data.summary.negotiating} theme={theme} />
+                <Stat label={t('decisionRoom.bestPrice')} value={data.summary.bestPrice ? formatINR(data.summary.bestPrice) : '—'} theme={theme} small />
               </View>
               {onNegotiate && (
                 <Pressable style={[styles.negBtn, { backgroundColor: theme.primary }]} onPress={onNegotiate}>
-                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>View negotiation timeline</Text>
+                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>{t('decisionRoom.timeline')}</Text>
                 </Pressable>
               )}
             </View>
           ) : null
         }
         ListEmptyComponent={
-          loading ? <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>Loading…</Text>
-          : <EmptyState title="No bids yet" message="Qualified transporters will submit structured bids here" icon="🤝" />
+          loading ? <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
+          : <EmptyState title={t('decisionRoom.noBids')} message="Qualified transporters will submit structured bids here" icon="🤝" />
         }
         renderItem={({ item }) => (
           <View style={[styles.bidCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -122,17 +124,17 @@ export function DecisionRoomScreen({ loadId, onBack, onConfirmed, onNegotiate }:
             </View>
             <Text style={[styles.bidder, { color: theme.foreground }]}>{item.transporterName}</Text>
             <View style={styles.metrics}>
-              <Metric label="Match score" value={`${item.score}/100`} theme={theme} />
-              <Metric label="Rating" value={`${item.rating.toFixed(1)}★`} theme={theme} />
-              <Metric label="Trips done" value={`${item.completedTrips}/${item.tripsCount}`} theme={theme} />
-              <Metric label="Advance" value={item.advanceAmount ? formatINR(item.advanceAmount) : '—'} theme={theme} />
+              <Metric label={t('decisionRoom.matchScore')} value={`${item.score}/100`} theme={theme} />
+              <Metric label={t('decisionRoom.rating')} value={`${item.rating.toFixed(1)}★`} theme={theme} />
+              <Metric label={t('decisionRoom.tripsDone')} value={`${item.completedTrips}/${item.tripsCount}`} theme={theme} />
+              <Metric label={t('decisionRoom.advance')} value={item.advanceAmount ? formatINR(item.advanceAmount) : '—'} theme={theme} />
             </View>
 
             <View style={styles.actions}>
-              <ActionBtn label="Shortlist" tone="success" onPress={() => shortlist(item.id)} theme={theme} />
-              <ActionBtn label="Counter" tone="primary" onPress={() => counter(item.id, item.amount)} theme={theme} />
-              <ActionBtn label="Confirm" tone="brand" onPress={() => confirm(item.id, item.amount)} theme={theme} />
-              <ActionBtn label="Reject" tone="danger" onPress={() => reject(item.id)} theme={theme} />
+              <ActionBtn label={t('decisionRoom.shortlist')} tone="success" onPress={() => shortlist(item.id)} theme={theme} />
+              <ActionBtn label={t('decisionRoom.counter')} tone="primary" onPress={() => counter(item.id, item.amount)} theme={theme} />
+              <ActionBtn label={t('decisionRoom.confirm')} tone="brand" onPress={() => confirm(item.id, item.amount)} theme={theme} />
+              <ActionBtn label={t('decisionRoom.reject')} tone="danger" onPress={() => reject(item.id)} theme={theme} />
             </View>
           </View>
         )}

@@ -6,6 +6,7 @@ import { Button } from '@wagon/components'
 import { api } from '../config'
 import { completeQuestWithXp } from '../gamification'
 import type { TruckModel } from '@wagon/contracts'
+import { useI18n } from '@wagon/i18n'
 
 interface Props {
   onBack: () => void
@@ -16,6 +17,7 @@ const TYPES = ['open', 'container', 'trailer'] as const
 
 export function AddTruckScreen({ onBack, onDone }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [models, setModels] = useState<TruckModel[]>([])
   const [truckNo, setTruckNo] = useState('')
   const [type, setType] = useState<string>('container')
@@ -50,14 +52,14 @@ export function AddTruckScreen({ onBack, onDone }: Props) {
     <KeyboardAvoidingView style={[styles.safe, { backgroundColor: theme.background }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Add Truck</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('addTruck.title')}</Text>
         <View style={{ width: 20 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Label text="Truck number" />
-          <TextInput style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]} value={truckNo} onChangeText={setTruckNo} placeholder="e.g. AP36XY1234" placeholderTextColor={theme.mutedForeground + '88'} autoCapitalize="characters" />
+          <Label text={t('addTruck.truckNo')} />
+          <TextInput style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]} value={truckNo} onChangeText={setTruckNo} placeholder={t('addTruck.truckNoExample')} placeholderTextColor={theme.mutedForeground + '88'} autoCapitalize="characters" />
 
           <Label text="Truck type" />
           <View style={styles.chips}>
@@ -73,16 +75,16 @@ export function AddTruckScreen({ onBack, onDone }: Props) {
             ))}
           </View>
 
-          <Label text="Origin (optional)" />
-          <TextInput style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]} value={origin} onChangeText={setOrigin} placeholder="e.g. Hyderabad" placeholderTextColor={theme.mutedForeground + '88'} />
+          <Label text={t('addTruck.origin')} />
+          <TextInput style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]} value={origin} onChangeText={setOrigin} placeholder={t('addTruck.originExample')} placeholderTextColor={theme.mutedForeground + '88'} />
 
           <Label text="GPS login ID (optional)" />
-          <TextInput style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]} value={gpsLogin} onChangeText={setGpsLogin} placeholder="GPS device ID" placeholderTextColor={theme.mutedForeground + '88'} />
+          <TextInput style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]} value={gpsLogin} onChangeText={setGpsLogin} placeholder={t('addTruck.gpsDevice')} placeholderTextColor={theme.mutedForeground + '88'} />
         </View>
       </ScrollView>
 
       <View style={[styles.footer, { borderTopColor: theme.border }]}>
-        <Button label="Save Truck" onPress={submit} loading={submitting} />
+        <Button label={t('addTruck.save')} onPress={submit} loading={submitting} />
       </View>
     </KeyboardAvoidingView>
   )

@@ -5,6 +5,7 @@ import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { StatusChip, EmptyState, type StatusTone } from '@wagon/components'
 import { api } from '../config'
 import type { Load } from '@wagon/contracts'
+import { useI18n } from '@wagon/i18n'
 
 interface MyBid {
   id: string
@@ -36,6 +37,7 @@ const TONE: Record<string, StatusTone> = {
 
 export function MyBidsScreen({ onBack, onOpenLoad }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [bids, setBids] = useState<MyBid[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -57,7 +59,7 @@ export function MyBidsScreen({ onBack, onOpenLoad }: Props) {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top', 'left', 'right']}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>My bids</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('myBids.title')}</Text>
         <View style={{ width: 20 }} />
       </View>
 
@@ -67,8 +69,8 @@ export function MyBidsScreen({ onBack, onOpenLoad }: Props) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetch(); setRefreshing(false) }} tintColor={theme.primary} colors={[theme.primary]} />}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          loading ? <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>Loading…</Text>
-          : <EmptyState title="No bids yet" message="Loads you bid on will appear here" icon="🤝" />
+          loading ? <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
+          : <EmptyState title={t('myBids.noBids')} message={t('myBids.hint')} icon="🤝" />
         }
         renderItem={({ item }) => (
           <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -87,7 +89,7 @@ export function MyBidsScreen({ onBack, onOpenLoad }: Props) {
             </Pressable>
             {(item.status === 'pending' || item.status === 'shortlisted') && (
               <Pressable style={[styles.withdraw, { borderColor: theme.danger + '55' }]} onPress={() => withdraw(item)}>
-                <Text style={{ color: theme.danger, fontWeight: '700', fontSize: 13 }}>Withdraw bid</Text>
+                <Text style={{ color: theme.danger, fontWeight: '700', fontSize: 13 }}>{t('myBids.withdraw')}</Text>
               </Pressable>
             )}
           </View>

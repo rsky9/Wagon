@@ -5,6 +5,7 @@ import { useTheme, spacing, radius } from '@wagon/design'
 import { Button } from '@wagon/components'
 import { api } from '../config'
 import type { Material, TruckModel } from '@wagon/contracts'
+import { useI18n } from '@wagon/i18n'
 
 export interface LoadFilters {
   truckType?: string
@@ -24,6 +25,7 @@ const TYPES = ['open', 'container', 'trailer'] as const
 
 export function FiltersScreen({ initial, onApply, onClose }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [models, setModels] = useState<TruckModel[]>([])
   const [materials, setMaterials] = useState<Material[]>([])
   const [truckType, setTruckType] = useState<string | undefined>(initial?.truckType)
@@ -44,14 +46,14 @@ export function FiltersScreen({ initial, onApply, onClose }: Props) {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
-        <Text style={[styles.title, { color: theme.foreground }]}>Filters</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('filters.title')}</Text>
         <Pressable onPress={onClose} hitSlop={8}>
           <Text style={{ color: theme.mutedForeground, fontSize: 16 }}>✕</Text>
         </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        <Section label="Truck type">
+        <Section label={t('filters.truckType')}>
           <View style={styles.chips}>
             {TYPES.map((t) => (
               <Chip key={t} label={t} active={truckType === t} onPress={() => { setTruckType(truckType === t ? undefined : t); setModelId(undefined) }} theme={theme} />
@@ -60,7 +62,7 @@ export function FiltersScreen({ initial, onApply, onClose }: Props) {
         </Section>
 
         {typeModels.length > 0 && (
-          <Section label="Truck model">
+          <Section label={t('filters.truckModel')}>
             <View style={styles.chips}>
               {typeModels.map((m) => (
                 <Chip key={m.id} label={m.model} active={modelId === m.id} onPress={() => setModelId(modelId === m.id ? undefined : m.id)} theme={theme} />
@@ -69,7 +71,7 @@ export function FiltersScreen({ initial, onApply, onClose }: Props) {
           </Section>
         )}
 
-        <Section label="Material">
+        <Section label={t('filters.material')}>
           <View style={styles.chips}>
             {materials.map((m) => (
               <Chip key={m.id} label={m.name} active={materialId === m.id} onPress={() => setMaterialId(materialId === m.id ? undefined : m.id)} theme={theme} />
@@ -77,18 +79,18 @@ export function FiltersScreen({ initial, onApply, onClose }: Props) {
           </View>
         </Section>
 
-        <Section label="Weight (tonnes)">
+        <Section label={t('filters.weight')}>
           <View style={styles.weightRow}>
-            <WeightBtn label="Any" active={minWeight === undefined} onPress={() => { setMinWeight(undefined); setMaxWeight(undefined) }} theme={theme} />
-            <WeightBtn label="< 20" active={minWeight === undefined && maxWeight === 20} onPress={() => { setMinWeight(undefined); setMaxWeight(20) }} theme={theme} />
-            <WeightBtn label="20–35" active={minWeight === 20 && maxWeight === 35} onPress={() => { setMinWeight(20); setMaxWeight(35) }} theme={theme} />
-            <WeightBtn label="> 35" active={minWeight === 35 && maxWeight === undefined} onPress={() => { setMinWeight(35); setMaxWeight(undefined) }} theme={theme} />
+            <WeightBtn label={t('filters.any')} active={minWeight === undefined} onPress={() => { setMinWeight(undefined); setMaxWeight(undefined) }} theme={theme} />
+            <WeightBtn label={t('filters.under20')} active={minWeight === undefined && maxWeight === 20} onPress={() => { setMinWeight(undefined); setMaxWeight(20) }} theme={theme} />
+            <WeightBtn label={t('filters.range2035')} active={minWeight === 20 && maxWeight === 35} onPress={() => { setMinWeight(20); setMaxWeight(35) }} theme={theme} />
+            <WeightBtn label={t('filters.over35')} active={minWeight === 35 && maxWeight === undefined} onPress={() => { setMinWeight(35); setMaxWeight(undefined) }} theme={theme} />
           </View>
         </Section>
       </ScrollView>
 
       <View style={[styles.footer, { borderTopColor: theme.border }]}>
-        <Button label="Apply filters" onPress={() => onApply({ truckType, modelId, materialId, minWeight, maxWeight })} />
+        <Button label={t('filters.apply')} onPress={() => onApply({ truckType, modelId, materialId, minWeight, maxWeight })} />
       </View>
     </SafeAreaView>
   )

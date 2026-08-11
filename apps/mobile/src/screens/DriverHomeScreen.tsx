@@ -4,6 +4,7 @@ import { StyleSheet, Text, View, FlatList, Pressable, RefreshControl, Switch } f
 import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { StatusChip, EmptyState, type StatusTone } from '@wagon/components'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 
 interface DriverTrip {
   id: string
@@ -30,6 +31,7 @@ const TONE: Record<string, StatusTone> = {
 
 export function DriverHomeScreen({ onOpenTrip }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [data, setData] = useState<DriverHome | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -52,12 +54,12 @@ export function DriverHomeScreen({ onOpenTrip }: Props) {
         <Text style={[styles.logo, { color: theme.foreground }]}>
           Wagon<Text style={{ color: theme.primary }}>.</Text>
         </Text>
-        <Text style={[styles.sub, { color: theme.mutedForeground }]}>Driver</Text>
+        <Text style={[styles.sub, { color: theme.mutedForeground }]}>{t('driver.title')}</Text>
       </View>
 
       <View style={[styles.availRow, { backgroundColor: theme.background, borderColor: theme.border }]}>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.availTitle, { color: theme.foreground }]}>Available for trips</Text>
+          <Text style={[styles.availTitle, { color: theme.foreground }]}>{t('driver.availableForTrips')}</Text>
           <Text style={[styles.availSub, { color: theme.mutedForeground }]}>
             {available ? 'Transporters can assign you loads' : 'You are offline'}
           </Text>
@@ -73,7 +75,7 @@ export function DriverHomeScreen({ onOpenTrip }: Props) {
         ListHeaderComponent={
           data?.activeTrip ? (
             <Pressable style={[styles.activeCard, { backgroundColor: theme.primary }]} onPress={() => onOpenTrip(data.activeTrip!.id)}>
-              <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800', letterSpacing: 1 }}>ACTIVE TRIP</Text>
+              <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800', letterSpacing: 1 }}>{t('driver.activeTrip')}</Text>
               <Text style={{ color: '#fff', fontSize: 17, fontWeight: '800', marginTop: 4 }}>
                 {data.activeTrip.load.pickupAddr} → {data.activeTrip.load.dropAddr}
               </Text>
@@ -84,7 +86,7 @@ export function DriverHomeScreen({ onOpenTrip }: Props) {
             </Pressable>
           ) : null
         }
-        ListEmptyComponent={<EmptyState title="No trips today" message="Your assigned trips for today will appear here" icon="🧭" />}
+        ListEmptyComponent={<EmptyState title={t('driver.noTripsToday')} message="Your assigned trips for today will appear here" icon="🧭" />}
         renderItem={({ item }) => (
           <Pressable style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]} onPress={() => onOpenTrip(item.id)}>
             <View style={styles.cardTop}>

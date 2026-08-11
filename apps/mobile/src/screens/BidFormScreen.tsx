@@ -5,6 +5,7 @@ import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { Button } from '@wagon/components'
 import { api } from '../config'
 import type { Load } from '@wagon/contracts'
+import { useI18n } from '@wagon/i18n'
 
 interface TruckRef {
   id: string
@@ -27,6 +28,7 @@ interface Props {
 /** Structured bid: not just a price — truck, driver, advance, balance, pickup, ETA, validity. */
 export function BidFormScreen({ load, onBack, onSubmitted }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [trucks, setTrucks] = useState<TruckRef[]>([])
   const [drivers, setDrivers] = useState<DriverRef[]>([])
   const [amount, setAmount] = useState(String(Math.round(load.fareEstimate)))
@@ -82,7 +84,7 @@ export function BidFormScreen({ load, onBack, onSubmitted }: Props) {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top', 'left', 'right']}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Submit a bid</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('bidForm.title')}</Text>
         <View style={{ width: 20 }} />
       </View>
 
@@ -92,11 +94,11 @@ export function BidFormScreen({ load, onBack, onSubmitted }: Props) {
           <Text style={[styles.meta, { color: theme.mutedForeground }]}>{load.weight}t · {load.distanceKm} km · reference {formatINR(load.fareEstimate)}</Text>
         </View>
 
-        <Field label="Your freight amount (₹)" theme={theme}>
+        <Field label={t('bidForm.freightAmount')} theme={theme}>
           <TextInput style={inputStyle} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholderTextColor={theme.mutedForeground + '88'} />
         </Field>
 
-        <Field label="Select truck" theme={theme}>
+        <Field label={t('bidForm.selectTruck')} theme={theme}>
           <View style={styles.chipRow}>
             {trucks.map((t) => (
               <Pressable key={t.id} onPress={() => setTruckId(t.id)} style={[styles.chip, { backgroundColor: truckId === t.id ? theme.primary : theme.card, borderColor: truckId === t.id ? theme.primary : theme.border }]}>
@@ -104,40 +106,40 @@ export function BidFormScreen({ load, onBack, onSubmitted }: Props) {
                 <Text style={{ color: truckId === t.id ? 'rgba(255,255,255,0.8)' : theme.mutedForeground, fontSize: 10 }}>{t.type}</Text>
               </Pressable>
             ))}
-            {trucks.length === 0 && <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>No trucks yet — add one from your fleet.</Text>}
+            {trucks.length === 0 && <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>{t('bidForm.noTrucks')}</Text>}
           </View>
         </Field>
 
-        <Field label="Select driver" theme={theme}>
+        <Field label={t('bidForm.selectDriver')} theme={theme}>
           <View style={styles.chipRow}>
             {drivers.map((d) => (
               <Pressable key={d.id} onPress={() => setDriverId(d.id)} style={[styles.chip, { backgroundColor: driverId === d.id ? theme.primary : theme.card, borderColor: driverId === d.id ? theme.primary : theme.border }]}>
                 <Text style={{ color: driverId === d.id ? '#fff' : theme.foreground, fontSize: 12, fontWeight: '700' }}>{d.name}</Text>
               </Pressable>
             ))}
-            {drivers.length === 0 && <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>No drivers yet.</Text>}
+            {drivers.length === 0 && <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>{t('bidForm.noDrivers')}</Text>}
           </View>
         </Field>
 
         <View style={styles.twoCol}>
-          <Field label="Advance (₹)" theme={theme} style={{ flex: 1 }}>
+          <Field label={t('bidForm.advance')} theme={theme} style={{ flex: 1 }}>
             <TextInput style={inputStyle} value={advance} onChangeText={setAdvance} keyboardType="decimal-pad" placeholderTextColor={theme.mutedForeground + '88'} />
           </Field>
-          <Field label="Balance (₹)" theme={theme} style={{ flex: 1 }}>
+          <Field label={t('bidForm.balance')} theme={theme} style={{ flex: 1 }}>
             <TextInput style={inputStyle} value={balance} onChangeText={setBalance} keyboardType="decimal-pad" placeholderTextColor={theme.mutedForeground + '88'} />
           </Field>
         </View>
 
         <View style={styles.twoCol}>
-          <Field label="Pickup by (HH:MM)" theme={theme} style={{ flex: 1 }}>
+          <Field label={t('bidForm.pickupBy')} theme={theme} style={{ flex: 1 }}>
             <TextInput style={inputStyle} value={pickupBy} onChangeText={setPickupBy} placeholder="08:00" placeholderTextColor={theme.mutedForeground + '88'} />
           </Field>
-          <Field label="ETA (hours)" theme={theme} style={{ flex: 1 }}>
+          <Field label={t('bidForm.eta')} theme={theme} style={{ flex: 1 }}>
             <TextInput style={inputStyle} value={etaHours} onChangeText={setEtaHours} keyboardType="number-pad" placeholder="6" placeholderTextColor={theme.mutedForeground + '88'} />
           </Field>
         </View>
 
-        <Field label="Bid valid for (hours)" theme={theme}>
+        <Field label={t('bidForm.validity')} theme={theme}>
           <View style={styles.chipRow}>
             {['12', '24', '48', '72'].map((v) => (
               <Pressable key={v} onPress={() => setValidity(v)} style={[styles.chip, { backgroundColor: validity === v ? theme.primary : theme.card, borderColor: validity === v ? theme.primary : theme.border }]}>
@@ -149,7 +151,7 @@ export function BidFormScreen({ load, onBack, onSubmitted }: Props) {
       </ScrollView>
 
       <View style={[styles.footer, { borderTopColor: theme.border }]}>
-        <Button label="Submit bid" onPress={submit} loading={submitting} />
+        <Button label={t('bidForm.submit')} onPress={submit} loading={submitting} />
       </View>
     </SafeAreaView>
   )

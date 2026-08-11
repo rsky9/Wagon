@@ -4,6 +4,7 @@ import { useTheme } from '@wagon/design'
 import { GamifiedOnboarding, QuestField, questInputStyle } from '@wagon/components'
 import { api } from '../config'
 import { awardXp } from '../gamification'
+import { useI18n } from '@wagon/i18n'
 
 interface Props {
   onComplete: () => void
@@ -12,6 +13,7 @@ interface Props {
 
 export function SupplierOnboarding({ onComplete, onSkip }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [companyName, setCompanyName] = useState('')
   const [gst, setGst] = useState('')
   const [pickup, setPickup] = useState('')
@@ -47,11 +49,11 @@ export function SupplierOnboarding({ onComplete, onSkip }: Props) {
           valid: !!companyName.trim(),
           render: () => (
             <>
-              <QuestField label="Company / business name">
-                <TextInput style={inputStyle} value={companyName} onChangeText={setCompanyName} placeholder="e.g. ABC Manufacturing" placeholderTextColor={theme.mutedForeground + '88'} />
+              <QuestField label={t('onboarding.companyName')}>
+                <TextInput style={inputStyle} value={companyName} onChangeText={setCompanyName} placeholder={t('onboarding.companyExample')} placeholderTextColor={theme.mutedForeground + '88'} />
               </QuestField>
-              <QuestField label="GST number (optional for now)">
-                <TextInput style={inputStyle} value={gst} onChangeText={setGst} placeholder="e.g. 36ABCDE1234F1Z5" autoCapitalize="characters" placeholderTextColor={theme.mutedForeground + '88'} />
+              <QuestField label={t('onboarding.gst')}>
+                <TextInput style={inputStyle} value={gst} onChangeText={setGst} placeholder={t('onboarding.gstExample')} autoCapitalize="characters" placeholderTextColor={theme.mutedForeground + '88'} />
               </QuestField>
             </>
           ),
@@ -63,8 +65,8 @@ export function SupplierOnboarding({ onComplete, onSkip }: Props) {
           hint: 'Comma-separated towns — helps trucks find your loads faster.',
           valid: !!pickup.trim(),
           render: () => (
-            <QuestField label="Usual pickup locations">
-              <TextInput style={inputStyle} value={pickup} onChangeText={setPickup} placeholder="Hyderabad, Vijayawada" placeholderTextColor={theme.mutedForeground + '88'} />
+            <QuestField label={t('onboarding.pickupLocations')}>
+              <TextInput style={inputStyle} value={pickup} onChangeText={setPickup} placeholder={t('onboarding.pickupExample')} placeholderTextColor={theme.mutedForeground + '88'} />
             </QuestField>
           ),
         },

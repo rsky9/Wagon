@@ -4,6 +4,7 @@ import { StyleSheet, Text, View, FlatList, Pressable } from 'react-native'
 import { useTheme, spacing, radius, timeAgo } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 
 interface ChatThread {
   tripId: string
@@ -21,6 +22,7 @@ interface Props {
 
 export function ChatListScreen({ onBack, onOpenThread }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [threads, setThreads] = useState<ChatThread[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -37,18 +39,18 @@ export function ChatListScreen({ onBack, onOpenThread }: Props) {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Messages</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('chat.title')}</Text>
         <View style={{ width: 20 }} />
       </View>
 
       {loading ? (
-        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>Loading…</Text>
+        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
       ) : (
         <FlatList
           data={threads}
           keyExtractor={(c) => c.tripId}
           contentContainerStyle={styles.list}
-          ListEmptyComponent={<EmptyState title="No conversations" message="Chat threads are created per trip once a load is accepted" icon="💬" />}
+          ListEmptyComponent={<EmptyState title={t('chat.noConversations')} message="Chat threads are created per trip once a load is accepted" icon="💬" />}
           renderItem={({ item }) => (
             <Pressable style={[styles.row, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => onOpenThread(item)}>
               <View style={[styles.avatar, { backgroundColor: theme.accent }]}>

@@ -4,6 +4,7 @@ import { StyleSheet, Text, View, ScrollView, Pressable, TextInput, Alert, Switch
 import { useTheme, spacing, radius } from '@wagon/design'
 import { Button, StatusChip } from '@wagon/components'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 
 interface TruckDetail {
   id: string
@@ -27,6 +28,7 @@ interface Props {
 
 export function TruckDetailScreen({ truckId, onBack }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [truck, setTruck] = useState<TruckDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [active, setActive] = useState(true)
@@ -74,11 +76,11 @@ export function TruckDetailScreen({ truckId, onBack }: Props) {
   }
 
   if (loading) {
-    return <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}><View style={styles.center}><Text style={{ color: theme.mutedForeground }}>Loading…</Text></View></SafeAreaView>
+    return <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}><View style={styles.center}><Text style={{ color: theme.mutedForeground }}>{t('common.loading')}</Text></View></SafeAreaView>
   }
 
   if (!truck) {
-    return <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}><Header onBack={onBack} theme={theme} /><View style={styles.center}><Text style={{ color: theme.mutedForeground }}>Truck not found</Text></View></SafeAreaView>
+    return <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}><Header onBack={onBack} theme={theme} /><View style={styles.center}><Text style={{ color: theme.mutedForeground }}>{t('truckDetail.notFound')}</Text></View></SafeAreaView>
   }
 
   return (
@@ -93,28 +95,28 @@ export function TruckDetailScreen({ truckId, onBack }: Props) {
 
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <View style={styles.switchRow}>
-            <Text style={[styles.label, { color: theme.foreground }]}>Availability</Text>
+            <Text style={[styles.label, { color: theme.foreground }]}>{t('truckDetail.availability')}</Text>
             <Switch value={active} onValueChange={setActive} trackColor={{ true: theme.primary, false: theme.border }} thumbColor="#fff" />
           </View>
         </View>
 
-        <Text style={[styles.section, { color: theme.mutedForeground }]}>Documents (YYYY-MM-DD)</Text>
+        <Text style={[styles.section, { color: theme.mutedForeground }]}>{t('truckDetail.documents')}</Text>
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Field label="Insurance expiry"><TextInput style={inputStyle} value={insurance} onChangeText={setInsurance} placeholder="2026-08-19" placeholderTextColor={theme.mutedForeground + '88'} /></Field>
-          <Field label="Permit expiry"><TextInput style={inputStyle} value={permit} onChangeText={setPermit} placeholder="2026-08-19" placeholderTextColor={theme.mutedForeground + '88'} /></Field>
-          <Field label="Fitness certificate expiry"><TextInput style={inputStyle} value={fitness} onChangeText={setFitness} placeholder="2026-08-19" placeholderTextColor={theme.mutedForeground + '88'} /></Field>
-          <Field label="Pollution certificate expiry"><TextInput style={inputStyle} value={pollution} onChangeText={setPollution} placeholder="2026-08-19" placeholderTextColor={theme.mutedForeground + '88'} /></Field>
+          <Field label={t('truckDetail.insuranceExpiry')}><TextInput style={inputStyle} value={insurance} onChangeText={setInsurance} placeholder="2026-08-19" placeholderTextColor={theme.mutedForeground + '88'} /></Field>
+          <Field label={t('truckDetail.permitExpiry')}><TextInput style={inputStyle} value={permit} onChangeText={setPermit} placeholder="2026-08-19" placeholderTextColor={theme.mutedForeground + '88'} /></Field>
+          <Field label={t('truckDetail.fitnessExpiry')}><TextInput style={inputStyle} value={fitness} onChangeText={setFitness} placeholder="2026-08-19" placeholderTextColor={theme.mutedForeground + '88'} /></Field>
+          <Field label={t('truckDetail.pollutionExpiry')}><TextInput style={inputStyle} value={pollution} onChangeText={setPollution} placeholder="2026-08-19" placeholderTextColor={theme.mutedForeground + '88'} /></Field>
         </View>
 
-        <Text style={[styles.section, { color: theme.mutedForeground }]}>Maintenance</Text>
+        <Text style={[styles.section, { color: theme.mutedForeground }]}>{t('truckDetail.maintenance')}</Text>
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Field label="Odometer (km)"><TextInput style={inputStyle} value={odometer} onChangeText={setOdometer} placeholder="e.g. 45000" keyboardType="number-pad" placeholderTextColor={theme.mutedForeground + '88'} /></Field>
+          <Field label={t('truckDetail.odometer')}><TextInput style={inputStyle} value={odometer} onChangeText={setOdometer} placeholder={t('truckDetail.odometerExample')} keyboardType="number-pad" placeholderTextColor={theme.mutedForeground + '88'} /></Field>
           {truck.nextServiceKm != null && (
             <Text style={{ color: theme.mutedForeground, fontSize: 13 }}>Next service at {truck.nextServiceKm} km</Text>
           )}
         </View>
 
-        <Button label="Save changes" onPress={save} />
+        <Button label={t('truckDetail.save')} onPress={save} />
       </ScrollView>
     </KeyboardAvoidingView>
   )
@@ -131,10 +133,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function Header({ onBack, theme }: { onBack: () => void; theme: ReturnType<typeof useTheme> }) {
+  const { t } = useI18n()
   return (
     <View style={[styles.header, { borderBottomColor: theme.border }]}>
       <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-      <Text style={[styles.title, { color: theme.foreground }]}>Truck details</Text>
+      <Text style={[styles.title, { color: theme.foreground }]}>{t('truckDetail.title')}</Text>
       <View style={{ width: 20 }} />
     </View>
   )

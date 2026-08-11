@@ -17,6 +17,7 @@ import { Button } from '@wagon/components'
 import { api } from '../config'
 import { completeQuestWithXp } from '../gamification'
 import type { Material, TruckModel } from '@wagon/contracts'
+import { useI18n } from '@wagon/i18n'
 
 interface Props {
   onBack: () => void
@@ -25,6 +26,7 @@ interface Props {
 
 export function PostLoadScreen({ onBack, onPosted }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const insets = useSafeAreaInsets()
   const [models, setModels] = useState<TruckModel[]>([])
   const [materials, setMaterials] = useState<Material[]>([])
@@ -104,25 +106,25 @@ export function PostLoadScreen({ onBack, onPosted }: Props) {
         <Pressable onPress={onBack} hitSlop={8}>
           <Text style={[styles.back, { color: theme.mutedForeground }]}>←</Text>
         </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.foreground }]}>Post a load</Text>
+        <Text style={[styles.headerTitle, { color: theme.foreground }]}>{t('postLoadLegacy.title')}</Text>
         <View style={{ width: 30 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <SectionLabel text="Route" />
-          <Input label="Pickup address" value={pickup} onChange={setPickup} placeholder="e.g. Ameerpet, Hyderabad" theme={theme} />
-          <Input label="Drop address" value={drop} onChange={setDrop} placeholder="e.g. Vijayawada, AP" theme={theme} />
+          <Input label={t('postLoadLegacy.pickupAddress')} value={pickup} onChange={setPickup} placeholder={t('postLoadLegacy.pickupExample')} theme={theme} />
+          <Input label={t('postLoadLegacy.dropAddress')} value={drop} onChange={setDrop} placeholder={t('postLoadLegacy.dropExample')} theme={theme} />
         </View>
 
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <SectionLabel text="Cargo" />
           <View style={styles.twoCol}>
-            <Input label="Weight (t)" value={weight} onChange={setWeight} placeholder="e.g. 35" keyboard="decimal-pad" theme={theme} half />
-            <Input label="Distance (km)" value={distance} onChange={setDistance} placeholder="e.g. 250" keyboard="decimal-pad" theme={theme} half />
+            <Input label={t('postLoadLegacy.weight')} value={weight} onChange={setWeight} placeholder={t('postLoadLegacy.weightExample')} keyboard="decimal-pad" theme={theme} half />
+            <Input label={t('postLoadLegacy.distance')} value={distance} onChange={setDistance} placeholder={t('postLoadLegacy.distanceExample')} keyboard="decimal-pad" theme={theme} half />
           </View>
-          <Input label="Pickup date" value={date} onChange={setDate} placeholder="YYYY-MM-DD" theme={theme} />
-          <Input label="Description (optional)" value={description} onChange={setDescription} placeholder="What are you shipping?" multiline theme={theme} />
+          <Input label={t('postLoadLegacy.pickupDate')} value={date} onChange={setDate} placeholder={t('postLoadLegacy.dateExample')} theme={theme} />
+          <Input label={t('postLoadLegacy.description')} value={description} onChange={setDescription} placeholder={t('postLoadLegacy.shipping')} multiline theme={theme} />
         </View>
 
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -156,7 +158,7 @@ export function PostLoadScreen({ onBack, onPosted }: Props) {
           shadows.md,
         ]}
       >
-        <Button label="Post Load" onPress={submit} loading={submitting} />
+        <Button label={t('postLoadLegacy.post')} onPress={submit} loading={submitting} />
       </View>
     </KeyboardAvoidingView>
   )

@@ -5,6 +5,7 @@ import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { StatusChip, EmptyState, type StatusTone } from '@wagon/components'
 import { api } from '../config'
 import type { Load } from '@wagon/contracts'
+import { useI18n } from '@wagon/i18n'
 
 interface Props {
   onBack: () => void
@@ -17,6 +18,7 @@ const TONE: Record<string, StatusTone> = {
 
 export function LoadHistoryScreen({ onBack }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [loads, setLoads] = useState<Load[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -30,18 +32,18 @@ export function LoadHistoryScreen({ onBack }: Props) {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Load history</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('loadHistory.title')}</Text>
         <View style={{ width: 20 }} />
       </View>
 
       {loading ? (
-        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>Loading…</Text>
+        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
       ) : (
         <FlatList
           data={loads}
           keyExtractor={(l) => l.id}
           contentContainerStyle={styles.list}
-          ListEmptyComponent={<EmptyState title="No history" message="Completed and cancelled loads appear here" icon="🗂️" />}
+          ListEmptyComponent={<EmptyState title={t('loadHistory.none')} message="Completed and cancelled loads appear here" icon="🗂️" />}
           renderItem={({ item }) => (
             <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <View style={styles.cardTop}>

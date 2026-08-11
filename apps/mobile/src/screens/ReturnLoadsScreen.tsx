@@ -5,6 +5,7 @@ import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { StatusChip, EmptyState, LoadCard, type StatusTone } from '@wagon/components'
 import { api } from '../config'
 import type { Load } from '@wagon/contracts'
+import { useI18n } from '@wagon/i18n'
 
 interface ReturnData {
   returnLoads: Array<Load & { matchScore?: number }>
@@ -28,6 +29,7 @@ const TONE: Record<string, StatusTone> = {
 
 export function ReturnLoadsScreen({ tripId, onBack, onSelectLoad }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [data, setData] = useState<ReturnData | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -39,7 +41,7 @@ export function ReturnLoadsScreen({ tripId, onBack, onSelectLoad }: Props) {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>Return loads</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('returnLoads.title')}</Text>
         <View style={{ width: 20 }} />
       </View>
 
@@ -52,14 +54,14 @@ export function ReturnLoadsScreen({ tripId, onBack, onSelectLoad }: Props) {
       )}
 
       {loading ? (
-        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>Loading…</Text>
+        <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
       ) : (
         <FlatList
           data={data?.returnLoads ?? []}
           keyExtractor={(l) => l.id}
           contentContainerStyle={styles.list}
           ListEmptyComponent={
-            <EmptyState title="No return loads yet" message={`No loads posted from ${data?.fromCity ?? 'this city'} right now. Check back soon.`} icon="🔄" />
+            <EmptyState title={t('returnLoads.none')} message={`No loads posted from ${data?.fromCity ?? 'this city'} right now. Check back soon.`} icon="🔄" />
           }
           renderItem={({ item }) => (
             <LoadCard

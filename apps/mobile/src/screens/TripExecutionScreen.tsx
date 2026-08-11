@@ -4,6 +4,7 @@ import { StyleSheet, Text, View, ScrollView, Pressable, Alert } from 'react-nati
 import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { StatusChip, Button, StatusStepper, type StatusTone } from '@wagon/components'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 
 interface TripDetail {
   id: string
@@ -55,6 +56,7 @@ const TONE: Record<string, StatusTone> = {
 
 export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [trip, setTrip] = useState<TripDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -72,14 +74,14 @@ export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
   useEffect(() => { fetch() }, [tripId])
 
   if (loading) {
-    return <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}><View style={styles.center}><Text style={{ color: theme.mutedForeground }}>Loading trip…</Text></View></SafeAreaView>
+    return <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}><View style={styles.center}><Text style={{ color: theme.mutedForeground }}>{t('common.loading')}</Text></View></SafeAreaView>
   }
 
   if (!trip) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
-        <Header onBack={onBack} title="Trip execution" theme={theme} />
-        <View style={styles.center}><Text style={{ color: theme.mutedForeground }}>Trip not found.</Text></View>
+        <Header onBack={onBack} title={t('tripExec.title')} theme={theme} />
+        <View style={styles.center}><Text style={{ color: theme.mutedForeground }}>{t('tripExec.notFound')}</Text></View>
       </SafeAreaView>
     )
   }
@@ -116,7 +118,7 @@ export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
-      <Header onBack={onBack} title="Trip execution" theme={theme} />
+      <Header onBack={onBack} title={t('tripExec.title')} theme={theme} />
 
       <ScrollView contentContainerStyle={styles.body}>
         <View style={styles.topRow}>
@@ -132,16 +134,16 @@ export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
 
         <View style={styles.actions}>
           {onExceptions && (
-            <Button label="Report an issue" onPress={onExceptions} variant="ghost" />
+            <Button label={t('tripExec.reportIssue')} onPress={onExceptions} variant="ghost" />
           )}
           {!isDelivered && (
             <Button label={`Mark ${STAGE_FLOW[currentIdx + 1]?.label ?? 'next'} →`} onPress={advance} loading={busy} />
           )}
           {needsPickupOtp && (
-            <Button label="Generate pickup OTP" onPress={() => generateOtp('pickup')} loading={busy} variant="secondary" />
+            <Button label={t('tripExec.genPickupOtp')} onPress={() => generateOtp('pickup')} loading={busy} variant="secondary" />
           )}
           {needsDeliveryOtp && (
-            <Button label="Generate delivery OTP" onPress={() => generateOtp('delivery')} loading={busy} variant="secondary" />
+            <Button label={t('tripExec.genDeliveryOtp')} onPress={() => generateOtp('delivery')} loading={busy} variant="secondary" />
           )}
           {isDelivered && (
             <View style={[styles.done, { backgroundColor: theme.success + '1A' }]}>
