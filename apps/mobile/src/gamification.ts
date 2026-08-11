@@ -19,6 +19,7 @@ export interface Badge {
 
 export interface GamificationState {
   xp: number
+  cashbackBalance?: number
   level: number
   xpIntoLevel: number
   xpPerLevel: number

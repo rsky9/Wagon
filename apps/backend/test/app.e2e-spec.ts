@@ -311,6 +311,23 @@ describe('Wagon API (e2e)', () => {
       expect(tr.body.balance).toBe(0)
     })
 
+    it('exposes the reward wallet with balance and ledger', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/payments/wallet')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      expect(typeof res.body.balance).toBe('number')
+      expect(Array.isArray(res.body.transactions)).toBe(true)
+    })
+
+    it('gamification state includes the cash-conversion balance', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/gamification')
+        .set('Authorization', `Bearer ${supToken}`)
+        .expect(200)
+      expect(typeof res.body.cashbackBalance).toBe('number')
+    })
+
     it('supplier rates the transporter', async () => {
       const res = await request(app.getHttpServer())
         .post(`/api/v1/ratings/trip/${tripId}`)

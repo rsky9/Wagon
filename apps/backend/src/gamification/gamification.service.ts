@@ -26,6 +26,10 @@ export interface BadgeDef {
 
 export const XP_PER_LEVEL = 120
 
+// Reward wallet: XP earned above the milestone converts to real cash (Wagon Cash).
+export const REWARD_MILESTONE_XP = 200 // XP threshold before XP becomes cash-earning
+export const XP_CASH_RATE = 0.1 // ₹ per XP (100 XP = ₹10)
+
 export const QUESTS: Record<'transporter' | 'supplier', QuestDef[]> = {
   transporter: [
     { id: 'company', title: 'Company profile', description: 'Tell us about your business', icon: '🏢', xp: 40, target: 'Settings' },
@@ -69,12 +73,17 @@ export class GamificationService {
     // Auto-complete quests/badges whose real-world condition is already met.
     await this.autoComplete(user, counts, doneSet, badgeSet)
 
+    // XP earned above the milestone converts into real Wagon Cash.
+    await this.convertXpToCash(user.id)
+
+    const fresh = await this.prisma.user.findUnique({ where: { id: user.id } })
     const role = user.role === 'supplier' ? 'supplier' : 'transporter'
     const quests = (QUESTS[role] ?? []).map((q) => ({ ...q, done: doneSet.has(q.id) }))
-    const xp = profile?.xp ?? 0
+    const xp = fresh?.xp ?? profile?.xp ?? 0
 
     return {
       xp,
+      cashbackBalance: fresh?.cashbackBalance ?? 0,
       level: Math.floor(xp / XP_PER_LEVEL) + 1,
       xpIntoLevel: xp % XP_PER_LEVEL,
       xpPerLevel: XP_PER_LEVEL,
@@ -82,6 +91,23 @@ export class GamificationService {
       quests,
       totalXp: quests.reduce((s, q) => s + q.xp, 0),
     }
+  }
+
+  /** Idempotently convert XP earned above the milestone into wallet cash. */
+  private async convertXpToCash(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } })
+    if (!user) return
+    const eligible = Math.max(0, user.xp - REWARD_MILESTONE_XP)
+    const fresh = eligible - user.xpConverted
+    if (fresh <= 0) return
+    const amount = Math.round(fresh * XP_CASH_RATE * 100) / 100
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { cashbackBalance: { increment: amount }, xpConverted: eligible },
+    })
+    await this.prisma.walletTransaction.create({
+      data: { userId, kind: 'xp_conversion', amount, note: `${fresh} XP converted to cash` },
+    })
   }
 
   /** Explicitly complete a quest (idempotent). Awards XP + badge. */

@@ -68,6 +68,11 @@ export function QuestsScreen({ role, onBack, onOpenQuest }: Props) {
               <View style={{ flex: 1 }}>
                 <Text style={[styles.levelTitle, { color: theme.foreground }]}>Level {level}</Text>
                 <Text style={[styles.levelSub, { color: theme.mutedForeground }]}>{state?.xp ?? 0} XP · {doneCount}/{quests.length} quests done</Text>
+                {(state?.cashbackBalance ?? 0) > 0 && (
+                  <Text style={[styles.cash, { color: theme.success, fontWeight: '800' }]}>
+                    🎁 Wagon Cash: ₹{(state?.cashbackBalance ?? 0).toLocaleString('en-IN')}
+                  </Text>
+                )}
                 <View style={[styles.track, { backgroundColor: theme.border }]}>
                   <View style={[styles.fill, { backgroundColor: theme.primary, width: `${pct}%` }]} />
                 </View>
@@ -99,6 +104,7 @@ const styles = StyleSheet.create({
   track: { height: 6, borderRadius: 3, overflow: 'hidden', marginTop: 6 },
   fill: { height: '100%', borderRadius: 3 },
   nextLevel: { fontSize: 12 },
+  cash: { fontSize: 13, marginTop: 4 },
   quest: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderRadius: radius.lg, borderWidth: 1, padding: spacing.md },
   questIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   questTitle: { fontSize: 15, fontWeight: '700' },

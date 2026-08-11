@@ -121,6 +121,8 @@ model User {
   supplierVerified  Boolean @default(false)
   transporterVerified Boolean @default(false)
   xp           Int         @default(0)
+  cashbackBalance Float    @default(0)
+  xpConverted  Int         @default(0)
   isActive     Boolean     @default(true)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
@@ -139,6 +141,7 @@ model User {
   reviewsReceived Review[] @relation("Reviewee")
   quests       UserQuest[]
   badges       UserBadge[]
+  walletTxs    WalletTransaction[]
   @@index([role])
 }
 
@@ -692,5 +695,20 @@ model UserBadge {
   awardedAt DateTime @default(now())
 
   @@unique([userId, badgeId])
+  @@index([userId])
+}
+
+// Reward wallet ledger: XP conversions, trip cashback and redemptions.
+model WalletTransaction {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // xp_conversion | trip_cashback | redeem | adjustment
+  kind      String
+  amount    Float
+  note      String?
+  tripId    String?
+  createdAt DateTime @default(now())
+
   @@index([userId])
 }

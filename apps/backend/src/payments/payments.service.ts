@@ -6,6 +6,10 @@ import type { User } from '@prisma/client'
 
 @Injectable()
 export class PaymentsService {
+  // First-N-trips cashback: a % of the payout is credited to the transporter's Wagon Cash.
+  private static readonly CASHBACK_FIRST_TRIPS = 3
+  private static readonly CASHBACK_RATE = 0.05 // 5%
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
@@ -118,10 +122,23 @@ export class PaymentsService {
     })
 
     if (result.status === 'succeeded') {
+      const tripsDone = user.tripsCount
       await this.prisma.user.update({
         where: { id: user.id },
         data: { tripsCount: { increment: 1 } },
       })
+      // First-N-trips cashback: credit Wagon Cash on the first few payouts.
+      if (tripsDone < PaymentsService.CASHBACK_FIRST_TRIPS) {
+        const cashback = Math.round(escrow.amount * PaymentsService.CASHBACK_RATE * 100) / 100
+        const note = `Cashback on trip #${tripsDone + 1} (${(PaymentsService.CASHBACK_RATE * 100).toFixed(0)}% of payout)`
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { cashbackBalance: { increment: cashback } },
+        })
+        await this.prisma.walletTransaction.create({
+          data: { userId: user.id, kind: 'trip_cashback', amount: cashback, note, tripId },
+        })
+      }
     }
 
     return { payment, alreadyPaid: false }
@@ -173,6 +190,25 @@ export class PaymentsService {
     const balance = totalIn - totalOut
 
     return { entries, balance }
+  }
+
+  /** Reward wallet: Wagon Cash balance + ledger of conversions/cashback/redemptions. */
+  async wallet(user: User) {
+    const [profile, txs] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: user.id } }),
+      this.prisma.walletTransaction.findMany({ where: { userId: user.id }, orderBy: { createdAt: 'desc' }, take: 50 }),
+    ])
+    return {
+      balance: profile?.cashbackBalance ?? 0,
+      transactions: txs.map((t) => ({
+        id: t.id,
+        kind: t.kind,
+        amount: t.amount,
+        note: t.note,
+        tripId: t.tripId,
+        createdAt: t.createdAt,
+      })),
+    }
   }
 
   async uploadPod(tripId: string, user: User) {

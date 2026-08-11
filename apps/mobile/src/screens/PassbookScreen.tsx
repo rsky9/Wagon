@@ -16,6 +16,14 @@ interface PassbookEntry {
   createdAt: string
 }
 
+interface WalletTx {
+  id: string
+  kind: string
+  amount: number
+  note?: string | null
+  createdAt: string
+}
+
 interface Props {
   onBack: () => void
   onOpenBank?: () => void
@@ -26,15 +34,21 @@ export function PassbookScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
   const theme = useTheme()
   const [entries, setEntries] = useState<PassbookEntry[]>([])
   const [balance, setBalance] = useState(0)
+  const [cashback, setCashback] = useState(0)
+  const [walletTxs, setWalletTxs] = useState<WalletTx[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    api
-      .get<{ entries: PassbookEntry[]; balance: number }>('/payments/passbook')
-      .then((res) => {
-        setEntries(res.entries)
-        setBalance(res.balance)
+    Promise.all([
+      api.get<{ entries: PassbookEntry[]; balance: number }>('/payments/passbook'),
+      api.get<{ balance: number; transactions: WalletTx[] }>('/payments/wallet').catch(() => ({ balance: 0, transactions: [] })),
+    ])
+      .then(([pb, w]) => {
+        setEntries(pb.entries)
+        setBalance(pb.balance)
+        setCashback(w.balance)
+        setWalletTxs(w.transactions)
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load passbook'))
       .finally(() => setLoading(false))
@@ -72,6 +86,22 @@ export function PassbookScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
                   .finally(() => setLoading(false))
               }}
             />
+            {cashback > 0 && (
+              <View style={[styles.cashback, { backgroundColor: theme.card, borderColor: theme.primary + '44' }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.cashbackLabel, { color: theme.mutedForeground }]}>Wagon Cash · rewards</Text>
+                  <Text style={[styles.cashbackAmount, { color: theme.foreground }]}>
+                    {formatINR(cashback)}
+                  </Text>
+                  {walletTxs.length > 0 && (
+                    <Text style={[styles.cashbackSub, { color: theme.mutedForeground }]} numberOfLines={1}>
+                      {walletTxs[0].note ?? 'Earned from quests & trip cashback'}
+                    </Text>
+                  )}
+                </View>
+                <Text style={{ fontSize: 26 }}>🎁</Text>
+              </View>
+            )}
             {pending.length > 0 && (
               <View style={[styles.pending, { backgroundColor: theme.warning + '22', borderColor: theme.warning + '44' }]}>
                 <Text style={{ color: theme.warning, fontWeight: '700', fontSize: 14 }}>
@@ -171,6 +201,10 @@ const styles = StyleSheet.create({
   list: { padding: spacing.lg, paddingBottom: 100 },
   top: { gap: spacing.lg },
   pending: { borderRadius: radius.md, padding: spacing.md, borderWidth: 1 },
+  cashback: { flexDirection: 'row', alignItems: 'center', borderRadius: radius.lg, borderWidth: 1, padding: spacing.md },
+  cashbackLabel: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  cashbackAmount: { fontSize: 26, fontWeight: '800', marginTop: 2 },
+  cashbackSub: { fontSize: 12, marginTop: 3 },
   sectionLabel: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: spacing.sm },
   bankRow: { flexDirection: 'row', alignItems: 'center', borderRadius: radius.lg, borderWidth: 1, padding: spacing.md },
   bankTitle: { fontSize: 15, fontWeight: '700' },
