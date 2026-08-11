@@ -303,12 +303,19 @@ describe('Wagon API (e2e)', () => {
       expect(res.body.payment.status).toBe('succeeded')
     })
 
-    it('transporter passbook balances to zero after payout', async () => {
+    it('transporter passbook nets to −TDS after payout', async () => {
+      const adm = await request(app.getHttpServer())
+        .get('/api/v1/admin/payments')
+        .set('Authorization', `Bearer ${admToken}`)
+        .expect(200)
+      const payout = adm.body.payments.find((p: { type: string; tripId: string }) => p.type === 'payout' && p.tripId === tripId)
       const tr = await request(app.getHttpServer())
         .get('/api/v1/payments/passbook')
         .set('Authorization', `Bearer ${trToken}`)
         .expect(200)
-      expect(tr.body.balance).toBe(0)
+      // Escrow (−amount) is netted against the payout (net of 2% TDS), so the
+      // balance settles at the negative of the TDS withheld on the payout.
+      expect(tr.body.balance).toBe(-(payout?.tdsAmount ?? 0))
     })
 
     it('exposes the reward wallet with balance and ledger', async () => {
@@ -1362,6 +1369,44 @@ describe('Wagon API (e2e)', () => {
       const actions = audit.body.items.map((a: { action: string }) => a.action)
       expect(actions).toContain('user.activate')
       expect(actions).toContain('payment.refund')
+    })
+
+    it('returns broadcast history', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/admin/broadcasts')
+        .set('Authorization', `Bearer ${admToken}`)
+        .expect(200)
+      expect(Array.isArray(res.body.broadcasts)).toBe(true)
+      const latest = res.body.broadcasts[0]
+      expect(latest.title).toBeTruthy()
+      expect(typeof latest.sentTo).toBe('number')
+    })
+
+    it('returns a load detail with bids, supplier & material', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/admin/loads/${loadId}`)
+        .set('Authorization', `Bearer ${admToken}`)
+        .expect(200)
+      expect(res.body.load.id).toBe(loadId)
+      expect(Array.isArray(res.body.load.bids)).toBe(true)
+      expect(res.body.load.material).toBeTruthy()
+      expect(res.body.load.supplier).toBeTruthy()
+    })
+
+    it('returns a payment detail with trip & load info', async () => {
+      const payments = await request(app.getHttpServer())
+        .get('/api/v1/admin/payments')
+        .set('Authorization', `Bearer ${admToken}`)
+        .expect(200)
+      const payment = payments.body.payments.find((p: { tripId: string }) => p.tripId === tripId)
+      expect(payment).toBeTruthy()
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/admin/payments/${payment.id}`)
+        .set('Authorization', `Bearer ${admToken}`)
+        .expect(200)
+      expect(res.body.payment.id).toBe(payment.id)
+      expect(res.body.payment.trip).toBeTruthy()
+      expect(res.body.payment.trip.load).toBeTruthy()
     })
   })
 })

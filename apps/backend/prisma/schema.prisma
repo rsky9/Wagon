@@ -142,6 +142,10 @@ model User {
   quests       UserQuest[]
   badges       UserBadge[]
   walletTxs    WalletTransaction[]
+  reportsMade   Report[] @relation("Reporter")
+  reportsReceived Report[] @relation("Reported")
+  disputesRaised Dispute[] @relation("RaisedBy")
+  exceptionsReported TripException[]
   @@index([role])
 }
 
@@ -172,6 +176,9 @@ model Transporter {
   id           String   @id @default(cuid())
   userId       String   @unique
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trips        Trip[]
+  bids         Bid[]
+  quotes       Quote[]
   companyName  String?
   ownerName    String?
   pan          String?
@@ -352,7 +359,9 @@ model Load {
 model Report {
   id         String   @id @default(cuid())
   reporterId String
+  reporter   User     @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
   reportedId String
+  reported   User     @relation("Reported", fields: [reportedId], references: [id], onDelete: Cascade)
   tripId     String?
   reason     String
   status     String   @default("open")
@@ -374,6 +383,7 @@ model Quote {
   loadId         String
   load           Load       @relation(fields: [loadId], references: [id], onDelete: Cascade)
   transporterId  String
+  transporter    Transporter @relation(fields: [transporterId], references: [id], onDelete: Cascade)
   amount         Float
   status         String     @default("pending")
   createdAt      DateTime   @default(now())
@@ -387,6 +397,7 @@ model Bid {
   loadId          String
   load            Load     @relation(fields: [loadId], references: [id], onDelete: Cascade)
   transporterId   String
+  transporter     Transporter @relation(fields: [transporterId], references: [id], onDelete: Cascade)
   truckId         String?
   driverId        String?
   amount          Float
@@ -422,6 +433,7 @@ model Trip {
   loadId       String
   load         Load       @relation(fields: [loadId], references: [id], onDelete: Cascade)
   transporterId String
+  transporter  Transporter @relation(fields: [transporterId], references: [id], onDelete: Cascade)
   driverId     String?
   status       TripStatus @default(accepted)
   stage        TripStage  @default(accepted)
@@ -460,6 +472,7 @@ model TripException {
   tripId    String
   trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
   reporterId String
+  reporter  User     @relation(fields: [reporterId], references: [id], onDelete: Cascade)
   kind      String   // breakdown | accident | traffic | delay | destination_problem | goods_damage | other
   title     String
   notes     String?
@@ -567,6 +580,17 @@ model Notification {
   @@index([userId, isRead])
 }
 
+// Broadcast history: admin broadcast sends (standalone, no relations).
+model Broadcast {
+  id        String   @id @default(cuid())
+  role      String?
+  title     String
+  body      String
+  sentTo    Int
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+}
+
 model FcmToken {
   id        String   @id @default(cuid())
   userId    String
@@ -607,6 +631,7 @@ model Dispute {
   tripId       String
   trip         Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
   raisedBy     String
+  raisedByUser User     @relation("RaisedBy", fields: [raisedBy], references: [id], onDelete: Cascade)
   subject      String
   evidenceKeys String[]
   resolution   String?

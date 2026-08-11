@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { ShellLayout } from "../../components/ShellLayout";
-import { PageHeader, Card, StatusBadge } from "../../components/ui";
+import { PageHeader, Card, StatusBadge, SkeletonRows } from "../../components/ui";
+
+const CSV_HEADER = ["reporter", "reported", "reason", "status", "createdAt"];
 
 interface Report {
   id: string;
@@ -19,13 +21,32 @@ export default function Reports() {
   const [reports, setReports] = useState<Report[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setLoading(true);
     api
       .get<{ reports: Report[] }>("/admin/reports")
       .then((res) => setReports(res.reports))
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load reports"));
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load reports"))
+      .finally(() => setLoading(false));
   }, []);
+
+  const exportCsv = () => {
+    const escape = (v: string | number | null | undefined) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const rows = [
+      CSV_HEADER,
+      ...reports.map((r) => [r.reporterId, r.reportedId, r.reason, r.status, r.createdAt]),
+    ];
+    const csv = rows.map((row) => row.map(escape).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `reports-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const act = async (r: Report, action: "dismiss" | "block") => {
     if (action === "block" && !window.confirm("Block the reported user? This prevents further contact.")) return;
@@ -42,10 +63,27 @@ export default function Reports() {
 
   return (
     <ShellLayout>
-      <PageHeader title="Reports" subtitle="Trust & safety · user reports" />
+      <PageHeader
+        title="Reports"
+        subtitle="Trust & safety · user reports"
+        actions={
+          <button
+            onClick={exportCsv}
+            disabled={reports.length === 0}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-300"
+          >
+            Export CSV
+          </button>
+        }
+      />
 
       {error && <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 
+      {loading ? (
+        <div className="card-shadow rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+          <SkeletonRows rows={4} cols={4} />
+        </div>
+      ) : (
       <div className="space-y-3">
         {reports.map((r) => (
           <Card key={r.id} className="p-5">
@@ -77,8 +115,9 @@ export default function Reports() {
             )}
           </Card>
         ))}
-        {reports.length === 0 && !error && <p className="text-sm text-slate-400">No reports.</p>}
+        {reports.length === 0 && !error && !loading && <p className="text-sm text-slate-400">No reports.</p>}
       </div>
+      )}
     </ShellLayout>
   );
 }

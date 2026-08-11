@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { ShellLayout } from "../../components/ShellLayout";
-import { PageHeader, Card, StatusBadge } from "../../components/ui";
+import { PageHeader, Card, StatusBadge, SkeletonRows } from "../../components/ui";
 
 interface Ticket {
   id: string;
@@ -20,12 +20,15 @@ export default function Tickets() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setLoading(true);
     api
       .get<{ tickets: Ticket[] }>("/admin/tickets")
       .then((res) => setTickets(res.tickets))
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load tickets"));
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load tickets"))
+      .finally(() => setLoading(false));
   }, []);
 
   const resolve = async (t: Ticket) => {
@@ -51,13 +54,19 @@ export default function Tickets() {
 
       {error && <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 
+      {loading ? (
+        <div className="card-shadow rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+          <SkeletonRows rows={4} cols={4} />
+        </div>
+      ) : (
+      <>
       <section className="mb-8">
         <h2 className="mb-3 text-sm font-semibold text-slate-500">Open · {open.length}</h2>
         <div className="space-y-3">
           {open.map((t) => (
             <TicketCard key={t.id} t={t} busy={busy === t.id} onResolve={() => resolve(t)} />
           ))}
-          {open.length === 0 && <p className="text-sm text-slate-400">No open tickets.</p>}
+          {open.length === 0 && !loading && <p className="text-sm text-slate-400">No open tickets.</p>}
         </div>
       </section>
 
@@ -67,9 +76,11 @@ export default function Tickets() {
           {closed.map((t) => (
             <TicketCard key={t.id} t={t} busy={false} />
           ))}
-          {closed.length === 0 && <p className="text-sm text-slate-400">No closed tickets.</p>}
+          {closed.length === 0 && !loading && <p className="text-sm text-slate-400">No closed tickets.</p>}
         </div>
       </section>
+      </>
+      )}
     </ShellLayout>
   );
 }

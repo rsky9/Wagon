@@ -12,19 +12,19 @@ interface Props {
 }
 
 // Condensed: 6 quick steps instead of 12.
-const STEPS = [
-  { key: 'route', label: 'Route' },
-  { key: 'cargo', label: 'Cargo' },
-  { key: 'truck', label: 'Truck' },
-  { key: 'schedule', label: 'When' },
-  { key: 'commercial', label: 'Pricing' },
-  { key: 'publish', label: 'Publish' },
+const getSteps = (t: (key: string) => string) => [
+  { key: 'route', label: t('postLoad.stepRoute') },
+  { key: 'cargo', label: t('postLoad.stepCargo') },
+  { key: 'truck', label: t('postLoad.stepTruck') },
+  { key: 'schedule', label: t('postLoad.stepWhen') },
+  { key: 'commercial', label: t('postLoad.stepPricing') },
+  { key: 'publish', label: t('postLoad.stepPublish') },
 ]
 
-const COMMERCIAL_MODELS = [
-  { key: 'fixed_rate', label: 'Fixed rate', desc: 'Transporters accept the published price' },
-  { key: 'open_bidding', label: 'Open bidding', desc: 'Eligible transporters bid in a window' },
-  { key: 'invite', label: 'Invite only', desc: 'Only selected transporters participate' },
+const getCommercialModels = (t: (key: string) => string) => [
+  { key: 'fixed_rate', label: t('postLoad.modelFixed'), desc: t('postLoad.modelFixedDesc') },
+  { key: 'open_bidding', label: t('postLoad.modelOpen'), desc: t('postLoad.modelOpenDesc') },
+  { key: 'invite', label: t('postLoad.modelInvite'), desc: t('postLoad.modelInviteDesc') },
 ]
 
 const MATERIAL_OPTIONS = ['Packaged Boxes', 'Food And Agriculture', 'Construction Material', 'Tyre', 'Scrap', 'Electronic Goods', 'Chemical Powder', 'Other']
@@ -46,6 +46,8 @@ function isoDaysFromNow(n: number) {
 export function PostLoadWizard({ onComplete, onCancel }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
+  const steps = getSteps(t)
+  const commercialModels = getCommercialModels(t)
   const [step, setStep] = useState(0)
   const [submitting, setSubmitting] = useState(false)
 
@@ -126,21 +128,21 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
   }
 
   const next = () => {
-    if (step < STEPS.length - 1) setStep(step + 1)
+    if (step < steps.length - 1) setStep(step + 1)
     else submit()
   }
 
   return (
     <Wizard
       title={t('postLoad.title')}
-      steps={STEPS}
+      steps={steps}
       step={step}
       onNext={next}
       onBackStep={() => (step > 0 ? setStep(step - 1) : onCancel())}
       onSkip={onCancel}
       canNext={canNext}
       submitting={submitting}
-      nextLabel={step === STEPS.length - 1 ? 'Publish load' : 'Continue'}
+      nextLabel={step === steps.length - 1 ? t('postLoad.publishLoad') : t('common.continue')}
     >
       {step === 0 && (
         <>
@@ -248,7 +250,7 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
         <>
           <Field label="How should transporters quote?">
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-              {COMMERCIAL_MODELS.map((m) => (
+              {commercialModels.map((m) => (
                 <Pressable key={m.key} onPress={() => setCommercialModel(m.key)} style={{ borderRadius: radius.md, borderWidth: 1, padding: spacing.md, backgroundColor: commercialModel === m.key ? theme.primary : theme.background, borderColor: commercialModel === m.key ? theme.primary : theme.border }}>
                   <Text style={{ color: commercialModel === m.key ? '#fff' : theme.foreground, fontSize: 13, fontWeight: '700' }}>{m.label}</Text>
                   <Text style={{ color: commercialModel === m.key ? 'rgba(255,255,255,0.85)' : theme.mutedForeground, fontSize: 11, marginTop: 2 }}>{m.desc}</Text>
@@ -274,7 +276,7 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
           <PreviewRow label="Cargo" value={`${weight} t · ${material}`} theme={theme} />
           <PreviewRow label="Truck" value={`${truckType} · ${modelName} · ${bodyType}`} theme={theme} />
           <PreviewRow label="Pickup" value={pickupDate} theme={theme} />
-          <PreviewRow label="Pricing" value={COMMERCIAL_MODELS.find((m) => m.key === commercialModel)?.label ?? ''} theme={theme} />
+          <PreviewRow label={t('postLoad.stepPricing')} value={commercialModels.find((m) => m.key === commercialModel)?.label ?? ''} theme={theme} />
           <PreviewRow label="Advance" value={advanceAmount ? `₹${advanceAmount}` : advancePct ? `${advancePct}%` : '—'} theme={theme} />
           <PreviewRow label="Payment" value={payLater ? 'Pay later' : 'Advance'} theme={theme} />
         </View>

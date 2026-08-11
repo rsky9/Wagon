@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { ShellLayout } from "../../components/ShellLayout";
-import { PageHeader, Card, StatusBadge } from "../../components/ui";
+import { PageHeader, Card, StatusBadge, SkeletonRows } from "../../components/ui";
 
 interface DisputeRow {
   id: string;
@@ -20,12 +20,15 @@ export default function Disputes() {
   const [error, setError] = useState<string | null>(null);
   const [resolution, setResolution] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const fetchDisputes = useCallback(() => {
+    setLoading(true);
     api
       .get<{ disputes: DisputeRow[] }>("/disputes/open")
       .then((res) => setDisputes(res.disputes))
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load disputes"));
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load disputes"))
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -56,6 +59,11 @@ export default function Disputes() {
 
       {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 
+      {loading ? (
+        <div className="card-shadow rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+          <SkeletonRows rows={4} cols={4} />
+        </div>
+      ) : (
       <div className="space-y-3">
         {disputes.map((d) => (
           <Card key={d.id} className="p-5">
@@ -87,13 +95,14 @@ export default function Disputes() {
             </div>
           </Card>
         ))}
-        {disputes.length === 0 && (
+        {disputes.length === 0 && !loading && (
           <div className="card-shadow rounded-2xl border border-slate-200 bg-white p-10 text-center text-slate-400 dark:border-slate-800 dark:bg-slate-900">
             <div className="mb-2 text-3xl">🎉</div>
             No open disputes.
           </div>
         )}
       </div>
+      )}
     </ShellLayout>
   );
 }

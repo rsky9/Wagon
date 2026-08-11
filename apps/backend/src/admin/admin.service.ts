@@ -82,6 +82,30 @@ export class AdminService {
     return { trips }
   }
 
+  /** Full load detail with its bids + supplier + material. */
+  async loadDetail(id: string) {
+    const load = await this.prisma.load.findUnique({
+      where: { id },
+      include: {
+        supplier: { include: { user: true } },
+        material: true,
+        bids: true,
+        trips: true,
+      },
+    })
+    if (!load) throw new NotFoundException('Load not found')
+    const bids = await Promise.all(
+      load.bids.map(async (b) => {
+        const transporter = await this.prisma.transporter.findUnique({
+          where: { id: b.transporterId },
+          include: { user: { select: { id: true, name: true, mobile: true } } },
+        })
+        return { ...b, transporter }
+      }),
+    )
+    return { load: { ...load, bids } }
+  }
+
   async user(id: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },
@@ -170,6 +194,9 @@ export class AdminService {
         }),
       ),
     )
+    await this.prisma.broadcast.create({
+      data: { role: role && role !== 'all' ? role : null, title, body, sentTo: notifications.length },
+    })
     await this.audit.log({
       actorId: actor.id,
       action: 'broadcast.send',
@@ -177,6 +204,15 @@ export class AdminService {
       after: { role: role ?? 'all', title, sent: notifications.length },
     })
     return { sent: notifications.length }
+  }
+
+  /** Recent broadcast history. */
+  async broadcasts() {
+    const broadcasts = await this.prisma.broadcast.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    })
+    return { broadcasts }
   }
 
   /** Rate card management: upsert price per model. */
@@ -373,6 +409,27 @@ export class AdminService {
       take: 200,
     })
     return { payments }
+  }
+
+  /** Full payment detail with its trip + load info. */
+  async paymentDetail(id: string) {
+    const payment = await this.prisma.payment.findUnique({
+      where: { id },
+      include: {
+        trip: {
+          include: {
+            load: {
+              include: {
+                material: true,
+                supplier: { include: { user: true } },
+              },
+            },
+          },
+        },
+      },
+    })
+    if (!payment) throw new NotFoundException('Payment not found')
+    return { payment }
   }
 
   async refund(paymentId: string, actor: User) {

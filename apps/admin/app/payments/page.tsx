@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { api } from "../../lib/api";
 import { ShellLayout } from "../../components/ShellLayout";
-import { PageHeader, Card, StatusBadge, Th, Td, EmptyRow } from "../../components/ui";
+import { PageHeader, Card, StatusBadge, Th, Td, EmptyRow, SkeletonRows } from "../../components/ui";
 
 interface Payment {
   id: string;
@@ -28,13 +29,16 @@ export default function Payments() {
   const [status, setStatus] = useState<string>("all");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const fetchPayments = (s?: string) => {
+    setLoading(true);
     if (!s || s === "all") {
       api
         .get<{ payments: Payment[] }>("/admin/payments")
         .then((res) => setPayments(res.payments))
-        .catch((e) => setError(e instanceof Error ? e.message : "Failed to load payments"));
+        .catch((e) => setError(e instanceof Error ? e.message : "Failed to load payments"))
+        .finally(() => setLoading(false));
       return;
     }
     // escrow/payout/refund are payment *types*; failed is a payment *status*.
@@ -42,7 +46,8 @@ export default function Payments() {
     api
       .get<{ payments: Payment[] }>(`/admin/payments?${param}`)
       .then((res) => setPayments(res.payments))
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load payments"));
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load payments"))
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => {
@@ -101,6 +106,11 @@ export default function Payments() {
         ))}
       </div>
 
+      {loading ? (
+        <div className="table-card">
+          <SkeletonRows rows={4} cols={4} />
+        </div>
+      ) : (
       <div className="table-card">
         <table className="w-full text-left text-sm">
           <thead className="table-head">
@@ -124,7 +134,16 @@ export default function Payments() {
                   <StatusBadge status={p.status} />
                 </Td>
                 <td className="px-5 py-3.5 text-slate-500">
-                  {p.trip?.load ? `${p.trip.load.pickupAddr} → ${p.trip.load.dropAddr}` : "—"}
+                  {p.trip?.load ? (
+                    <Link
+                      href={`/payments/${p.id}`}
+                      className="text-orange-600 hover:underline dark:text-orange-400"
+                    >
+                      {p.trip.load.pickupAddr} → {p.trip.load.dropAddr}
+                    </Link>
+                  ) : (
+                    "—"
+                  )}
                 </td>
                 <td className="px-5 py-3.5 text-xs text-slate-400">{new Date(p.createdAt).toLocaleString()}</td>
                 <td className="px-5 py-3.5 text-right">
@@ -140,10 +159,11 @@ export default function Payments() {
                 </td>
               </tr>
             ))}
-            {payments.length === 0 && <EmptyRow colSpan={6}>No payments.</EmptyRow>}
+            {payments.length === 0 && !loading && <EmptyRow colSpan={6}>No payments.</EmptyRow>}
           </tbody>
         </table>
       </div>
+      )}
     </ShellLayout>
   );
 }

@@ -21,6 +21,11 @@ export class AdminController {
     return this.admin.loads(status ? { status } : undefined)
   }
 
+  @Get('loads/:id')
+  load(@Param('id') id: string) {
+    return this.admin.loadDetail(id)
+  }
+
   @Get('trips')
   trips() {
     return this.admin.trips()
@@ -59,6 +64,11 @@ export class AdminController {
   @Post('broadcast')
   broadcast(@Body() body: { role?: string; title: string; body: string }, @CurrentUser() actor: User) {
     return this.admin.broadcast(body.role, body.title, body.body, actor)
+  }
+
+  @Get('broadcasts')
+  broadcasts() {
+    return this.admin.broadcasts()
   }
 
   @Post('rate-cards/:modelId')
@@ -112,6 +122,11 @@ export class AdminController {
     if (type) q.type = type
     if (status) q.status = status
     return this.admin.payments(q)
+  }
+
+  @Get('payments/:id')
+  payment(@Param('id') id: string) {
+    return this.admin.paymentDetail(id)
   }
 
   @Post('payments/:id/refund')

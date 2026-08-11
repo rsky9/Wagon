@@ -1,13 +1,18 @@
 import { Injectable, BadRequestException, NotFoundException, Inject, forwardRef } from '@nestjs/common'
+import Redis from 'ioredis'
+import { REDIS } from '../redis/redis.module'
 import { PrismaService } from '../prisma/prisma.service'
 import { TrackingGateway } from './tracking.gateway'
 import type { User } from '@prisma/client'
 
 @Injectable()
 export class TrackingService {
+  private static readonly MIN_INTERVAL_MS = 2000
+
   constructor(
     private readonly prisma: PrismaService,
     @Inject(forwardRef(() => TrackingGateway)) private readonly gateway: TrackingGateway,
+    @Inject(REDIS) private readonly redis: Redis,
   ) {}
 
   /** Transporter shares a live location point for an in-transit trip. */
@@ -15,6 +20,14 @@ export class TrackingService {
     if (!isFinite(lat) || !isFinite(lng)) {
       throw new BadRequestException('Invalid coordinates')
     }
+    // Rate-limit DB writes per trip (GPS pings can arrive every few hundred ms).
+    const key = `tracking:${tripId}`
+    const last = await this.redis.get(key)
+    const now = Date.now()
+    if (last && now - Number(last) < TrackingService.MIN_INTERVAL_MS) {
+      throw new BadRequestException('Location updates too frequent — slow down')
+    }
+    await this.redis.set(key, String(now), 'EX', 60)
     const trip = await this.prisma.trip.findUnique({ where: { id: tripId } })
     if (!trip) {
       throw new NotFoundException('Trip not found')

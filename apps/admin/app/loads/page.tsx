@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { api } from "../../lib/api";
 import { ShellLayout } from "../../components/ShellLayout";
-import { PageHeader, StatusBadge, Th, Td, EmptyRow } from "../../components/ui";
+import { PageHeader, StatusBadge, Th, Td, EmptyRow, SkeletonRows } from "../../components/ui";
 
 interface LoadRow {
   id: string;
@@ -30,6 +31,7 @@ export default function Loads() {
   const [trips, setTrips] = useState<TripRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const cancelLoad = async (l: LoadRow) => {
     const reason = window.prompt("Cancellation reason:", "Cancelled by admin");
@@ -59,14 +61,17 @@ export default function Loads() {
   };
 
   useEffect(() => {
+    setLoading(true);
     api
       .get<{ loads: LoadRow[] }>("/admin/loads")
       .then((res) => setLoads(res.loads))
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load loads"));
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load loads"))
+      .finally(() => setLoading(false));
     api
       .get<{ trips: TripRow[] }>("/admin/trips")
       .then((res) => setTrips(res.trips))
-      .catch(() => {});
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load trips"))
+      .finally(() => setLoading(false));
   }, []);
 
   return (
@@ -75,6 +80,12 @@ export default function Loads() {
 
       {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 
+      {loading ? (
+        <div className="card-shadow overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+          <SkeletonRows rows={4} cols={4} />
+        </div>
+      ) : (
+      <>
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Loads</h2>
       <div className="card-shadow mb-8 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <table className="w-full text-left text-sm">
@@ -94,7 +105,12 @@ export default function Loads() {
             {loads.map((l) => (
               <tr key={l.id} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
                 <td className="px-5 py-3.5">
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">{l.pickupAddr}</span>
+                  <Link
+                    href={`/loads/${l.id}`}
+                    className="font-semibold text-orange-600 hover:underline dark:text-orange-400"
+                  >
+                    {l.pickupAddr}
+                  </Link>
                   <span className="mx-1.5 text-slate-400">→</span>
                   <span className="text-slate-600 dark:text-slate-400">{l.dropAddr}</span>
                 </td>
@@ -121,7 +137,7 @@ export default function Loads() {
                 </td>
               </tr>
             ))}
-            {loads.length === 0 && <EmptyRow colSpan={8}>No loads.</EmptyRow>}
+            {loads.length === 0 && !loading && <EmptyRow colSpan={8}>No loads.</EmptyRow>}
           </tbody>
         </table>
       </div>
@@ -166,10 +182,12 @@ export default function Loads() {
                 </td>
               </tr>
             ))}
-            {trips.length === 0 && <EmptyRow colSpan={5}>No trips.</EmptyRow>}
+            {trips.length === 0 && !loading && <EmptyRow colSpan={5}>No trips.</EmptyRow>}
           </tbody>
         </table>
       </div>
+      </>
+      )}
     </ShellLayout>
   );
 }

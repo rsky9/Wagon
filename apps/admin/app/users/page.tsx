@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import Link from "next/link";
 import { ShellLayout } from "../../components/ShellLayout";
-import { PageHeader, StatusBadge, EmptyRow, Th, Td } from "../../components/ui";
+import { PageHeader, StatusBadge, EmptyRow, Th, Td, SkeletonRows } from "../../components/ui";
 
 interface UserRow {
   id: string;
@@ -55,6 +55,7 @@ export default function Users() {
   const [docUser, setDocUser] = useState<{ id: string; name: string } | null>(null);
   const [docs, setDocs] = useState<KycDoc[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const openDocs = async (u: UserRow) => {
     setDocUser({ id: u.id, name: u.name ?? u.mobile });
@@ -70,10 +71,12 @@ export default function Users() {
   };
 
   const fetchUsers = useCallback((q?: string) => {
+    setLoading(true);
     api
       .get<{ users: UserRow[] }>(`/admin/users?${q ? `q=${encodeURIComponent(q)}&` : ""}pageSize=100`)
       .then((res) => setUsers(res.users))
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load users"));
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load users"))
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -195,6 +198,11 @@ export default function Users() {
         ))}
       </div>
 
+      {loading ? (
+        <div className="table-card">
+          <SkeletonRows rows={4} cols={4} />
+        </div>
+      ) : (
       <div className="table-card">
         <table className="w-full text-left text-sm">
           <thead className="table-head">
@@ -267,10 +275,11 @@ export default function Users() {
                 </td>
               </tr>
             ))}
-            {filtered.length === 0 && <EmptyRow colSpan={6}>No users match this filter.</EmptyRow>}
+            {filtered.length === 0 && !loading && <EmptyRow colSpan={6}>No users match this filter.</EmptyRow>}
           </tbody>
         </table>
       </div>
+      )}
 
       {docUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6" onClick={() => setDocUser(null)}>

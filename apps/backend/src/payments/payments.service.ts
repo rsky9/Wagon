@@ -46,11 +46,14 @@ export class PaymentsService {
       metadata: { tripId },
     })
 
+    const tax = PaymentsService.taxBreakdown(amount)
     const payment = await this.prisma.payment.create({
       data: {
         tripId,
         type: 'escrow',
         amount,
+        gstAmount: tax.gstAmount,
+        tdsAmount: tax.tdsAmount,
         method: 'mock',
         providerRef: result.providerRef,
         idempotencyKey,
@@ -75,9 +78,22 @@ export class PaymentsService {
     return { payment, alreadyCaptured: false }
   }
 
+  /** GST 5% / TDS 2% breakdown on the agreed rate. */
+  private static taxBreakdown(base: number) {
+    const gstRate = 0.05
+    const tdsRate = 0.02
+    const gstAmount = Math.round(base * gstRate * 100) / 100
+    const tdsAmount = Math.round(base * tdsRate * 100) / 100
+    const net = Math.round((base + gstAmount - tdsAmount) * 100) / 100
+    return { base, gstRate, tdsRate, gstAmount, tdsAmount, net }
+  }
+
   /** Release escrow to transporter once delivered + POD uploaded. Idempotent. */
   async releasePayout(tripId: string, user: User) {
-    const trip = await this.prisma.trip.findUnique({ where: { id: tripId }, include: { load: true } })
+    const trip = await this.prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { load: true, booking: true },
+    })
     if (!trip) {
       throw new NotFoundException('Trip not found')
     }
@@ -102,8 +118,14 @@ export class PaymentsService {
       return { payment: existing, alreadyPaid: true }
     }
 
+    // Agreed rate is the locked booking rate (fall back to the escrow amount).
+    const base = trip.booking?.rate ?? escrow.amount
+    const tax = PaymentsService.taxBreakdown(base)
+    // Transporter receives net of TDS; GST is collected on the service.
+    const payoutAmount = Math.round((base - tax.tdsAmount) * 100) / 100
+
     const result = await this.provider.payout({
-      amount: escrow.amount,
+      amount: payoutAmount,
       currency: 'INR',
       reference: idempotencyKey,
       destination: { account: transporter.bankAccount ?? undefined, ifsc: transporter.ifsc ?? undefined },
@@ -113,7 +135,9 @@ export class PaymentsService {
       data: {
         tripId,
         type: 'payout',
-        amount: escrow.amount,
+        amount: payoutAmount,
+        gstAmount: tax.gstAmount,
+        tdsAmount: tax.tdsAmount,
         method: 'mock',
         providerRef: result.providerRef,
         idempotencyKey,
@@ -228,11 +252,11 @@ export class PaymentsService {
     return this.prisma.trip.update({ where: { id: tripId }, data: { podUrl } })
   }
 
-  /** Invoice for a delivered trip with TDS/GST breakdown. */
+  /** Invoice for a delivered trip with TDS/GST breakdown. Uses the agreed booking rate. */
   async invoice(tripId: string, user: User) {
     const trip = await this.prisma.trip.findUnique({
       where: { id: tripId },
-      include: { load: { include: { supplier: true } }, payments: true },
+      include: { load: { include: { supplier: true } }, payments: true, booking: true },
     })
     if (!trip) throw new NotFoundException('Trip not found')
     const isTransporter = (user.capabilities?.includes('transporter') as boolean) || user.role === 'transporter'
@@ -242,12 +266,8 @@ export class PaymentsService {
       (isSupplier && trip.load.supplierId === (await this.supplierId(user)))
     if (!isParticipant) throw new BadRequestException('Not a participant of this trip')
 
-    const base = trip.load.fareEstimate
-    const gstRate = 0.05
-    const gstAmount = Math.round(base * gstRate)
-    const tdsRate = 0.02
-    const tdsAmount = Math.round(base * tdsRate)
-    const net = base + gstAmount - tdsAmount
+    const base = trip.booking?.rate ?? trip.load.fareEstimate
+    const tax = PaymentsService.taxBreakdown(base)
     const payouts = trip.payments.filter((p) => p.type === 'payout' && p.status === 'succeeded')
 
     return {
@@ -259,12 +279,13 @@ export class PaymentsService {
         transporterId: trip.transporterId,
         supplierId: trip.load.supplierId,
         baseAmount: base,
-        gstAmount,
-        tdsAmount,
-        netAmount: net,
+        gstAmount: tax.gstAmount,
+        tdsAmount: tax.tdsAmount,
+        netAmount: tax.net,
+        paidAmount: payouts.length ? (payouts[0]?.amount ?? 0) : 0,
         settled: payouts.length > 0,
-        gstRate,
-        tdsRate,
+        gstRate: tax.gstRate,
+        tdsRate: tax.tdsRate,
       },
     }
   }

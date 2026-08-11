@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { ShellLayout } from "../../components/ShellLayout";
-import { PageHeader } from "../../components/ui";
+import { PageHeader, Card, Badge } from "../../components/ui";
 
 const ROLES = [
   { value: "all", label: "Everyone" },
@@ -12,6 +12,22 @@ const ROLES = [
   { value: "driver", label: "Drivers" },
 ];
 
+interface Broadcast {
+  id: string;
+  role: string | null;
+  title: string;
+  body: string;
+  sentTo: number;
+  createdAt: string;
+}
+
+const ROLE_TONE: Record<string, "emerald" | "amber" | "red" | "sky" | "slate" | "orange" | "violet"> = {
+  supplier: "sky",
+  transporter: "emerald",
+  driver: "amber",
+  all: "violet",
+};
+
 export default function Broadcast() {
   const [role, setRole] = useState("all");
   const [title, setTitle] = useState("");
@@ -19,6 +35,18 @@ export default function Broadcast() {
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
+
+  const loadHistory = () => {
+    api
+      .get<{ broadcasts: Broadcast[] }>("/admin/broadcasts")
+      .then((res) => setBroadcasts(res.broadcasts))
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    loadHistory();
+  }, []);
 
   const send = async () => {
     if (!title.trim() || !body.trim()) {
@@ -33,6 +61,7 @@ export default function Broadcast() {
       const res = await api.post<{ sent: number }>("/admin/broadcast", { role, title, body });
       setResult(`Notification sent to ${res.sent} user(s)`);
       setBody("");
+      loadHistory();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to broadcast");
     } finally {
@@ -87,6 +116,26 @@ export default function Broadcast() {
         >
           {sending ? "Sending…" : "Send broadcast"}
         </button>
+      </div>
+
+      <h2 className="mb-3 mt-10 text-sm font-semibold uppercase tracking-wide text-slate-500">Broadcast history</h2>
+      <div className="max-w-2xl space-y-3">
+        {broadcasts.map((b) => (
+          <Card key={b.id} className="p-4">
+            <div className="flex items-center justify-between gap-4">
+              <span className="font-semibold text-slate-800 dark:text-slate-100">{b.title}</span>
+              <div className="flex shrink-0 items-center gap-2">
+                <Badge tone={ROLE_TONE[b.role ?? "all"]}>{b.role ?? "all"}</Badge>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  {b.sentTo} sent
+                </span>
+              </div>
+            </div>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{b.body}</p>
+            <div className="mt-2 text-xs text-slate-400">{new Date(b.createdAt).toLocaleString()}</div>
+          </Card>
+        ))}
+        {broadcasts.length === 0 && !error && <p className="text-sm text-slate-400">No broadcasts sent yet.</p>}
       </div>
     </ShellLayout>
   );
