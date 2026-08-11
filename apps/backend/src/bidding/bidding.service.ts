@@ -433,6 +433,20 @@ export class BiddingService {
     if (!transporter || trip.transporterId !== transporter.id) throw new BadRequestException('Not your trip')
     if (trip.status !== 'delivered') throw new BadRequestException('Rate after delivery')
     if (trip.supplierRating) throw new BadRequestException('Already rated')
+    const supplier = await this.prisma.supplier.findUnique({ where: { id: trip.load.supplierId } })
+    // Write a Review row so the supplier's profile aggregates from the Review model too.
+    await this.prisma.review.upsert({
+      where: { tripId_reviewerId: { tripId, reviewerId: user.id } },
+      update: { score, review: review?.trim() || null, role: 'supplier', revieweeId: supplier?.userId ?? '' },
+      create: {
+        tripId,
+        reviewerId: user.id,
+        revieweeId: supplier?.userId ?? '',
+        role: 'supplier',
+        score,
+        review: review?.trim() || null,
+      },
+    })
     const updated = await this.prisma.trip.update({
       where: { id: tripId },
       data: { supplierRating: score, supplierReview: review?.trim() || null, supplierRatedAt: new Date() },

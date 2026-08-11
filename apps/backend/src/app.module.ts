@@ -35,6 +35,7 @@ import { OnboardingModule } from './onboarding/onboarding.module'
 import { NotifPrefsModule } from './notif-prefs/notif-prefs.module'
 import { TrustModule } from './trust/trust.module'
 import { DriverModule } from './driver/driver.module'
+import { GamificationModule } from './gamification/gamification.module'
 
 @Module({
   imports: [
@@ -79,6 +80,7 @@ import { DriverModule } from './driver/driver.module'
     NotifPrefsModule,
     TrustModule,
     DriverModule,
+    GamificationModule,
   ],
   controllers: [AppController],
   providers: [

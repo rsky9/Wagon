@@ -120,6 +120,7 @@ model User {
   verified     Boolean     @default(false)
   supplierVerified  Boolean @default(false)
   transporterVerified Boolean @default(false)
+  xp           Int         @default(0)
   isActive     Boolean     @default(true)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
@@ -134,6 +135,10 @@ model User {
   favorites    Favorite[]
   savedSearches SavedSearch[]
   messages     Message[]
+  reviewsGiven   Review[] @relation("Reviewer")
+  reviewsReceived Review[] @relation("Reviewee")
+  quests       UserQuest[]
+  badges       UserBadge[]
   @@index([role])
 }
 
@@ -437,6 +442,7 @@ model Trip {
   booking      BookingSnapshot?
   exceptions   TripException[]
   messages     Message[]
+  reviews      Review[]
   supplierRating Int?
   supplierReview String?
   transporterRatedAt DateTime?
@@ -645,4 +651,46 @@ model NotificationPreference {
   docExpiry   Boolean @default(true)
   promo       Boolean @default(false)
   updatedAt   DateTime @updatedAt
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  tripId      String
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  reviewerId  String
+  reviewer    User     @relation("Reviewer", fields: [reviewerId], references: [id])
+  revieweeId  String
+  reviewee    User     @relation("Reviewee", fields: [revieweeId], references: [id])
+  // Role being reviewed: 'transporter' (supplier rates the hauler) or 'supplier' (hauler rates the shipper).
+  role        String
+  score       Int
+  review      String?
+  createdAt   DateTime @default(now())
+
+  @@unique([tripId, reviewerId])
+  @@index([revieweeId])
+  @@index([reviewerId])
+}
+
+model UserQuest {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questId     String
+  completedAt DateTime? 
+  createdAt   DateTime  @default(now())
+
+  @@unique([userId, questId])
+  @@index([userId])
+}
+
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badgeId   String
+  awardedAt DateTime @default(now())
+
+  @@unique([userId, badgeId])
+  @@index([userId])
 }

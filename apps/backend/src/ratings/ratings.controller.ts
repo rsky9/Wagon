@@ -34,4 +34,9 @@ export class RatingsController {
   reviews(@Param('userId') userId: string) {
     return this.ratings.reviewsForTransporter(userId)
   }
+
+  @Get('mine')
+  mine(@CurrentUser() user: User) {
+    return this.ratings.reviewsReceived(user.id)
+  }
 }

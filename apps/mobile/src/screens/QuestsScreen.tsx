@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, FlatList, Pressable } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
-import { loadGamification, QUESTS, levelFor, levelProgress, XP_PER_LEVEL, type GamificationState, type Quest } from '../gamification'
+import { loadGamification, levelFor, levelProgress, XP_PER_LEVEL, type GamificationState } from '../gamification'
 
 interface Props {
   role: 'transporter' | 'supplier'
@@ -19,13 +19,13 @@ export function QuestsScreen({ role, onBack, onOpenQuest }: Props) {
     loadGamification().then(setState)
   }, [])
 
-  const quests = QUESTS[role] ?? []
-  const doneCount = quests.filter((q) => state?.questsDone.includes(q.id)).length
-  const level = levelFor(state?.xp ?? 0)
-  const pct = levelProgress(state?.xp ?? 0)
+  const quests = state?.quests ?? []
+  const doneCount = quests.filter((q) => q.done).length
+  const level = state?.level ?? levelFor(state?.xp ?? 0)
+  const pct = levelProgress(state?.xpIntoLevel ?? state?.xp ?? 0)
 
-  const renderQuest = ({ item }: { item: Quest }) => {
-    const done = state?.questsDone.includes(item.id)
+  const renderQuest = ({ item }: { item: (typeof quests)[number] }) => {
+    const done = item.done
     return (
       <Pressable
         style={[styles.quest, { backgroundColor: theme.card, borderColor: theme.border, opacity: done ? 0.55 : 1 }]}
@@ -74,7 +74,7 @@ export function QuestsScreen({ role, onBack, onOpenQuest }: Props) {
               </View>
             </View>
             <Text style={[styles.nextLevel, { color: theme.mutedForeground }]}>
-              {XP_PER_LEVEL - (state?.xp ?? 0) % XP_PER_LEVEL} XP to Level {level + 1}
+              {XP_PER_LEVEL - (state?.xpIntoLevel ?? 0)} XP to Level {level + 1}
             </Text>
           </View>
         }

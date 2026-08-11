@@ -25,6 +25,21 @@ export class RatingsService {
       throw new BadRequestException('Already rated')
     }
 
+    const transporter = await this.prisma.transporter.findUnique({ where: { id: trip.transporterId } })
+
+    // Write a Review row (source of truth for the counterparty's profile) + keep the Trip column in sync.
+    await this.prisma.review.upsert({
+      where: { tripId_reviewerId: { tripId, reviewerId: user.id } },
+      update: { score, review: review?.trim() || null, role: 'transporter', revieweeId: transporter?.userId ?? '' },
+      create: {
+        tripId,
+        reviewerId: user.id,
+        revieweeId: transporter?.userId ?? '',
+        role: 'transporter',
+        score,
+        review: review?.trim() || null,
+      },
+    })
     const updated = await this.prisma.trip.update({
       where: { id: tripId },
       data: { rating: score, review: review?.trim() || undefined },
@@ -35,54 +50,65 @@ export class RatingsService {
 
   /** All delivered trips with ratings/reviews for a transporter. */
   async reviewsForTransporter(userId: string) {
-    const transporter = await this.prisma.transporter.findUnique({ where: { userId } })
-    if (!transporter) throw new NotFoundException('Transporter not found')
-    const trips = await this.prisma.trip.findMany({
-      where: { transporterId: transporter.id, rating: { not: null } },
-      include: { load: { select: { pickupAddr: true, dropAddr: true } } },
-      orderBy: { deliveredAt: 'desc' },
+    const reviews = await this.prisma.review.findMany({
+      where: { revieweeId: userId, role: 'transporter' },
+      include: { trip: { include: { load: { select: { pickupAddr: true, dropAddr: true } } } } },
+      orderBy: { createdAt: 'desc' },
       take: 50,
     })
     return {
-      reviews: trips.map((t) => ({
-        tripId: t.id,
-        rating: t.rating,
-        review: t.review,
-        route: `${t.load.pickupAddr} → ${t.load.dropAddr}`,
-        deliveredAt: t.deliveredAt,
+      reviews: reviews.map((r) => ({
+        tripId: r.tripId,
+        rating: r.score,
+        review: r.review,
+        route: `${r.trip.load.pickupAddr} → ${r.trip.load.dropAddr}`,
+        deliveredAt: r.trip.deliveredAt,
       })),
     }
   }
 
   async transporterRating(userId: string) {
-    const transporter = await this.prisma.transporter.findUnique({ where: { userId } })
-    if (!transporter) {
-      throw new NotFoundException('Transporter not found')
-    }
-    const trips = await this.prisma.trip.findMany({
-      where: { transporterId: transporter.id, rating: { not: null } },
+    const reviews = await this.prisma.review.findMany({
+      where: { revieweeId: userId, role: 'transporter' },
     })
-    if (trips.length === 0) {
+    if (reviews.length === 0) {
       return { rating: null, count: 0 }
     }
-    const avg = trips.reduce((s, t) => s + (t.rating ?? 0), 0) / trips.length
-    return { rating: Math.round(avg * 10) / 10, count: trips.length }
+    const avg = reviews.reduce((s, r) => s + r.score, 0) / reviews.length
+    return { rating: Math.round(avg * 10) / 10, count: reviews.length }
+  }
+
+  /** All reviews received by a user (both roles), newest first. */
+  async reviewsReceived(userId: string) {
+    const reviews = await this.prisma.review.findMany({
+      where: { revieweeId: userId },
+      include: { trip: { include: { load: { select: { pickupAddr: true, dropAddr: true } } } }, reviewer: { select: { name: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    })
+    return {
+      reviews: reviews.map((r) => ({
+        tripId: r.tripId,
+        role: r.role,
+        rating: r.score,
+        review: r.review,
+        reviewerName: r.reviewer.name,
+        route: `${r.trip.load.pickupAddr} → ${r.trip.load.dropAddr}`,
+        createdAt: r.createdAt,
+      })),
+    }
   }
 
   /** Supplier-side reputation: average of transporter ratings received on shipped loads. */
   async supplierRating(userId: string) {
-    const supplier = await this.prisma.supplier.findUnique({ where: { userId } })
-    if (!supplier) {
-      throw new NotFoundException('Supplier not found')
-    }
-    const trips = await this.prisma.trip.findMany({
-      where: { load: { supplierId: supplier.id }, supplierRating: { not: null } },
+    const reviews = await this.prisma.review.findMany({
+      where: { revieweeId: userId, role: 'supplier' },
     })
-    if (trips.length === 0) {
+    if (reviews.length === 0) {
       return { rating: null, count: 0 }
     }
-    const avg = trips.reduce((s, t) => s + (t.supplierRating ?? 0), 0) / trips.length
-    return { rating: Math.round(avg * 10) / 10, count: trips.length }
+    const avg = reviews.reduce((s, r) => s + r.score, 0) / reviews.length
+    return { rating: Math.round(avg * 10) / 10, count: reviews.length }
   }
 
   private async recomputeTransporterRating(transporterId: string) {

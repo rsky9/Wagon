@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { api } from './config'
 
 export interface Quest {
   id: string
@@ -19,23 +19,16 @@ export interface Badge {
 
 export interface GamificationState {
   xp: number
-  badges: string[]
-  questsDone: string[]
+  level: number
+  xpIntoLevel: number
+  xpPerLevel: number
+  badges: Array<Badge & { earned: boolean }>
+  quests: Array<Quest & { done: boolean }>
+  totalXp: number
 }
 
-const STORAGE_KEY = 'wagon_gamification'
-
+/** Fallback quest/badge catalogs used for rendering while the server state loads. */
 export const XP_PER_LEVEL = 120
-
-export const BADGES: Record<string, Badge> = {
-  onboarded: { id: 'onboarded', title: 'Onboarded', icon: '🎓', description: 'Completed your first-run setup' },
-  fleet: { id: 'fleet', title: 'Fleet Builder', icon: '🚚', description: 'Added your first truck' },
-  crew: { id: 'crew', title: 'Crew Leader', icon: '🧑‍✈️', description: 'Added your first driver' },
-  verified: { id: 'verified', title: 'Verified', icon: '🛡️', description: 'Completed KYC verification' },
-  firstLoad: { id: 'firstLoad', title: 'First Load', icon: '📦', description: 'Posted your first load' },
-  paid: { id: 'paid', title: 'Paid', icon: '💰', description: 'Connected payouts' },
-}
-
 export const QUESTS: Record<string, Quest[]> = {
   transporter: [
     { id: 'company', title: 'Company profile', description: 'Tell us about your business', icon: '🏢', xp: 40, target: 'Settings' },
@@ -50,6 +43,15 @@ export const QUESTS: Record<string, Quest[]> = {
     { id: 'kyc', title: 'Verify your identity', description: 'Complete KYC to unlock faster booking', icon: '🛡️', xp: 60, target: 'Kyc' },
     { id: 'pay', title: 'Set payment terms', description: 'Choose advance / pay-later options', icon: '💰', xp: 30, target: 'Settings' },
   ],
+}
+
+export const BADGES: Record<string, Badge> = {
+  onboarded: { id: 'onboarded', title: 'Onboarded', icon: '🎓', description: 'Completed your first-run setup' },
+  fleet: { id: 'fleet', title: 'Fleet Builder', icon: '🚚', description: 'Added your first truck' },
+  crew: { id: 'crew', title: 'Crew Leader', icon: '🧑‍✈️', description: 'Added your first driver' },
+  verified: { id: 'verified', title: 'Verified', icon: '🛡️', description: 'Completed KYC verification' },
+  firstLoad: { id: 'firstLoad', title: 'First Load', icon: '📦', description: 'Posted your first load' },
+  paid: { id: 'paid', title: 'Paid', icon: '💰', description: 'Connected payouts' },
 }
 
 export function levelFor(xp: number) {
@@ -73,48 +75,44 @@ export function badgeForQuest(questId: string): string | null {
   }
 }
 
+const EMPTY: GamificationState = {
+  xp: 0,
+  level: 1,
+  xpIntoLevel: 0,
+  xpPerLevel: XP_PER_LEVEL,
+  badges: [],
+  quests: [],
+  totalXp: 0,
+}
+
 export async function loadGamification(): Promise<GamificationState> {
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY)
-    if (!raw) return { xp: 0, badges: [], questsDone: [] }
-    return JSON.parse(raw) as GamificationState
+    return await api.get<GamificationState>('/gamification')
   } catch {
-    return { xp: 0, badges: [], questsDone: [] }
+    return EMPTY
   }
 }
 
 export async function awardXp(amount: number, extraBadge?: string): Promise<GamificationState> {
-  const state = await loadGamification()
-  const next: GamificationState = {
-    xp: state.xp + amount,
-    badges: extraBadge && !state.badges.includes(extraBadge) ? [...state.badges, extraBadge] : state.badges,
-    questsDone: state.questsDone,
+  try {
+    return await api.post<GamificationState>('/gamification/xp', { amount, badge: extraBadge })
+  } catch {
+    return EMPTY
   }
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-  return next
 }
 
 export async function completeQuest(questId: string): Promise<GamificationState> {
-  const state = await loadGamification()
-  if (state.questsDone.includes(questId)) return state
-  const next: GamificationState = {
-    xp: state.xp,
-    badges: state.badges,
-    questsDone: [...state.questsDone, questId],
+  try {
+    return await api.post<GamificationState>(`/gamification/quests/${questId}/complete`)
+  } catch {
+    return EMPTY
   }
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-  return next
 }
 
 export async function completeQuestWithXp(questId: string, xp: number): Promise<GamificationState> {
-  const state = await loadGamification()
-  if (state.questsDone.includes(questId)) return state
-  const badge = badgeForQuest(questId)
-  const next: GamificationState = {
-    xp: state.xp + xp,
-    badges: badge && !state.badges.includes(badge) ? [...state.badges, badge] : state.badges,
-    questsDone: [...state.questsDone, questId],
+  try {
+    return await api.post<GamificationState>(`/gamification/quests/${questId}/complete`)
+  } catch {
+    return EMPTY
   }
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-  return next
 }

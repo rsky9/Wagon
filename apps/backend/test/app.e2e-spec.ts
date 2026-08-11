@@ -328,6 +328,35 @@ describe('Wagon API (e2e)', () => {
         .expect(400)
     })
 
+    it('exposes ratings through the Review model', async () => {
+      const transporter = await request(app.getHttpServer())
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/ratings/transporter/${transporter.body.profile.id}`)
+        .set('Authorization', `Bearer ${supToken}`)
+        .expect(200)
+      expect(res.body.rating).toBe(5)
+      expect(res.body.count).toBeGreaterThanOrEqual(1)
+    })
+
+    it('returns gamification state and awards XP on quest completion', async () => {
+      const state = await request(app.getHttpServer())
+        .get('/api/v1/gamification')
+        .set('Authorization', `Bearer ${supToken}`)
+        .expect(200)
+      expect(typeof state.body.xp).toBe('number')
+      expect(Array.isArray(state.body.quests)).toBe(true)
+
+      const complete = await request(app.getHttpServer())
+        .post('/api/v1/gamification/quests/kyc/complete')
+        .set('Authorization', `Bearer ${supToken}`)
+        .expect(201)
+      expect(complete.body.xp).toBeGreaterThanOrEqual(state.body.xp)
+      expect(complete.body.quests.find((q: { id: string }) => q.id === 'kyc').done).toBe(true)
+    })
+
     it('blocks non-participants from tracking history', async () => {
       await request(app.getHttpServer())
         .get(`/api/v1/tracking/${tripId}`)
