@@ -19,21 +19,31 @@ export function RupeeIcon({ size = 28, filled = false, color }: Props) {
   const glyphColor = filled ? '#fff' : (color ?? theme.primary)
   const bg = filled ? theme.primary : 'transparent'
   const border = filled ? 'transparent' : theme.primary + '55'
+  const glyphSize = Math.round(size * 0.66)
 
   return (
     <View
       style={[
         styles.badge,
-        { width: size, height: size, borderRadius: radius.md, backgroundColor: bg, borderColor: border },
+        { width: size, height: size, borderRadius: size / 2.6, backgroundColor: bg, borderColor: border },
         !filled && { borderWidth: 1.5 },
       ]}
     >
-      <Text style={[styles.glyph, { color: glyphColor, fontSize: size * 0.62, lineHeight: size }]}>₹</Text>
+      <Text
+        style={[
+          styles.glyph,
+          { color: glyphColor, fontSize: glyphSize, lineHeight: size, minHeight: size },
+        ]}
+        adjustsFontSizeToFit
+        numberOfLines={1}
+      >
+        ₹
+      </Text>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  badge: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  glyph: { fontWeight: '900', includeFontPadding: false },
+  badge: { alignItems: 'center', justifyContent: 'center' },
+  glyph: { fontWeight: '900', includeFontPadding: false, textAlign: 'center' },
 })

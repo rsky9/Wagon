@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
   logo: { fontSize: 24, fontWeight: '800', letterSpacing: -0.02 },
   sub: { fontSize: 13 },
   themeBtn: { borderRadius: radius.full, width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
-  body: { padding: spacing.lg, gap: spacing.md },
+  body: { padding: spacing.lg, paddingBottom: 130, gap: spacing.md },
   profileCard: {
     flexDirection: 'row',
     alignItems: 'center',
