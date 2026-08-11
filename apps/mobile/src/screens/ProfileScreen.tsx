@@ -280,7 +280,7 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
 
         <Pressable style={[styles.row, { backgroundColor: theme.background, borderColor: theme.border }]} onPress={onOpenRateCard}>
           <View style={styles.rowLeft}>
-            <Text style={[styles.rowIcon, { color: theme.primary }]}>💵</Text>
+            <Text style={[styles.rowIcon, { color: theme.primary }]}>📋</Text>
             <View>
               <Text style={[styles.rowLabel, { color: theme.foreground }]}>Rate Card</Text>
             </View>

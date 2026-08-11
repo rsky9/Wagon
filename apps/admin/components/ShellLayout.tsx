@@ -13,7 +13,7 @@ const nav = [
   { label: "Tickets", href: "/tickets", key: "/tickets", icon: "🎫" },
   { label: "Reports", href: "/reports", key: "/reports", icon: "🚩" },
   { label: "Broadcast", href: "/broadcast", key: "/broadcast", icon: "📢" },
-  { label: "Rate Cards", href: "/rate-cards", key: "/rate-cards", icon: "💲" },
+  { label: "Rate Cards", href: "/rate-cards", key: "/rate-cards", icon: "📊" },
   { label: "Audit Log", href: "/audit", key: "/audit", icon: "📜" },
 ];
 
