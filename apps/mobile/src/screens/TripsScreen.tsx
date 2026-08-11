@@ -81,20 +81,20 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
     setBusy(bidId)
     try {
       await api.post(`/bidding/load/${loadId}/confirm/transporter`, { bidId })
-      Alert.alert('Confirmed', 'Booking locked in — trip created')
+      Alert.alert(t('ui.confirmed'), 'Booking locked in — trip created')
       fetchTrips()
       fetchPending()
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to confirm')
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to confirm')
     } finally {
       setBusy(null)
     }
   }
 
   const rateSupplier = (trip: TripInfo) => {
-    Alert.alert('Rate the supplier', 'How was loading readiness and communication?', [
+    Alert.alert(t('ui.rateSupplier'), 'How was loading readiness and communication?', [
       { text: 'Cancel', style: 'cancel' },
-      ...[5, 4, 3, 2, 1].map((s) => ({ text: `${s}★`, onPress: () => api.post(`/bidding/trip/${trip.id}/rate-supplier`, { score: s }).then(() => Alert.alert('Thanks', 'Rating saved')).catch(() => Alert.alert('Error', 'Failed to rate')) })),
+      ...[5, 4, 3, 2, 1].map((s) => ({ text: `${s}★`, onPress: () => api.post(`/bidding/trip/${trip.id}/rate-supplier`, { score: s }).then(() => Alert.alert(t('ui.thanks'), 'Rating saved')).catch(() => Alert.alert(t('ui.error'), 'Failed to rate')) })),
     ])
   }
 
@@ -104,7 +104,7 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
       await api.patch(`/trips/${trip.id}/status`, { status })
       fetchTrips()
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to update')
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to update')
     } finally {
       setBusy(null)
     }
@@ -129,10 +129,10 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
         name: asset.name ?? 'pod.pdf',
         type: asset.mimeType ?? 'application/pdf',
       })
-      Alert.alert('POD uploaded', 'Proof of delivery recorded')
+      Alert.alert(t('ui.podUploaded'), 'Proof of delivery recorded')
       fetchTrips()
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to upload POD')
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to upload POD')
     } finally {
       setBusy(null)
     }
@@ -145,7 +145,7 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
       Alert.alert('Payout', res.alreadyPaid ? 'Already paid out' : 'Payout processed')
       fetchTrips()
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to request payout')
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to request payout')
     } finally {
       setBusy(null)
     }
@@ -195,7 +195,7 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
           }
           ListEmptyComponent={
             <EmptyState
-              title="No trips yet"
+              title={t('trip.noTrips')}
               message="Accept a load to start your first trip"
               actionLabel="Browse loads"
               onAction={onBack}

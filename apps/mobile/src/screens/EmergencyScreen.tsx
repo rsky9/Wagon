@@ -13,7 +13,7 @@ export function EmergencyScreen({ onBack }: Props) {
   const { t } = useI18n()
 
   const call = (num: string) => {
-    Linking.openURL(`tel:${num}`).catch(() => Alert.alert('Unable to call'))
+    Linking.openURL(`tel:${num}`).catch(() => Alert.alert(t('ui.unavailableCall')))
   }
 
   return (

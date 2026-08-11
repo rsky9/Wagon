@@ -60,7 +60,7 @@ export function TripDetailScreen({ loadId, onBack, onTrack }: Props) {
         if (t?.rating) setRating(t.rating)
         if (t?.load.ewbNumber) setEwb(t.load.ewbNumber)
       })
-      .catch((e) => Alert.alert('Error', e.message))
+      .catch((e) => Alert.alert(t('ui.error'), e.message))
       .finally(() => setLoading(false))
   }, [loadId])
 
@@ -92,9 +92,9 @@ export function TripDetailScreen({ loadId, onBack, onTrack }: Props) {
     setPaying(true)
     try {
       await api.post('/payments/escrow', { tripId: trip.id, amount: trip.load.fareEstimate })
-      Alert.alert('Paid', `Booking amount ${formatINR(trip.load.fareEstimate)} captured`)
+      Alert.alert(t('ui.paid'), `Booking amount ${formatINR(trip.load.fareEstimate)} captured`)
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Payment failed')
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Payment failed')
     } finally {
       setPaying(false)
     }
@@ -103,10 +103,10 @@ export function TripDetailScreen({ loadId, onBack, onTrack }: Props) {
   const submitRating = async () => {
     try {
       await api.post(`/ratings/trip/${trip.id}`, { score: rating })
-      Alert.alert('Thanks', 'Your rating has been saved')
+      Alert.alert(t('ui.thanks'), 'Your rating has been saved')
       setTrip({ ...trip, rating })
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to rate')
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to rate')
     }
   }
 
@@ -114,17 +114,17 @@ export function TripDetailScreen({ loadId, onBack, onTrack }: Props) {
     try {
       const res = await api.post<{ ewbNumber: string }>(`/ewb/loads/${loadId}`)
       setEwb(res.ewbNumber)
-      Alert.alert('E-way bill', `Generated ${res.ewbNumber}`)
+      Alert.alert(t('ui.ewb'), `Generated ${res.ewbNumber}`)
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to generate EWB')
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to generate EWB')
     }
   }
 
   const verifyOtp = (kind: 'pickup' | 'delivery') => {
     Alert.prompt(`Enter ${kind} OTP`, `Ask the transporter for the ${kind} code`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Verify', onPress: (code?: string) => {
       api.post(`/trips/${trip.id}/otp/${kind}/verify`, { code: code ?? '' })
-        .then(() => { Alert.alert('Verified', `${kind} confirmed`); setTrip({ ...trip }) })
-        .catch((e) => Alert.alert('Invalid', e instanceof Error ? e.message : 'Wrong code'))
+        .then(() => { Alert.alert(t('ui.verified'), `${kind} confirmed`); setTrip({ ...trip }) })
+        .catch((e) => Alert.alert(t('ui.invalidAmount'), e instanceof Error ? e.message : 'Wrong code'))
     } }])
   }
 

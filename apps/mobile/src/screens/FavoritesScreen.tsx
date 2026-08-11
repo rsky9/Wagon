@@ -45,7 +45,7 @@ export function FavoritesScreen({ onBack, onOpenLoad, onRunSearch }: Props) {
   useEffect(() => { fetch() }, [fetch])
 
   const unsave = (loadId: string) => {
-    Alert.alert('Remove saved load?', 'Remove this from your saved loads?', [
+    Alert.alert(t('ui.removeSavedLoad'), 'Remove this from your saved loads?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: () => api.request('DELETE', `/favorites/load/${loadId}`).then(() => fetch()).catch(() => {}) },
     ])

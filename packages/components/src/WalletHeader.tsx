@@ -1,6 +1,7 @@
 import React from 'react'
 import { View, Text, StyleSheet, Pressable } from 'react-native'
 import { radius, spacing, shadows } from '@wagon/design'
+import { useI18n } from '@wagon/i18n'
 
 interface Props {
   balance: number
@@ -15,15 +16,16 @@ interface Props {
 /** Premium wallet balance header — always a dark navy card so white text stays readable in light & dark mode. */
 export function WalletHeader({ balance, hideable = true, primaryLabel, onPrimary, secondaryLabel, onSecondary, children }: Props) {
   const [hidden, setHidden] = React.useState(false)
+  const { t } = useI18n()
 
   return (
     <View style={styles.wrap}>
       <View style={[styles.card, shadows.lg]}>
         <View style={styles.glow} />
         <View style={styles.topRow}>
-          <Text style={styles.label}>Available balance</Text>
+          <Text style={styles.label}>{t('ui.availableBalance')}</Text>
           <View style={styles.pill}>
-            <Text style={styles.pillText}>WALLET</Text>
+            <Text style={styles.pillText}>{t('ui.wallet')}</Text>
           </View>
         </View>
         <View style={styles.balanceRow}>

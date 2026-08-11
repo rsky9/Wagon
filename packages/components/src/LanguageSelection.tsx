@@ -10,13 +10,13 @@ interface Props {
 
 /** Full-screen language selection shown on first run (PhonePe-style). */
 export function LanguageSelection({ onDone }: Props) {
-  const { lang, setLang } = useI18n()
+  const { lang, setLang, t } = useI18n()
 
   return (
     <View style={styles.gradient}>
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
-          <Text style={styles.title}>Choose your language</Text>
+          <Text style={styles.title}>{t('ui.chooseLanguage')}</Text>
           <Text style={styles.subtitle}>आपकी भाषा चुनें · మీ భాషను ఎంచుకోండి</Text>
         </View>
 
@@ -44,7 +44,7 @@ export function LanguageSelection({ onDone }: Props) {
         />
 
         <View style={styles.footer}>
-          <Button label="Continue" onPress={onDone} />
+          <Button label={t('common.continue')} onPress={onDone} />
         </View>
       </SafeAreaView>
     </View>

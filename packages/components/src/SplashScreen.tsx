@@ -1,8 +1,10 @@
 import { useEffect } from 'react'
 import { View, Text, StyleSheet, Image, type ImageSourcePropType } from 'react-native'
+import { useI18n } from '@wagon/i18n'
 
 /** Brand splash shown on launch while the session/language restores. */
 export function SplashScreen({ showLang = false, logo, logoSize = 96 }: { showLang?: boolean; logo?: ImageSourcePropType; logoSize?: number }) {
+  const { t } = useI18n()
   useEffect(() => {
     // no-op; navigation decides when to advance
   }, [])
@@ -20,7 +22,7 @@ export function SplashScreen({ showLang = false, logo, logoSize = 96 }: { showLa
         <Text style={styles.brand}>
           Wagon<Text style={styles.dot}>.</Text>
         </Text>
-        <Text style={styles.tagline}>Move goods. Get paid.</Text>
+        <Text style={styles.tagline}>{t('ui.moveGoodsGetPaid')}</Text>
       </View>
       {showLang && <View />}
     </View>

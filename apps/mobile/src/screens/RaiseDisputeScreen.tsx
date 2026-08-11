@@ -27,7 +27,7 @@ export function RaiseDisputeScreen({ onBack, onSubmitted }: Props) {
   }
 
   const submit = async () => {
-    if (!tripId.trim() || !subject.trim()) { Alert.alert('Required', 'Enter trip ID and describe the issue'); return }
+    if (!tripId.trim() || !subject.trim()) { Alert.alert(t('ui.required'), 'Enter trip ID and describe the issue'); return }
     setSubmitting(true)
     try {
       await api.post('/disputes', {
@@ -35,9 +35,9 @@ export function RaiseDisputeScreen({ onBack, onSubmitted }: Props) {
         subject: subject.trim(),
         evidenceKeys: evidence.trim() ? [evidence.trim()] : undefined,
       })
-      Alert.alert('Raised', 'Our team will review the dispute with the full trip timeline.', [{ text: 'OK', onPress: onSubmitted }])
+      Alert.alert(t('ui.raised'), 'Our team will review the dispute with the full trip timeline.', [{ text: 'OK', onPress: onSubmitted }])
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to raise')
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to raise')
     } finally { setSubmitting(false) }
   }
 

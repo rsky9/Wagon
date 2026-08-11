@@ -31,11 +31,11 @@ export function SearchScreen({ onBack, onSelect, initialQuery }: Props) {
   const [loading, setLoading] = useState(false)
 
   const saveSearch = () => {
-    if (!query.trim()) { Alert.alert('Nothing to save', 'Type a search first'); return }
-    Alert.prompt('Save this search', 'Name it for quick access', [{ text: 'Cancel', style: 'cancel' }, { text: 'Save', onPress: (name?: string) => {
+    if (!query.trim()) { Alert.alert(t('ui.nothingToSave'), 'Type a search first'); return }
+    Alert.prompt(t('ui.saveThisSearch'), 'Name it for quick access', [{ text: 'Cancel', style: 'cancel' }, { text: 'Save', onPress: (name?: string) => {
       api.post('/favorites/search', { name: name?.trim() || query.trim(), query: { q: query.trim() } })
-        .then(() => Alert.alert('Saved', 'Search saved — find it under Account → Saved'))
-        .catch(() => Alert.alert('Error', 'Failed to save'))
+        .then(() => Alert.alert(t('ui.saved'), 'Search saved — find it under Account → Saved'))
+        .catch(() => Alert.alert(t('ui.error'), 'Failed to save'))
     } }])
   }
 

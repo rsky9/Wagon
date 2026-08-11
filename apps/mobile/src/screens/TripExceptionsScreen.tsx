@@ -48,20 +48,20 @@ export function TripExceptionsScreen({ tripId, onBack }: Props) {
   useEffect(() => { fetch() }, [fetch])
 
   const report = (kind: string) => {
-    Alert.prompt('Describe the issue', `Report ${kind.replace('_', ' ')}`, [{ text: 'Cancel', style: 'cancel' }, {
+    Alert.prompt(t('ui.describeIssue'), `Report ${kind.replace('_', ' ')}`, [{ text: 'Cancel', style: 'cancel' }, {
       text: 'Report', onPress: (title?: string) => {
-        if (!title?.trim()) { Alert.alert('Required', 'Describe the issue'); return }
+        if (!title?.trim()) { Alert.alert(t('ui.required'), 'Describe the issue'); return }
         setReporting(true)
         api.post(`/exceptions/trip/${tripId}`, { kind, title: title.trim() })
-          .then(() => { Alert.alert('Reported', 'The other party and support have been notified.'); fetch() })
-          .catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'Failed'))
+          .then(() => { Alert.alert(t('ui.issueReported'), 'The other party and support have been notified.'); fetch() })
+          .catch((e) => Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed'))
           .finally(() => setReporting(false))
       },
     }])
   }
 
   const resolve = (id: string) => {
-    api.patch(`/exceptions/${id}/resolve`).then(() => fetch()).catch(() => Alert.alert('Error', 'Failed to resolve'))
+    api.patch(`/exceptions/${id}/resolve`).then(() => fetch()).catch(() => Alert.alert(t('ui.error'), 'Failed to resolve'))
   }
 
   return (

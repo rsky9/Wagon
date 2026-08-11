@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { View, Text, StyleSheet, Pressable } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { spacing, radius } from '@wagon/design'
+import { useI18n } from '@wagon/i18n'
 import { Button } from './Button'
 
 export interface CapabilityChoice {
@@ -48,13 +49,14 @@ const OPTIONS: Array<{ key: string; icon: string; title: string; sub: string; ca
 /** Unified capability selection: one account, choose what you can do. */
 export function CapabilitySelection({ onSelect }: Props) {
   const [selected, setSelected] = useState<string | null>(null)
+  const { t } = useI18n()
 
   return (
     <View style={styles.gradient}>
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
-          <Text style={styles.title}>How do you want to use Wagon?</Text>
-          <Text style={styles.subtitle}>One account — add capabilities anytime.</Text>
+          <Text style={styles.title}>{t('ui.chooseCapability')}</Text>
+          <Text style={styles.subtitle}>{t('ui.capabilityHint')}</Text>
         </View>
 
         <View style={styles.cards}>
@@ -77,7 +79,7 @@ export function CapabilitySelection({ onSelect }: Props) {
                     <Text style={styles.cardTitle}>{o.title}</Text>
                     {o.recommended && (
                       <View style={styles.recoBadge}>
-                        <Text style={styles.recoText}>Recommended</Text>
+                        <Text style={styles.recoText}>{t('ui.recommended')}</Text>
                       </View>
                     )}
                   </View>
@@ -90,7 +92,7 @@ export function CapabilitySelection({ onSelect }: Props) {
 
         <View style={styles.footer}>
           <Button
-            label="Continue"
+            label={t('common.continue')}
             disabled={!selected}
             onPress={() => {
               const opt = OPTIONS.find((o) => o.key === selected)

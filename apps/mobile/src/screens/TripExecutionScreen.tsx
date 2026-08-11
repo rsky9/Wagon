@@ -97,7 +97,7 @@ export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
       await api.post(`/trips/${tripId}/advance`)
       fetch()
     } catch (e) {
-      Alert.alert('Cannot advance', e instanceof Error ? e.message : 'Failed')
+      Alert.alert(t('ui.cannotAdvance'), e instanceof Error ? e.message : 'Failed')
     } finally { setBusy(false) }
   }
 
@@ -108,7 +108,7 @@ export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
       Alert.alert(`${kind} OTP`, `Share this code with the supplier: ${res.devCode}`, [
         { text: "I've shared it", onPress: () => fetch() },
       ])
-    } catch (e) { Alert.alert('Error', e instanceof Error ? e.message : 'Failed') } finally { setBusy(false) }
+    } catch (e) { Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed') } finally { setBusy(false) }
   }
 
   const steps = STAGE_FLOW.map((s, i) => ({

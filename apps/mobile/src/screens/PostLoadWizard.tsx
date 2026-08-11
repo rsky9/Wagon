@@ -121,7 +121,7 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
       })
       onComplete()
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to publish')
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to publish')
     } finally { setSubmitting(false) }
   }
 

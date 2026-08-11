@@ -77,11 +77,11 @@ export function KycScreen({ onBack }: Props) {
         name: `${kind}.jpg`,
         type: asset.mimeType ?? 'image/jpeg',
       })
-      Alert.alert('Uploaded', `${kind} submitted for review`)
+      Alert.alert(t('ui.submitted'), `${kind} submitted for review`)
       completeQuestWithXp('kyc', 60)
       fetchDocs()
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Upload failed')
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Upload failed')
     } finally {
       setUploading(null)
     }

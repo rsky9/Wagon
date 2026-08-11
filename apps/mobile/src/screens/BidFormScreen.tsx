@@ -60,7 +60,7 @@ export function BidFormScreen({ load, onBack, onSubmitted }: Props) {
 
   const submit = async () => {
     const n = Number(amount)
-    if (!n || n <= 0) { Alert.alert('Invalid', 'Enter a bid amount'); return }
+    if (!n || n <= 0) { Alert.alert(t('ui.invalidAmount'), 'Enter a bid amount'); return }
     setSubmitting(true)
     try {
       await api.post('/bidding/bid', {
@@ -74,9 +74,9 @@ export function BidFormScreen({ load, onBack, onSubmitted }: Props) {
         etaHours: etaHours ? Number(etaHours) : undefined,
         validityHours: Number(validity) || 24,
       })
-      Alert.alert('Bid submitted', 'Your structured bid is in the Decision Room.', [{ text: 'OK', onPress: onSubmitted }])
+      Alert.alert(t('ui.bidSubmitted'), 'Your structured bid is in the Decision Room.', [{ text: 'OK', onPress: onSubmitted }])
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to bid')
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to bid')
     } finally { setSubmitting(false) }
   }
 

@@ -40,34 +40,34 @@ export function ChatScreen({ onBack, contactName, contactPhone, contactId, tripI
     if (!draft.trim() || !tripId) return
     api.post(`/chat/trip/${tripId}`, { body: draft.trim() })
       .then(() => { setDraft(''); fetch() })
-      .catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'Failed to send'))
+      .catch((e) => Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to send'))
   }
 
   useEffect(() => { fetch() }, [tripId])
 
   const report = () => {
-    Alert.alert('Report user?', `Report ${contactName} for fraudulent or unsafe behaviour?`, [
+    Alert.alert(t('ui.reportUser'), `Report ${contactName} for fraudulent or unsafe behaviour?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Report',
         style: 'destructive',
         onPress: () => {
-          if (!contactId) { Alert.alert('Cannot report', 'Contact ID missing'); return }
-          api.post('/trust/report', { reportedId: contactId, reason: 'Fraudulent / unsafe behaviour' }).then(() => Alert.alert('Reported', 'Our team will review this.')).catch(() => Alert.alert('Error', 'Failed to report'))
+          if (!contactId) { Alert.alert(t('ui.cannotReport'), 'Contact ID missing'); return }
+          api.post('/trust/report', { reportedId: contactId, reason: 'Fraudulent / unsafe behaviour' }).then(() => Alert.alert(t('ui.reported'), 'Our team will review this.')).catch(() => Alert.alert(t('ui.error'), 'Failed to report'))
         },
       },
     ])
   }
 
   const block = () => {
-    Alert.alert('Block user?', `You won't receive messages from ${contactName}.`, [
+    Alert.alert(t('ui.blockUser'), `You won't receive messages from ${contactName}.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Block',
         style: 'destructive',
         onPress: () => {
-          if (!contactId) { Alert.alert('Cannot block', 'Contact ID missing'); return }
-          api.post('/trust/block', { blockedId: contactId }).then(() => Alert.alert('Blocked', 'User blocked.')).catch(() => Alert.alert('Error', 'Failed to block'))
+          if (!contactId) { Alert.alert(t('ui.cannotBlock'), 'Contact ID missing'); return }
+          api.post('/trust/block', { blockedId: contactId }).then(() => Alert.alert(t('ui.blocked'), 'User blocked.')).catch(() => Alert.alert(t('ui.error'), 'Failed to block'))
         },
       },
     ])

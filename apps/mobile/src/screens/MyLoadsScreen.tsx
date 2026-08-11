@@ -75,7 +75,7 @@ export function MyLoads({ onPostLoad, onLogout, onSelectLoad, onOpenKyc, onOpenD
         text: 'Cancel',
         style: 'destructive' as const,
         onPress: () => {
-          Alert.alert('Cancel this load?', 'Why are you cancelling?', [
+          Alert.alert(t('ui.cancelLoad'), 'Why are you cancelling?', [
             { text: 'Back', style: 'cancel' },
             { text: 'No trucks available', onPress: () => { api.patch(`/loads/${load.id}/cancel`, { reason: 'No trucks available' }).then(fetchLoads).catch(() => {}) } },
             { text: 'Rates too high', onPress: () => { api.patch(`/loads/${load.id}/cancel`, { reason: 'Rates too high' }).then(fetchLoads).catch(() => {}) } },

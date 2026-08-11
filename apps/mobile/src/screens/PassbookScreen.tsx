@@ -78,7 +78,7 @@ export function PassbookScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
               balance={balance}
               primaryLabel={t("wallet.withdraw")}
               secondaryLabel={t("wallet.statement")}
-              onPrimary={() => Alert.alert('Withdraw', 'Withdrawals are released after each delivered trip payout. Your available balance settles automatically.', [{ text: 'OK' }])}
+              onPrimary={() => Alert.alert(t('wallet.withdraw'), 'Withdrawals are released after each delivered trip payout. Your available balance settles automatically.', [{ text: 'OK' }])}
               onSecondary={() => {
                 setLoading(true)
                 api
@@ -132,7 +132,7 @@ export function PassbookScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
               </Pressable>
             )}
             <Text style={[styles.sectionLabel, { color: theme.mutedForeground }]}>{t('wallet.settlements')}</Text>
-            {loading && <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: spacing.xl }}>Loading…</Text>}
+            {loading && <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: spacing.xl }}>{t('common.loading')}</Text>}
             {error && <Text style={{ color: theme.danger, textAlign: 'center', marginTop: spacing.xl }}>{error}</Text>}
             {!loading && entries.length === 0 && (
               <EmptyState

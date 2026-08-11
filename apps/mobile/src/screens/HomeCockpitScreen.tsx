@@ -116,7 +116,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
 
             {data.transporter.recommended.length > 0 && (
               <>
-                <SectionTitle>Recommended for you</SectionTitle>
+                <SectionTitle>{t('home.recommended')}</SectionTitle>
                 {data.transporter.recommended.map((l) => (
                   <LoadCard key={l.id} load={l} onPress={() => onOpenLoad(l)} theme={theme} />
                 ))}
@@ -125,7 +125,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
 
             {data.transporter.returnLoads.length > 0 && (
               <>
-                <SectionTitle>Return-load opportunities</SectionTitle>
+                <SectionTitle>{t('home.returnLoads')}</SectionTitle>
                 {data.transporter.returnLoads.map((l) => (
                   <LoadCard key={l.id} load={l} onPress={() => onOpenLoad(l)} theme={theme} />
                 ))}

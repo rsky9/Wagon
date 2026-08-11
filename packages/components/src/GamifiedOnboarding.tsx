@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { View, Text, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform, Animated, TextInput } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius, shadows } from '@wagon/design'
+import { useI18n } from '@wagon/i18n'
 import { Button } from './Button'
 
 interface PhaseStep {
@@ -26,8 +27,9 @@ interface Props {
 }
 
 /** Gamified, phased onboarding: 3-4 essential steps with XP + badge celebration. */
-export function GamifiedOnboarding({ roleName, phaseTitle, phaseSubtitle, steps, xpPerStep, onSubmit, onComplete, onSkip, nextLabel = 'Continue' }: Props) {
+export function GamifiedOnboarding({ roleName, phaseTitle, phaseSubtitle, steps, xpPerStep, onSubmit, onComplete, onSkip, nextLabel }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [step, setStep] = useState(0)
   const [xp, setXp] = useState(0)
   const [submitting, setSubmitting] = useState(false)
@@ -70,7 +72,7 @@ export function GamifiedOnboarding({ roleName, phaseTitle, phaseSubtitle, steps,
           <Text style={{ color: step === 0 ? 'transparent' : theme.mutedForeground, fontSize: 20 }}>←</Text>
         </Pressable>
         <Text style={[styles.title, { color: theme.foreground }]}>{phaseTitle}</Text>
-        <Pressable onPress={onSkip} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 14 }}>Skip</Text></Pressable>
+        <Pressable onPress={onSkip} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 14 }}>{t('ui.skip')}</Text></Pressable>
       </View>
 
       <View style={[styles.levelBar, { backgroundColor: theme.muted }]}>
@@ -154,7 +156,7 @@ export function GamifiedOnboarding({ roleName, phaseTitle, phaseSubtitle, steps,
           {isDoneStep ? (
             <Button label="Finish & see rewards" onPress={finish} loading={submitting} />
           ) : (
-            <Button label={nextLabel} onPress={advance} disabled={!current!.valid} />
+            <Button label={nextLabel ?? t('common.continue')} onPress={advance} disabled={!current!.valid} />
           )}
         </View>
       </KeyboardAvoidingView>

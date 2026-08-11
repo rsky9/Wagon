@@ -39,14 +39,14 @@ export function BankScreen({ onBack }: Props) {
   useEffect(() => { fetch() }, [])
 
   const save = async () => {
-    if (!account.trim() || !ifsc.trim()) { Alert.alert('Required', 'Enter account number and IFSC'); return }
+    if (!account.trim() || !ifsc.trim()) { Alert.alert(t('ui.required'), 'Enter account number and IFSC'); return }
     setSaving(true)
     try {
       await api.patch('/auth/bank', { account: account.trim(), ifsc: ifsc.trim(), holder: holder.trim() })
-      Alert.alert('Saved', 'Payout details updated')
+      Alert.alert(t('ui.saved'), 'Payout details updated')
       fetch()
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save')
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to save')
     } finally { setSaving(false) }
   }
 

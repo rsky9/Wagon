@@ -70,9 +70,9 @@ export function TruckDetailScreen({ truckId, onBack }: Props) {
         pollutionUpto: pollution ? `${pollution}T00:00:00Z` : undefined,
         odometerKm: odometer ? Number(odometer) : undefined,
       })
-      Alert.alert('Saved', `${truck?.truckNo} updated`)
+      Alert.alert(t('ui.saved'), `${truck?.truckNo} updated`)
       fetch()
-    } catch (e) { Alert.alert('Error', e instanceof Error ? e.message : 'Failed') }
+    } catch (e) { Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed') }
   }
 
   if (loading) {

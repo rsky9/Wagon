@@ -49,9 +49,9 @@ export function MyBidsScreen({ onBack, onOpenLoad }: Props) {
   useEffect(() => { fetch() }, [fetch])
 
   const withdraw = (bid: MyBid) => {
-    Alert.alert('Withdraw bid?', `Remove your bid of ${formatINR(bid.amount)}?`, [
+    Alert.alert(t('ui.withdrawBid'), `Remove your bid of ${formatINR(bid.amount)}?`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Withdraw', style: 'destructive', onPress: () => api.post(`/bidding/bid/${bid.id}/withdraw`).then(() => { Alert.alert('Withdrawn', 'Bid removed'); fetch() }).catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'Failed')) },
+      { text: 'Withdraw', style: 'destructive', onPress: () => api.post(`/bidding/bid/${bid.id}/withdraw`).then(() => { Alert.alert(t('ui.withdrawn'), 'Bid removed'); fetch() }).catch((e) => Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed')) },
     ])
   }
 

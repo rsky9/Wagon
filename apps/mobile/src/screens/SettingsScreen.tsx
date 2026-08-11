@@ -45,9 +45,9 @@ export function SettingsScreen({ onBack, onChangeRole }: Props) {
           <Pressable
             style={[styles.row, { backgroundColor: theme.card, borderColor: theme.border }]}
             onPress={() =>
-              Alert.alert('Logout?', 'You will need to verify your number again to sign in.', [
+              Alert.alert(t('ui.logoutQ'), 'You will need to verify your number again to sign in.', [
                 { text: 'Cancel', style: 'cancel' },
-                { text: 'Logout', style: 'destructive', onPress: logout },
+                { text: t('ui.logoutAction'), style: 'destructive', onPress: logout },
               ])
             }
           >
@@ -62,17 +62,17 @@ export function SettingsScreen({ onBack, onChangeRole }: Props) {
             style={[styles.row, { backgroundColor: theme.card, borderColor: theme.border }]}
             onPress={() =>
               Alert.alert(
-                'Delete account?',
+                t('ui.deleteAccountQ'),
                 'This permanently deletes your profile, trucks and trip history. This cannot be undone.',
                 [
                   { text: 'Cancel', style: 'cancel' },
                   {
-                    text: 'Delete my account',
+                    text: t('ui.deleteAccountConfirm'),
                     style: 'destructive',
                     onPress: () => {
                       api.post('/auth/delete').then(() => {
-                        Alert.alert('Deleted', 'Your account has been permanently deleted.', [{ text: 'OK', onPress: logout }])
-                      }).catch(() => Alert.alert('Error', 'Could not delete account. Contact support.'))
+                        Alert.alert(t('ui.deleted'), 'Your account has been permanently deleted.', [{ text: 'OK', onPress: logout }])
+                      }).catch(() => Alert.alert(t('ui.error'), 'Could not delete account. Contact support.'))
                     },
                   },
                 ],
@@ -157,7 +157,7 @@ export function SettingsScreen({ onBack, onChangeRole }: Props) {
               Get support for loads, payments, KYC and more. Our team is available 9am–6pm.
             </Text>
           </View>
-          <Pressable style={[styles.row, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => Linking.openURL('tel:18001234567').catch(() => Alert.alert('Unable to call'))}>
+          <Pressable style={[styles.row, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => Linking.openURL('tel:18001234567').catch(() => Alert.alert(t('ui.unavailableCall')))}>
             <Text style={{ fontSize: 18 }}>📞</Text>
             <View style={{ flex: 1, marginLeft: spacing.md }}>
               <Text style={[styles.rowTitle, { color: theme.foreground }]}>{t('settings.callSupport')}</Text>

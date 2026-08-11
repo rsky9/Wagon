@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, Pressable } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { spacing, radius } from '@wagon/design'
+import { useI18n } from '@wagon/i18n'
 import { Button } from './Button'
 
 interface Props {
@@ -9,12 +10,13 @@ interface Props {
 
 /** First-run role selection: transporter vs supplier vs driver. */
 export function RoleSelection({ onSelect }: Props) {
+  const { t } = useI18n()
   return (
     <View style={styles.gradient}>
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
-          <Text style={styles.title}>What do you want to do?</Text>
-          <Text style={styles.subtitle}>Select how you'll use Wagon</Text>
+          <Text style={styles.title}>{t('ui.whatDoYouDo')}</Text>
+          <Text style={styles.subtitle}>{t('ui.roleHint')}</Text>
         </View>
 
         <View style={styles.cards}>
@@ -31,7 +33,7 @@ export function RoleSelection({ onSelect }: Props) {
               <Text style={styles.icon}>📦</Text>
             </View>
             <Text style={styles.cardTitle}>I post loads</Text>
-            <Text style={styles.cardSub}>Post loads, get trucks, track deliveries</Text>
+            <Text style={styles.cardSub}>{t('ui.rolePostLoads')}</Text>
           </Pressable>
 
           <Pressable style={styles.card} onPress={() => onSelect('driver')}>
@@ -39,12 +41,12 @@ export function RoleSelection({ onSelect }: Props) {
               <Text style={styles.icon}>🧑‍✈️</Text>
             </View>
             <Text style={styles.cardTitle}>I'm a driver</Text>
-            <Text style={styles.cardSub}>Get trips, share location, upload POD</Text>
+            <Text style={styles.cardSub}>{t('ui.roleGetTrips')}</Text>
           </Pressable>
         </View>
 
         <View style={styles.footer}>
-          <Text style={styles.note}>You can change this later in Settings</Text>
+          <Text style={styles.note}>{t('ui.changeLater')}</Text>
         </View>
       </SafeAreaView>
     </View>

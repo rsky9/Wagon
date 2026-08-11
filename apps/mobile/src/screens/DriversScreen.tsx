@@ -36,21 +36,21 @@ export function DriversScreen({ onBack }: Props) {
   useEffect(() => { fetch() }, [fetch])
 
   const add = async () => {
-    if (!name.trim() || mobile.length !== 10) { Alert.alert('Required', 'Enter name and 10-digit mobile'); return }
+    if (!name.trim() || mobile.length !== 10) { Alert.alert(t('ui.required'), 'Enter name and 10-digit mobile'); return }
     setSubmitting(true)
     try {
       await api.post('/drivers', { name, mobile })
       completeQuestWithXp('driver', 40)
-      Alert.alert('Added', `${name} added · +40 XP`)
+      Alert.alert(t('ui.added'), `${name} added · +40 XP`)
       setName(''); setMobile(''); setShowForm(false)
       fetch()
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed')
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed')
     } finally { setSubmitting(false) }
   }
 
   const remove = (id: string, driverName: string) => {
-    Alert.alert('Remove driver', `Remove ${driverName}?`, [
+    Alert.alert(t('ui.removeDriver'), `Remove ${driverName}?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: async () => { await api.request('DELETE', `/drivers/${id}`).catch(() => {}); fetch() } },
     ])

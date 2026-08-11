@@ -55,11 +55,11 @@ export function LoadDetailScreen({ load, onBack, onAccepted, onOpenBid }: Props)
     setLoading(true)
     try {
       await api.post<{ trip: unknown }>('/trips/accept', { loadId: load.id })
-      Alert.alert('Load reserved', 'Start the trip from your Trips tab.', [
+      Alert.alert(t('ui.loadReserved'), 'Start the trip from your Trips tab.', [
         { text: 'View trip', onPress: onAccepted },
       ])
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to accept load')
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to accept load')
     } finally {
       setLoading(false)
     }
@@ -67,13 +67,13 @@ export function LoadDetailScreen({ load, onBack, onAccepted, onOpenBid }: Props)
 
   const openBid = () => {
     if (onOpenBid) { onOpenBid(); return }
-    Alert.prompt('Submit a bid', `Enter your freight amount (reference: ${formatINR(load.fareEstimate)})`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Bid', onPress: (amount?: string) => {
+    Alert.prompt(t('ui.submitBidQ'), `Enter your freight amount (reference: ${formatINR(load.fareEstimate)})`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Bid', onPress: (amount?: string) => {
       const n = Number(amount ?? 0)
-      if (!n || n <= 0) { Alert.alert('Invalid', 'Enter a positive amount'); return }
+      if (!n || n <= 0) { Alert.alert(t('ui.invalidAmount'), 'Enter a positive amount'); return }
       setLoading(true)
       api.post('/bidding/bid', { loadId: load.id, amount: n, validityHours: 24 })
-        .then(() => Alert.alert('Bid submitted', 'The supplier will review your structured bid in the Decision Room.'))
-        .catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'Failed to bid'))
+        .then(() => Alert.alert(t('ui.bidSubmitted'), 'The supplier will review your structured bid in the Decision Room.'))
+        .catch((e) => Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to bid'))
         .finally(() => setLoading(false))
     } }])
   }
@@ -149,7 +149,7 @@ export function LoadDetailScreen({ load, onBack, onAccepted, onOpenBid }: Props)
           <Pressable
             style={[styles.rejectBtn, { borderColor: theme.danger + '55' }]}
             onPress={() =>
-              Alert.alert('Reject load?', 'Are you sure you want to pass on this load?', [
+              Alert.alert(t('ui.rejectLoadQ'), 'Are you sure you want to pass on this load?', [
                 { text: 'Cancel', style: 'cancel' },
                 { text: 'Reject', style: 'destructive', onPress: onBack },
               ])

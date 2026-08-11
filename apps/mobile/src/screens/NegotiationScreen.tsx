@@ -58,16 +58,16 @@ export function NegotiationScreen({ loadId, onBack }: Props) {
       Alert.prompt('Counteroffer', 'Enter amount, then conditions after a | (e.g. 39000 | pickup before 8:30 AM)', [{ text: 'Cancel', style: 'cancel' }, { text: 'Send', onPress: (raw?: string) => {
         const [amtPart, condPart] = (raw ?? '').split('|')
         const n = Number(amtPart?.trim() ?? 0)
-        if (!n || n <= 0) { Alert.alert('Invalid', 'Enter a positive amount'); return }
+        if (!n || n <= 0) { Alert.alert(t('ui.invalidAmount'), 'Enter a positive amount'); return }
         api.post(`/bidding/offer/${offer.id}/respond`, { action: 'counter', amount: n, conditions: condPart?.trim() || undefined })
           .then(() => { Alert.alert('Sent', 'Counteroffer submitted'); fetch() })
-          .catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'Failed'))
+          .catch((e) => Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed'))
       } }])
       return
     }
     api.post(`/bidding/offer/${offer.id}/respond`, { action })
       .then(() => { Alert.alert(action === 'accept' ? 'Accepted' : 'Rejected', action === 'accept' ? 'Terms agreed' : 'Offer declined'); fetch() })
-      .catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'Failed'))
+      .catch((e) => Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed'))
   }
 
   const pending = data?.offers.filter((o) => o.status === 'offered') ?? []

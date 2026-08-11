@@ -52,13 +52,13 @@ export function PostLoadScreen({ onBack, onPosted }: Props) {
         setMaterialId(res.materials[0]?.id ?? '')
         setModelId(res.models.find((m) => m.type === 'container')?.id ?? res.models[0]?.id ?? '')
       })
-      .catch(() => Alert.alert('Error', 'Could not load reference data'))
+      .catch(() => Alert.alert(t('ui.error'), 'Could not load reference data'))
       .finally(() => setLoading(false))
   }, [])
 
   const submit = async () => {
     if (!pickup || !drop || !date || !weight || !distance) {
-      Alert.alert('Missing fields', 'Please fill pickup, drop, date, weight and distance')
+      Alert.alert(t('ui.missingFields'), 'Please fill pickup, drop, date, weight and distance')
       return
     }
     setSubmitting(true)
@@ -79,10 +79,10 @@ export function PostLoadScreen({ onBack, onPosted }: Props) {
         description,
         noOfTrucks: 1,
       })
-      Alert.alert('Posted!', 'Your load is now visible to transporters · +60 XP', [{ text: 'View', onPress: onPosted }])
+      Alert.alert(t('ui.posted'), 'Your load is now visible to transporters · +60 XP', [{ text: 'View', onPress: onPosted }])
       completeQuestWithXp('load', 60)
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to post load')
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to post load')
     } finally {
       setSubmitting(false)
     }

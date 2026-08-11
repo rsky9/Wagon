@@ -56,11 +56,11 @@ export function DecisionRoomScreen({ loadId, onBack, onConfirmed, onNegotiate }:
   useEffect(() => { fetch() }, [fetch])
 
   const shortlist = (bidId: string) => {
-    api.post(`/bidding/bid/${bidId}/shortlist`).then(() => { fetch() }).catch(() => Alert.alert('Error', 'Failed to shortlist'))
+    api.post(`/bidding/bid/${bidId}/shortlist`).then(() => { fetch() }).catch(() => Alert.alert(t('ui.error'), 'Failed to shortlist'))
   }
 
   const reject = (bidId: string) => {
-    Alert.alert('Reject bid?', 'This removes the bid from consideration.', [
+    Alert.alert(t('ui.rejectBid'), 'This removes the bid from consideration.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Reject', style: 'destructive', onPress: () => api.post(`/bidding/bid/${bidId}/reject`).then(() => fetch()).catch(() => {}) },
     ])
@@ -69,15 +69,15 @@ export function DecisionRoomScreen({ loadId, onBack, onConfirmed, onNegotiate }:
   const counter = (bidId: string, current: number) => {
     Alert.prompt('Counteroffer', 'Enter your amount', [{ text: 'Cancel', style: 'cancel' }, { text: 'Send', onPress: (amount?: string) => {
       const n = Number(amount ?? 0)
-      if (!n || n <= 0) { Alert.alert('Invalid', 'Enter a positive amount'); return }
-      api.post(`/bidding/bid/${bidId}/counter`, { amount: n }).then(() => fetch()).catch(() => Alert.alert('Error', 'Failed to send'))
+      if (!n || n <= 0) { Alert.alert(t('ui.invalidAmount'), 'Enter a positive amount'); return }
+      api.post(`/bidding/bid/${bidId}/counter`, { amount: n }).then(() => fetch()).catch(() => Alert.alert(t('ui.error'), 'Failed to send'))
     } }])
   }
 
   const confirm = (bidId: string, amount: number) => {
-    Alert.alert('Propose booking?', `Send a booking proposal at ₹${amount.toLocaleString('en-IN')}? The transporter must confirm it.`, [
+    Alert.alert(t('ui.proposeBooking'), `Send a booking proposal at ₹${amount.toLocaleString('en-IN')}? The transporter must confirm it.`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Propose', onPress: () => api.post(`/bidding/load/${loadId}/confirm`, { bidId }).then(() => { Alert.alert('Proposed', 'Booking proposal sent — waiting for transporter confirmation'); onConfirmed() }).catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'Failed')) },
+      { text: 'Propose', onPress: () => api.post(`/bidding/load/${loadId}/confirm`, { bidId }).then(() => { Alert.alert(t('ui.proposed'), 'Booking proposal sent — waiting for transporter confirmation'); onConfirmed() }).catch((e) => Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed')) },
     ])
   }
 

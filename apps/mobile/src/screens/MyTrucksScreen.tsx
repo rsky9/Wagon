@@ -33,7 +33,7 @@ export function MyTrucksScreen({ onBack, onAdd }: Props) {
   useEffect(() => { fetch() }, [fetch])
 
   const remove = (id: string, truckNo: string) => {
-    Alert.alert('Remove truck', `Remove ${truckNo}?`, [
+    Alert.alert(t('ui.removeTruck'), `Remove ${truckNo}?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: async () => { await api.request('DELETE', `/trucks/${id}`).catch(() => {}); fetch() } },
     ])

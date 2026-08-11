@@ -36,15 +36,15 @@ export function AddTruckScreen({ onBack, onDone }: Props) {
   const typeModels = models.filter((m) => m.type === type)
 
   const submit = async () => {
-    if (!truckNo.trim()) { Alert.alert('Required', 'Enter truck number'); return }
+    if (!truckNo.trim()) { Alert.alert(t('ui.required'), 'Enter truck number'); return }
     setSubmitting(true)
     try {
       await api.post('/trucks', { truckNo, type, modelId, origin: origin || undefined, gpsLogin: gpsLogin || undefined })
       completeQuestWithXp('truck', 60)
-      Alert.alert('Added', `${truckNo.toUpperCase()} added · +60 XP`)
+      Alert.alert(t('ui.added'), `${truckNo.toUpperCase()} added · +60 XP`)
       onDone()
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed')
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed')
     } finally { setSubmitting(false) }
   }
 

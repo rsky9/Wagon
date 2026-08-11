@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, Pressable, ScrollView, KeyboardAvoidingView, Platform } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius } from '@wagon/design'
+import { useI18n } from '@wagon/i18n'
 import { Button } from './Button'
 
 interface Step {
@@ -24,6 +25,7 @@ interface Props {
 /** Multi-step wizard shell with progress indicator + back/next navigation. */
 export function Wizard({ title, steps, step, onNext, onBackStep, onSkip, canNext, submitting, nextLabel = 'Continue', children }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const progress = ((step + 1) / steps.length) * 100
 
   return (
@@ -34,7 +36,7 @@ export function Wizard({ title, steps, step, onNext, onBackStep, onSkip, canNext
         </Pressable>
         <Text style={[styles.title, { color: theme.foreground }]}>{title}</Text>
         {onSkip ? (
-          <Pressable onPress={onSkip} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 14 }}>Skip</Text></Pressable>
+          <Pressable onPress={onSkip} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 14 }}>{t('ui.skip')}</Text></Pressable>
         ) : <View style={{ width: 30 }} />}
       </View>
 
