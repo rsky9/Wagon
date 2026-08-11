@@ -544,7 +544,13 @@ describe('Wagon API (e2e)', () => {
       expect(list.body.drivers.length).toBeGreaterThan(0)
     })
 
-    it('blocks supplier from trucks endpoint (transporter only)', async () => {
+    it('blocks a supplier-only user from trucks endpoint (transporter only)', async () => {
+      // Ensure the supplier has no transporter capability for this check.
+      await request(app.getHttpServer())
+        .patch('/api/v1/auth/capabilities')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ capabilities: ['supplier'] })
+        .expect(200)
       await request(app.getHttpServer())
         .get('/api/v1/trucks')
         .set('Authorization', `Bearer ${supToken}`)

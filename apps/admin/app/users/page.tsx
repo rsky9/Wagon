@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../lib/api";
+import Link from "next/link";
 import { ShellLayout } from "../../components/ShellLayout";
 import { PageHeader, StatusBadge, EmptyRow, Th, Td } from "../../components/ui";
 
@@ -210,7 +211,9 @@ export default function Users() {
             {filtered.map((u) => (
               <tr key={u.id} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
                 <td className="px-5 py-3.5 font-semibold text-slate-800 dark:text-slate-200">
-                  {u.name ?? "—"}
+                  <Link href={`/users/${u.id}`} className="text-slate-800 underline-offset-2 hover:underline dark:text-slate-200">
+                    {u.name ?? "—"}
+                  </Link>
                 </td>
                 <td className="px-5 py-3.5 tabular-nums text-slate-600 dark:text-slate-400">{u.mobile}</td>
                 <td className="px-5 py-3.5 capitalize text-slate-600 dark:text-slate-400">{u.role}</td>

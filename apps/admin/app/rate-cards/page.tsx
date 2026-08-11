@@ -6,7 +6,7 @@ import { ShellLayout } from "../../components/ShellLayout";
 import { PageHeader } from "../../components/ui";
 
 interface RateCard {
-  id: string;
+  modelId: string;
   type: string;
   model: string;
   pricePerKm: number;
@@ -34,10 +34,10 @@ export default function RateCards() {
       setError("Enter a valid price");
       return;
     }
-    setBusy(c.id);
+    setBusy(c.modelId);
     try {
-      await api.post(`/admin/rate-cards/${c.id}`, { pricePerKm: price });
-      setCards((prev) => prev.map((x) => (x.id === c.id ? { ...x, pricePerKm: price } : x)));
+      await api.post(`/admin/rate-cards/${c.modelId}`, { pricePerKm: price });
+      setCards((prev) => prev.map((x) => (x.modelId === c.modelId ? { ...x, pricePerKm: price } : x)));
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update");
@@ -64,17 +64,17 @@ export default function RateCards() {
           </thead>
           <tbody>
             {cards.map((c) => (
-              <tr key={c.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
+              <tr key={c.modelId} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
                 <td className="px-5 py-3 capitalize text-slate-600 dark:text-slate-300">{c.type}</td>
                 <td className="px-5 py-3 font-medium text-slate-800 dark:text-slate-100">{c.model}</td>
                 <td className="px-5 py-3 tabular-nums text-slate-600 dark:text-slate-300">₹{c.pricePerKm || "—"}</td>
                 <td className="px-5 py-3 text-right">
                   <button
                     onClick={() => update(c)}
-                    disabled={busy === c.id}
+                    disabled={busy === c.modelId}
                     className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-orange-600 disabled:opacity-50"
                   >
-                    {busy === c.id ? "…" : "Edit"}
+                    {busy === c.modelId ? "…" : "Edit"}
                   </button>
                 </td>
               </tr>

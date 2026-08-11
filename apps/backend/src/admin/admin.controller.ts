@@ -107,8 +107,11 @@ export class AdminController {
   }
 
   @Get('payments')
-  payments(@Query('status') status?: string) {
-    return this.admin.payments(status ? { status } : undefined)
+  payments(@Query('type') type?: string, @Query('status') status?: string) {
+    const q: { type?: string; status?: string } = {}
+    if (type) q.type = type
+    if (status) q.status = status
+    return this.admin.payments(q)
   }
 
   @Post('payments/:id/refund')

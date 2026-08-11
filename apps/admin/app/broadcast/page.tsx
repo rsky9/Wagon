@@ -25,6 +25,7 @@ export default function Broadcast() {
       setError("Title and body are required");
       return;
     }
+    if (!window.confirm(`Send this broadcast to all ${role === "all" ? "users" : role + "s"}? This cannot be undone.`)) return;
     setSending(true);
     setError(null);
     setResult(null);

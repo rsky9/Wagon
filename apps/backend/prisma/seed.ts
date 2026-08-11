@@ -49,7 +49,7 @@ async function main() {
   const admin = await prisma.user.upsert({
     where: { mobile: '9999988888' },
     update: {},
-    create: { mobile: '9999988888', role: 'admin', name: 'Wagon Admin', verified: true },
+    create: { mobile: '9999988888', role: 'admin', name: 'Wagon Admin', verified: true, capabilities: ['transporter'] },
   })
 
   const supplier = await prisma.user.upsert({
@@ -58,6 +58,7 @@ async function main() {
     create: {
       mobile: '9963712337',
       role: 'supplier',
+      capabilities: ['supplier'],
       name: 'Demo Supplier',
       tier: 'kyc_full',
       kycStatus: 'approved',
@@ -72,6 +73,7 @@ async function main() {
     create: {
       mobile: '9491996633',
       role: 'transporter',
+      capabilities: ['transporter'],
       name: 'Demo Transporter',
       tier: 'kyc_full',
       kycStatus: 'approved',

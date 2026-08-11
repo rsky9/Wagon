@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
 import { PrismaService } from '../prisma/prisma.service'
 import { NotificationsService } from '../notifications/notifications.service'
 import type { User, TripStage } from '@prisma/client'
@@ -8,6 +9,7 @@ export class TripsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly config: ConfigService,
   ) {}
 
   async quote(loadId: string, amount: number, user: User) {
@@ -222,8 +224,9 @@ export class TripsService {
         : { deliveryOtp: code, deliveryOtpAt: new Date() },
     })
     // Mock: log the code; real impl sends to supplier via SMS/push.
-    console.log(`[mock-otp-${kind}] trip=${tripId} code=${code}`)
-    return { kind, otpGenerated: true, devCode: code, trip: updated }
+    const isProd = this.config.get('NODE_ENV') === 'production'
+    if (!isProd) console.log(`[mock-otp-${kind}] trip=${tripId} code=${code}`)
+    return { kind, otpGenerated: true, devCode: isProd ? undefined : code, trip: updated }
   }
 
   /** Supplier verifies the pickup/delivery OTP before the trip proceeds. */

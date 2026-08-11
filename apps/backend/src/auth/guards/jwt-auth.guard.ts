@@ -26,7 +26,10 @@ export class JwtAuthGuard implements CanActivate {
       context.getClass(),
     ])
     if (requiredRoles && requiredRoles.length > 0) {
-      return requiredRoles.includes(user.role)
+      // Match against the primary role OR the capability set, so dual-capability
+      // users (e.g. supplier + transporter) can call role-gated endpoints on either side.
+      const caps = (user.capabilities ?? []) as string[]
+      return requiredRoles.some((r) => r === user.role || caps.includes(r))
     }
     return true
   }

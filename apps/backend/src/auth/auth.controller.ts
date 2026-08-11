@@ -21,6 +21,8 @@ export class AuthController {
     return this.auth.requestOtp(body)
   }
 
+  // Cap verification attempts too: 10 tries / 10 min per IP.
+  @Throttle({ default: { limit: 10, ttl: 600_000 } })
   @Post('verify')
   verifyOtp(@Body() body: VerifyOtpRequest) {
     return this.auth.verifyOtp(body)

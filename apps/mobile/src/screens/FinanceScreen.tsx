@@ -16,9 +16,11 @@ interface Entry {
 
 interface Props {
   onBack: () => void
+  onOpenBank?: () => void
+  onOpenInvoices?: () => void
 }
 
-export function FinanceScreen({ onBack }: Props) {
+export function FinanceScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
   const theme = useTheme()
   const [entries, setEntries] = useState<Entry[]>([])
   const [balance, setBalance] = useState(0)
@@ -45,7 +47,7 @@ export function FinanceScreen({ onBack }: Props) {
         contentContainerStyle={styles.list}
         ListHeaderComponent={
           <View>
-            <WalletHeader balance={balance} primaryLabel="Withdraw" secondaryLabel="Statement" />
+            <WalletHeader balance={balance} primaryLabel="Withdraw" onPrimary={onOpenBank} secondaryLabel="Statement" onSecondary={onOpenInvoices} />
             <View style={styles.statsRow}>
               <Stat label="Total earnings" value={formatINR(earnings)} color={theme.success} theme={theme} />
               <Stat label="Pending payout" value={formatINR(pending)} color={theme.warning} theme={theme} />

@@ -46,7 +46,7 @@ export const QUESTS: Record<string, Quest[]> = {
   ],
   supplier: [
     { id: 'company', title: 'Company profile', description: 'Complete your business details', icon: '🏢', xp: 40, target: 'Settings' },
-    { id: 'load', title: 'Post your first load', description: 'Get trucks bidding for your freight', icon: '📦', xp: 60, target: 'Post' },
+    { id: 'load', title: 'Post your first load', description: 'Get trucks bidding for your freight', icon: '📦', xp: 60, target: 'PostLoadWizard' },
     { id: 'kyc', title: 'Verify your identity', description: 'Complete KYC to unlock faster booking', icon: '🛡️', xp: 60, target: 'Kyc' },
     { id: 'pay', title: 'Set payment terms', description: 'Choose advance / pay-later options', icon: '💰', xp: 30, target: 'Settings' },
   ],

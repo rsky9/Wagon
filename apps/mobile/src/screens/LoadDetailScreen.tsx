@@ -12,6 +12,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius, formatINR, formatWeight, shadows } from '@wagon/design'
 import { RouteRail, StatusChip, Button, type StatusTone } from '@wagon/components'
 import { api } from '../config'
+import { useAuth } from '../auth'
 import type { Load } from '@wagon/contracts'
 
 interface Props {
@@ -33,6 +34,9 @@ const TONE: Record<string, StatusTone> = {
 export function LoadDetailScreen({ load, onBack, onAccepted, onOpenBid }: Props) {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
+  const { session } = useAuth()
+  const caps = session?.profile.capabilities?.length ? session.profile.capabilities : [session?.profile.role ?? '']
+  const canHaul = caps.includes('transporter')
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
   const accepted = load.status !== 'posted'
@@ -136,7 +140,7 @@ export function LoadDetailScreen({ load, onBack, onAccepted, onOpenBid }: Props)
         <Button
           label={accepted ? 'Accepted' : load.commercialModel === 'open_bidding' ? 'Submit bid' : 'Accept Load'}
           onPress={load.commercialModel === 'open_bidding' ? openBid : accept}
-          disabled={accepted || loading}
+          disabled={accepted || loading || (!canHaul && load.commercialModel !== 'open_bidding')}
           loading={loading}
         />
         {!accepted && (

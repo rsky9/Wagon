@@ -30,8 +30,17 @@ export default function Payments() {
   const [busy, setBusy] = useState<string | null>(null);
 
   const fetchPayments = (s?: string) => {
+    if (!s || s === "all") {
+      api
+        .get<{ payments: Payment[] }>("/admin/payments")
+        .then((res) => setPayments(res.payments))
+        .catch((e) => setError(e instanceof Error ? e.message : "Failed to load payments"));
+      return;
+    }
+    // escrow/payout/refund are payment *types*; failed is a payment *status*.
+    const param = s === "failed" ? "status=failed" : `type=${s}`;
     api
-      .get<{ payments: Payment[] }>(`/admin/payments?${s && s !== "all" ? `status=${s}` : ""}`)
+      .get<{ payments: Payment[] }>(`/admin/payments?${param}`)
       .then((res) => setPayments(res.payments))
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load payments"));
   };

@@ -9,6 +9,7 @@ import type { Load } from '@wagon/contracts'
 interface Props {
   onBack: () => void
   onSelect: (load: Load) => void
+  initialQuery?: string
 }
 
 const TONE: Record<string, StatusTone> = {
@@ -20,9 +21,9 @@ const TONE: Record<string, StatusTone> = {
   cancelled: 'danger',
 }
 
-export function SearchScreen({ onBack, onSelect }: Props) {
+export function SearchScreen({ onBack, onSelect, initialQuery }: Props) {
   const theme = useTheme()
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(initialQuery ?? '')
   const [results, setResults] = useState<Load[]>([])
   const [searched, setSearched] = useState(false)
   const [loading, setLoading] = useState(false)

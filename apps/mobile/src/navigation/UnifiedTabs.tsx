@@ -6,6 +6,7 @@ import { createTheme, useTheme, spacing, radius } from '@wagon/design'
 import { useThemeMode } from '../theme'
 import { useAuth } from '../auth'
 import { useActiveMode } from '../mode'
+import { useLoadFilters } from '../filters'
 import { AppLogo } from '../components/AppLogo'
 import { HomeCockpitScreen } from '../screens/HomeCockpitScreen'
 import { LoadFeedScreen } from '../screens/LoadFeedScreen'
@@ -98,9 +99,9 @@ function HomeTab({ navigation }: any) {
 
 /** Marketplace adapts: transporters browse the feed, suppliers manage their loads. */
 function MarketplaceTab({ navigation }: any) {
-  const { session } = useAuth()
+  const { session, logout } = useAuth()
   const activeMode = useActiveMode()
-  const [filters, setFilters] = useState<LoadFilters | undefined>()
+  const filters = useLoadFilters()
   const caps = session?.profile.capabilities?.length ? session.profile.capabilities : [session?.profile.role ?? '']
   const isSupplier = caps.includes('supplier')
   const isTransporter = caps.includes('transporter')
@@ -131,13 +132,13 @@ function MarketplaceTab({ navigation }: any) {
             onOpenTrips={() => navigation.navigate('Trips')}
             onOpenKyc={() => root?.navigate('Kyc')}
             filters={filters}
-            onOpenFilters={() => root?.navigate('Search')}
+            onOpenFilters={() => root?.navigate('Filters')}
             embedded
           />
         ) : (
           <MyLoads
             onPostLoad={() => root?.navigate('PostLoadWizard')}
-            onLogout={() => {}}
+            onLogout={logout}
             onSelectLoad={(loadId) => root?.navigate('TripDetail', { loadId })}
             onOpenKyc={() => root?.navigate('Kyc')}
             onOpenDecisionRoom={(loadId) => root?.navigate('DecisionRoom', { loadId })}
@@ -155,7 +156,7 @@ function MarketplaceTab({ navigation }: any) {
         onOpenTrips={() => navigation.navigate('Trips')}
         onOpenKyc={() => root?.navigate('Kyc')}
         filters={filters}
-        onOpenFilters={() => root?.navigate('Search')}
+        onOpenFilters={() => root?.navigate('Filters')}
       />
     )
   }
@@ -163,7 +164,7 @@ function MarketplaceTab({ navigation }: any) {
   return (
     <MyLoads
       onPostLoad={() => root?.navigate('PostLoadWizard')}
-      onLogout={() => {}}
+      onLogout={logout}
       onSelectLoad={(loadId) => root?.navigate('TripDetail', { loadId })}
       onOpenKyc={() => root?.navigate('Kyc')}
       onOpenDecisionRoom={(loadId) => root?.navigate('DecisionRoom', { loadId })}

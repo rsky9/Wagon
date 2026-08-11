@@ -33,6 +33,8 @@ import { NotificationsScreen } from '../screens/NotificationsScreen'
 import { QuestsScreen } from '../screens/QuestsScreen'
 import { SettingsScreen } from '../screens/SettingsScreen'
 import { SearchScreen } from '../screens/SearchScreen'
+import { FiltersScreen } from '../screens/FiltersScreen'
+import { useLoadFilters, filtersActions } from '../filters'
 import { FinanceScreen } from '../screens/FinanceScreen'
 import { ReviewsScreen } from '../screens/ReviewsScreen'
 import { TicketsScreen } from '../screens/TicketsScreen'
@@ -82,7 +84,7 @@ export type RootStackParamList = {
   RateCard: undefined
   Settings: undefined
   Filters: undefined
-  Search: undefined
+  Search: { preset?: string } | undefined
   Finance: undefined
   Reviews: undefined
   Tickets: undefined
@@ -257,12 +259,38 @@ function RoleChangeRoute({ navigation }: any) {
   return <CapabilitySelection onSelect={change} />
 }
 
-function SearchRoute({ navigation }: any) {
-  return <SearchScreen onBack={() => navigation.goBack()} onSelect={(load) => navigation.navigate('LoadDetail', { load })} />
+function SearchRoute({ navigation, route }: any) {
+  return (
+    <SearchScreen
+      onBack={() => navigation.goBack()}
+      onSelect={(load) => navigation.navigate('LoadDetail', { load })}
+      initialQuery={route.params?.preset}
+    />
+  )
+}
+
+function FiltersRoute({ navigation }: any) {
+  const filters = useLoadFilters()
+  return (
+    <FiltersScreen
+      initial={filters}
+      onClose={() => navigation.goBack()}
+      onApply={(f) => {
+        filtersActions.apply(f)
+        navigation.goBack()
+      }}
+    />
+  )
 }
 
 function FinanceRoute({ navigation }: any) {
-  return <FinanceScreen onBack={() => navigation.goBack()} />
+  return (
+    <FinanceScreen
+      onBack={() => navigation.goBack()}
+      onOpenBank={() => navigation.navigate('Bank')}
+      onOpenInvoices={() => navigation.navigate('Invoices')}
+    />
+  )
 }
 
 function ReviewsRoute({ navigation }: any) {
@@ -490,6 +518,7 @@ export function MobileNavigator() {
                 <Stack.Screen name="RateCard" component={RateCardRoute} />
                 <Stack.Screen name="Settings" component={SettingsRoute} />
                 <Stack.Screen name="Search" component={SearchRoute} />
+                <Stack.Screen name="Filters" component={FiltersRoute} />
                 <Stack.Screen name="Finance" component={FinanceRoute} />
                 <Stack.Screen name="Reviews" component={ReviewsRoute} />
                 <Stack.Screen name="Tickets" component={TicketsRoute} />

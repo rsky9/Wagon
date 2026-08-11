@@ -294,7 +294,8 @@ export class AdminService {
   }
 
   async changeRole(userId: string, role: string, actor: User) {
-    if (!['supplier', 'transporter', 'driver', 'admin'].includes(role)) {
+    // Admins cannot be self/peer-promoted via the console; use a dedicated flow.
+    if (!['supplier', 'transporter', 'driver'].includes(role)) {
       throw new BadRequestException('Invalid role')
     }
     const user = await this.prisma.user.findUnique({ where: { id: userId } })
@@ -318,6 +319,9 @@ export class AdminService {
   async cancelLoad(loadId: string, reason: string, actor: User) {
     const load = await this.prisma.load.findUnique({ where: { id: loadId } })
     if (!load) throw new NotFoundException('Load not found')
+    if (['cancelled', 'completed', 'delivered'].includes(load.status)) {
+      throw new BadRequestException('Cannot cancel a completed or cancelled load')
+    }
     const updated = await this.prisma.load.update({
       where: { id: loadId },
       data: { status: 'cancelled', cancelReason: reason?.trim() || 'Cancelled by admin' },
@@ -335,6 +339,9 @@ export class AdminService {
   async forceCompleteTrip(tripId: string, actor: User) {
     const trip = await this.prisma.trip.findUnique({ where: { id: tripId } })
     if (!trip) throw new NotFoundException('Trip not found')
+    if (trip.status === 'delivered' || trip.status === 'cancelled') {
+      throw new BadRequestException('Trip is already delivered or cancelled')
+    }
     const updated = await this.prisma.trip.update({
       where: { id: tripId },
       data: { status: 'delivered', deliveredAt: new Date() },
@@ -355,8 +362,10 @@ export class AdminService {
 
   // ---------- Payments / finance ----------
 
-  async payments(query?: { status?: string }) {
-    const where = query?.status ? { status: query.status as never } : undefined
+  async payments(query?: { type?: string; status?: string }) {
+    const where: Record<string, unknown> = {}
+    if (query?.type) where.type = query.type
+    if (query?.status) where.status = query.status
     const payments = await this.prisma.payment.findMany({
       where,
       include: { trip: { include: { load: true } } },
@@ -370,6 +379,8 @@ export class AdminService {
     const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } })
     if (!payment) throw new NotFoundException('Payment not found')
     if (payment.type === 'refund') throw new BadRequestException('Already a refund')
+    // Only succeeded escrows/payouts can be refunded.
+    if (payment.status !== 'succeeded') throw new BadRequestException('Only succeeded payments can be refunded')
     const refund = await this.prisma.payment.create({
       data: {
         tripId: payment.tripId,
@@ -384,7 +395,7 @@ export class AdminService {
       actorId: actor.id,
       action: 'payment.refund',
       resource: `payment:${paymentId}`,
-      before: { type: payment.type, amount: payment.amount },
+      before: { type: payment.type, amount: payment.amount, status: payment.status },
       after: { refundId: refund.id },
     })
     return { refund }
