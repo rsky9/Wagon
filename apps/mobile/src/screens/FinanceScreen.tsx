@@ -54,7 +54,7 @@ export function FinanceScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
             </View>
             <Text style={[styles.sectionLabel, { color: theme.mutedForeground }]}>Settlements</Text>
             {loading && <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 20 }}>Loading…</Text>}
-            {!loading && entries.length === 0 && <EmptyState title="No transactions yet" message="Payouts for delivered loads appear here" icon="💰" />}
+            {!loading && entries.length === 0 && <EmptyState title="No transactions yet" message="Payouts for delivered loads appear here" icon="₹" />}
           </View>
         }
         renderItem={({ item }) => (

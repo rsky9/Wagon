@@ -11,6 +11,7 @@ import { useTheme, spacing, radius } from '@wagon/design'
 import { useThemeMode } from '../theme'
 import { api } from '../config'
 import { AppLogo } from '../components/AppLogo'
+import { RupeeIcon } from '../components/RupeeIcon'
 import type { UserProfile } from '@wagon/contracts'
 
 interface Props {
@@ -166,7 +167,7 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
 
         <Pressable style={[styles.row, { backgroundColor: theme.background, borderColor: theme.border }]} onPress={onOpenFinance}>
           <View style={styles.rowLeft}>
-            <Text style={[styles.rowIcon, { color: theme.primary }]}>💰</Text>
+            <RupeeIcon size={24} filled />
             <View>
               <Text style={[styles.rowLabel, { color: theme.foreground }]}>Earnings & Settlements</Text>
             </View>

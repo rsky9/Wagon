@@ -8,7 +8,7 @@ const nav = [
   { label: "Dashboard", href: "/", key: "/", icon: "▦" },
   { label: "Users", href: "/users", key: "/users", icon: "👥" },
   { label: "Loads & Trips", href: "/loads", key: "/loads", icon: "🚛" },
-  { label: "Payments", href: "/payments", key: "/payments", icon: "💰" },
+  { label: "Payments", href: "/payments", key: "/payments", icon: "₹" },
   { label: "Disputes", href: "/disputes", key: "/disputes", icon: "⚖️" },
   { label: "Tickets", href: "/tickets", key: "/tickets", icon: "🎫" },
   { label: "Reports", href: "/reports", key: "/reports", icon: "🚩" },

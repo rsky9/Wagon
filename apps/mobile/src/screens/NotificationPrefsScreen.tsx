@@ -22,7 +22,7 @@ const ROWS: Array<{ key: keyof Prefs; icon: string; label: string; desc: string 
   { key: 'loadAlerts', icon: '🚛', label: 'Load alerts', desc: 'New loads matching your lane' },
   { key: 'booking', icon: '📅', label: 'Booking alerts', desc: 'Load accepted, quoted, booked' },
   { key: 'trip', icon: '🧭', label: 'Trip alerts', desc: 'Pickup, transit and delivery updates' },
-  { key: 'payment', icon: '💰', label: 'Payment alerts', desc: 'Escrow, payout and settlement' },
+  { key: 'payment', icon: '₹', label: 'Payment alerts', desc: 'Escrow, payout and settlement' },
   { key: 'kyc', icon: '🛡️', label: 'KYC alerts', desc: 'Verification status changes' },
   { key: 'docExpiry', icon: '📄', label: 'Document expiry', desc: 'Insurance, permit, fitness reminders' },
   { key: 'promo', icon: '🎁', label: 'Promotions', desc: 'Offers and product updates' },

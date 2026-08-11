@@ -36,13 +36,13 @@ export const QUESTS: Record<'transporter' | 'supplier', QuestDef[]> = {
     { id: 'truck', title: 'Add your first truck', description: 'Start building your fleet', icon: '🚚', xp: 60, target: 'MyTrucks', badge: 'fleet' },
     { id: 'driver', title: 'Add a driver', description: 'Bring a driver on board', icon: '🧑‍✈️', xp: 40, target: 'Drivers', badge: 'crew' },
     { id: 'kyc', title: 'Verify your identity', description: 'Complete KYC to unlock more loads', icon: '🛡️', xp: 60, target: 'Kyc', badge: 'verified' },
-    { id: 'bank', title: 'Connect payouts', description: 'Add bank details for settlements', icon: '💰', xp: 40, target: 'Finance', badge: 'paid' },
+    { id: 'bank', title: 'Connect payouts', description: 'Add bank details for settlements', icon: '₹', xp: 40, target: 'Finance', badge: 'paid' },
   ],
   supplier: [
     { id: 'company', title: 'Company profile', description: 'Complete your business details', icon: '🏢', xp: 40, target: 'Settings' },
     { id: 'load', title: 'Post your first load', description: 'Get trucks bidding for your freight', icon: '📦', xp: 60, target: 'PostLoadWizard', badge: 'firstLoad' },
     { id: 'kyc', title: 'Verify your identity', description: 'Complete KYC to unlock faster booking', icon: '🛡️', xp: 60, target: 'Kyc', badge: 'verified' },
-    { id: 'pay', title: 'Set payment terms', description: 'Choose advance / pay-later options', icon: '💰', xp: 30, target: 'Settings', badge: 'paid' },
+    { id: 'pay', title: 'Set payment terms', description: 'Choose advance / pay-later options', icon: '₹', xp: 30, target: 'Settings', badge: 'paid' },
   ],
 }
 
@@ -52,7 +52,7 @@ export const BADGES: Record<string, BadgeDef> = {
   crew: { id: 'crew', title: 'Crew Leader', icon: '🧑‍✈️', description: 'Added your first driver' },
   verified: { id: 'verified', title: 'Verified', icon: '🛡️', description: 'Completed KYC verification' },
   firstLoad: { id: 'firstLoad', title: 'First Load', icon: '📦', description: 'Posted your first load' },
-  paid: { id: 'paid', title: 'Paid', icon: '💰', description: 'Connected payouts' },
+  paid: { id: 'paid', title: 'Paid', icon: '₹', description: 'Connected payouts' },
 }
 
 @Injectable()

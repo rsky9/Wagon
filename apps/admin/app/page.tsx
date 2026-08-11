@@ -123,7 +123,7 @@ export default function Home() {
               <div className="flex flex-wrap gap-2">
                 <QuickLink href="/users" label="Review KYC queue" icon="🛡️" />
                 <QuickLink href="/disputes" label="Resolve disputes" icon="⚖️" />
-                <QuickLink href="/payments" label="Escrow & refunds" icon="💰" />
+                <QuickLink href="/payments" label="Escrow & refunds" icon="₹" />
                 <QuickLink href="/tickets" label="Support tickets" icon="🎫" />
                 <QuickLink href="/broadcast" label="Send broadcast" icon="📢" />
               </div>

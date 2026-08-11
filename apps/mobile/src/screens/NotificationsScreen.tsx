@@ -24,7 +24,7 @@ const TYPE_ICON: Record<string, string> = {
   order_accepted: '✅',
   trip_started: '🚚',
   trip_delivered: '📦',
-  escrow_paid: '💰',
+  escrow_paid: '₹',
   lane_match: '🔔',
   ewb_generated: '🧾',
   bid_received: '🤝',

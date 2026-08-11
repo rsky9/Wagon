@@ -36,13 +36,13 @@ export const QUESTS: Record<string, Quest[]> = {
     { id: 'truck', title: 'Add your first truck', description: 'Start building your fleet', icon: '🚚', xp: 60, target: 'MyTrucks' },
     { id: 'driver', title: 'Add a driver', description: 'Bring a driver on board', icon: '🧑‍✈️', xp: 40, target: 'Drivers' },
     { id: 'kyc', title: 'Verify your identity', description: 'Complete KYC to unlock more loads', icon: '🛡️', xp: 60, target: 'Kyc' },
-    { id: 'bank', title: 'Connect payouts', description: 'Add bank details for settlements', icon: '💰', xp: 40, target: 'Finance' },
+    { id: 'bank', title: 'Connect payouts', description: 'Add bank details for settlements', icon: '₹', xp: 40, target: 'Finance' },
   ],
   supplier: [
     { id: 'company', title: 'Company profile', description: 'Complete your business details', icon: '🏢', xp: 40, target: 'Settings' },
     { id: 'load', title: 'Post your first load', description: 'Get trucks bidding for your freight', icon: '📦', xp: 60, target: 'PostLoadWizard' },
     { id: 'kyc', title: 'Verify your identity', description: 'Complete KYC to unlock faster booking', icon: '🛡️', xp: 60, target: 'Kyc' },
-    { id: 'pay', title: 'Set payment terms', description: 'Choose advance / pay-later options', icon: '💰', xp: 30, target: 'Settings' },
+    { id: 'pay', title: 'Set payment terms', description: 'Choose advance / pay-later options', icon: '₹', xp: 30, target: 'Settings' },
   ],
 }
 
@@ -52,7 +52,7 @@ export const BADGES: Record<string, Badge> = {
   crew: { id: 'crew', title: 'Crew Leader', icon: '🧑‍✈️', description: 'Added your first driver' },
   verified: { id: 'verified', title: 'Verified', icon: '🛡️', description: 'Completed KYC verification' },
   firstLoad: { id: 'firstLoad', title: 'First Load', icon: '📦', description: 'Posted your first load' },
-  paid: { id: 'paid', title: 'Paid', icon: '💰', description: 'Connected payouts' },
+  paid: { id: 'paid', title: 'Paid', icon: '₹', description: 'Connected payouts' },
 }
 
 export function levelFor(xp: number) {

@@ -8,6 +8,7 @@ import { useAuth } from '../auth'
 import { useActiveMode } from '../mode'
 import { useLoadFilters } from '../filters'
 import { AppLogo } from '../components/AppLogo'
+import { RupeeIcon } from '../components/RupeeIcon'
 import { HomeCockpitScreen } from '../screens/HomeCockpitScreen'
 import { LoadFeedScreen } from '../screens/LoadFeedScreen'
 import { MyLoads } from '../screens/MyLoadsScreen'
@@ -71,7 +72,11 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
           return (
             <Pressable key={route.key} style={styles.floatingTab} onPress={onPress} accessibilityRole="button" accessibilityState={isFocused ? { selected: true } : {}}>
               <View style={[styles.floatingIcon, isFocused && { backgroundColor: 'rgba(249,115,22,0.22)' }]}>
-                <Text style={[styles.floatingIconText, { opacity: isFocused ? 1 : 0.55 }]}>{TAB_ICONS[route.name] ?? '•'}</Text>
+                {route.name === 'Finance' ? (
+                  <RupeeIcon size={20} filled={isFocused} color="#FDBA74" />
+                ) : (
+                  <Text style={[styles.floatingIconText, { opacity: isFocused ? 1 : 0.55 }]}>{TAB_ICONS[route.name] ?? '•'}</Text>
+                )}
                 {isFocused && <View style={[styles.floatingIndicator, { backgroundColor: '#F97316' }]} />}
               </View>
               <Text style={[styles.floatingLabel, { color: isFocused ? '#fff' : 'rgba(255,255,255,0.6)' }, isFocused && { fontWeight: '800' }]}>
