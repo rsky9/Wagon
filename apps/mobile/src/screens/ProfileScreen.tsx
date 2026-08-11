@@ -12,6 +12,7 @@ import { useThemeMode } from '../theme'
 import { api } from '../config'
 import { AppLogo } from '../components/AppLogo'
 import { RupeeIcon } from '../components/RupeeIcon'
+import { useI18n } from '@wagon/i18n'
 import type { UserProfile } from '@wagon/contracts'
 
 interface Props {
@@ -40,6 +41,7 @@ interface Props {
 
 export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers, onOpenRateCard, onOpenNotifications, onOpenSettings, onOpenSearch, onOpenFinance, onOpenReviews, onOpenTickets, onOpenEmergency, onOpenChat, onOpenFleet, onOpenNotifPrefs, onOpenInvoices, onOpenLoadHistory, onOpenQuests, onOpenSaved, onOpenBids, onOpenDisputes }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const { isDark, cycle } = useThemeMode()
   const [profile, setProfile] = useState<UserProfile | null>(null)
 
@@ -93,7 +95,7 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <View style={styles.rowLeft}>
             <Text style={[styles.rowIcon, { color: theme.primary }]}>🛡️</Text>
             <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>Verification (KYC)</Text>
+              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.verification')}</Text>
               <Text style={[styles.rowStatus, { color: theme.mutedForeground }]}>
                 {kycPct}% complete · {profile?.kycStatus.replace('_', ' ')}
               </Text>
@@ -106,8 +108,8 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <View style={styles.rowLeft}>
             <Text style={[styles.rowIcon, { color: theme.primary }]}>🎯</Text>
             <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>Rewards & Quests</Text>
-              <Text style={[styles.rowStatus, { color: theme.mutedForeground }]}>Earn XP and badges as you grow</Text>
+              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.quests')}</Text>
+              <Text style={[styles.rowStatus, { color: theme.mutedForeground }]}>{t('profile.questsSub')}</Text>
             </View>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
@@ -117,7 +119,7 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <View style={styles.rowLeft}>
             <Text style={[styles.rowIcon, { color: theme.primary }]}>🔔</Text>
             <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>Notifications</Text>
+              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.notifications')}</Text>
             </View>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
@@ -127,8 +129,8 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <View style={styles.rowLeft}>
             <Text style={[styles.rowIcon, { color: theme.primary }]}>💬</Text>
             <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>Messages</Text>
-              <Text style={[styles.rowStatus, { color: theme.mutedForeground }]}>Trip conversations</Text>
+              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.messages')}</Text>
+              <Text style={[styles.rowStatus, { color: theme.mutedForeground }]}>{t('profile.tripConvos')}</Text>
             </View>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
@@ -138,7 +140,7 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <View style={styles.rowLeft}>
             <Text style={[styles.rowIcon, { color: theme.primary }]}>🚚</Text>
             <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>Fleet Dashboard</Text>
+              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.fleet')}</Text>
               <Text style={[styles.rowStatus, { color: theme.mutedForeground }]}>Trucks · documents · maintenance</Text>
             </View>
           </View>
@@ -149,7 +151,7 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <View style={styles.rowLeft}>
             <Text style={[styles.rowIcon, { color: theme.primary }]}>🔕</Text>
             <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>Notification settings</Text>
+              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.notifSettings')}</Text>
             </View>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
@@ -159,7 +161,7 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <View style={styles.rowLeft}>
             <Text style={[styles.rowIcon, { color: theme.primary }]}>🔍</Text>
             <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>Search Loads</Text>
+              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.searchLoads')}</Text>
             </View>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
@@ -169,7 +171,7 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <View style={styles.rowLeft}>
             <RupeeIcon size={24} filled />
             <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>Earnings & Settlements</Text>
+              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.earnings')}</Text>
             </View>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
@@ -179,8 +181,8 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <View style={styles.rowLeft}>
             <Text style={[styles.rowIcon, { color: theme.primary }]}>🧾</Text>
             <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>Invoices</Text>
-              <Text style={[styles.rowStatus, { color: theme.mutedForeground }]}>GST & TDS breakups</Text>
+              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.invoices')}</Text>
+              <Text style={[styles.rowStatus, { color: theme.mutedForeground }]}>{t('profile.invoicesSub')}</Text>
             </View>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
@@ -190,8 +192,8 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <View style={styles.rowLeft}>
             <Text style={[styles.rowIcon, { color: theme.primary }]}>🔖</Text>
             <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>Saved</Text>
-              <Text style={[styles.rowStatus, { color: theme.mutedForeground }]}>Saved loads & searches</Text>
+              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.saved')}</Text>
+              <Text style={[styles.rowStatus, { color: theme.mutedForeground }]}>{t('profile.savedSub')}</Text>
             </View>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
@@ -201,7 +203,7 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <View style={styles.rowLeft}>
             <Text style={[styles.rowIcon, { color: theme.primary }]}>🤝</Text>
             <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>My bids</Text>
+              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.myBids')}</Text>
               <Text style={[styles.rowStatus, { color: theme.mutedForeground }]}>Bids you've submitted</Text>
             </View>
           </View>
@@ -212,8 +214,8 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <View style={styles.rowLeft}>
             <Text style={[styles.rowIcon, { color: theme.primary }]}>⚖️</Text>
             <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>Disputes</Text>
-              <Text style={[styles.rowStatus, { color: theme.mutedForeground }]}>Raise & track disputes</Text>
+              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.disputes')}</Text>
+              <Text style={[styles.rowStatus, { color: theme.mutedForeground }]}>{t('profile.disputesSub')}</Text>
             </View>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
@@ -223,7 +225,7 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <View style={styles.rowLeft}>
             <Text style={[styles.rowIcon, { color: theme.primary }]}>🗂️</Text>
             <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>Load history</Text>
+              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.loadHistory')}</Text>
             </View>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
@@ -233,7 +235,7 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <View style={styles.rowLeft}>
             <Text style={[styles.rowIcon, { color: theme.primary }]}>⭐</Text>
             <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>Reviews</Text>
+              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.reviews')}</Text>
             </View>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
@@ -243,7 +245,7 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <View style={styles.rowLeft}>
             <Text style={[styles.rowIcon, { color: theme.primary }]}>🎫</Text>
             <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>Support Tickets</Text>
+              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.tickets')}</Text>
             </View>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
@@ -253,7 +255,7 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <View style={styles.rowLeft}>
             <Text style={[styles.rowIcon, { color: theme.danger }]}>🆘</Text>
             <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>Emergency</Text>
+              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.emergency')}</Text>
             </View>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
@@ -263,7 +265,7 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <View style={styles.rowLeft}>
             <Text style={[styles.rowIcon, { color: theme.primary }]}>🚛</Text>
             <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>My Trucks</Text>
+              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.myTrucks')}</Text>
             </View>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
@@ -273,7 +275,7 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <View style={styles.rowLeft}>
             <Text style={[styles.rowIcon, { color: theme.primary }]}>👤</Text>
             <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>Drivers</Text>
+              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.drivers')}</Text>
             </View>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
@@ -283,7 +285,7 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <View style={styles.rowLeft}>
             <Text style={[styles.rowIcon, { color: theme.primary }]}>📋</Text>
             <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>Rate Card</Text>
+              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.rateCard')}</Text>
             </View>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
@@ -293,7 +295,7 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <View style={styles.rowLeft}>
             <Text style={[styles.rowIcon, { color: theme.primary }]}>⚙️</Text>
             <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>Settings</Text>
+              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.settings')}</Text>
               <Text style={[styles.rowStatus, { color: theme.mutedForeground }]}>Language · Help</Text>
             </View>
           </View>
@@ -304,7 +306,7 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           style={[styles.logout, { borderColor: theme.danger + '44' }]}
           onPress={onLogout}
         >
-          <Text style={{ color: theme.danger, fontWeight: '700', fontSize: 15 }}>Logout</Text>
+          <Text style={{ color: theme.danger, fontWeight: '700', fontSize: 15 }}>{t('profile.logout')}</Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>

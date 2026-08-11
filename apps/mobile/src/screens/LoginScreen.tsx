@@ -88,14 +88,14 @@ export function LoginScreen({ auth }: { auth: Auth }) {
               </View>
 
               <View style={styles.form}>
-                <Text style={[styles.fieldLabel, { color: isDark ? 'rgba(255,255,255,0.5)' : palette.slate500 }]}>Mobile number</Text>
+                <Text style={[styles.fieldLabel, { color: isDark ? 'rgba(255,255,255,0.5)' : palette.slate500 }]}>{t('auth.mobileNumber')}</Text>
                 <View style={[styles.phoneRow, { backgroundColor: c.fieldBg, borderColor: c.fieldBorder }]}>
                   <View style={[styles.countryCode, { borderRightColor: c.fieldBorder }]}>
                     <Text style={[styles.ccText, { color: c.text }]}>🇮🇳 +91</Text>
                   </View>
                   <TextInput
                     style={[styles.phoneInput, { color: c.text }]}
-                    placeholder="Enter mobile number"
+                    placeholder={t("auth.enterMobile")}
                     placeholderTextColor={c.muted}
                     keyboardType="number-pad"
                     maxLength={10}
@@ -105,9 +105,9 @@ export function LoginScreen({ auth }: { auth: Auth }) {
                 </View>
 
                 <View style={styles.trustRow}>
-                  <TrustChip icon="✅" label="KYC verified" />
-                  <TrustChip icon="🛡️" label="Escrow protected" />
-                  <TrustChip icon="🆓" label="Free to join" />
+                  <TrustChip icon="✅" label={t("auth.trustKyc")} />
+                  <TrustChip icon="🛡️" label={t("auth.trustEscrow")} />
+                  <TrustChip icon="🆓" label={t("auth.trustFree")} />
                 </View>
 
                 {auth.error && <Text style={[styles.error, { color: c.error }]}>{auth.error}</Text>}
@@ -138,13 +138,13 @@ export function LoginScreen({ auth }: { auth: Auth }) {
           >
             <View style={styles.hero}>
               <AppLogo height={40} />
-              <Text style={[styles.otpTitle, { color: c.text }]}>Enter OTP</Text>
+              <Text style={[styles.otpTitle, { color: c.text }]}>{t('auth.enterOtp')}</Text>
               <Text style={[styles.otpSubtitle, { color: isDark ? 'rgba(255,255,255,0.6)' : palette.slate600 }]}>
                 We sent a 4-digit code to <Text style={[styles.ccText, { color: c.text }]}>+91 {mobile}</Text>
               </Text>
               {auth.devCode && (
                 <View style={[styles.devBox, { backgroundColor: c.devBg, borderColor: c.devBorder }]}>
-                  <Text style={[styles.devLabel, { color: c.devLabel }]}>DEV (mock provider)</Text>
+                  <Text style={[styles.devLabel, { color: c.devLabel }]}>{t('auth.devProvider')}</Text>
                   <Text style={[styles.devCode, { color: c.devCode }]}>{auth.devCode}</Text>
                 </View>
               )}
@@ -178,14 +178,14 @@ export function LoginScreen({ auth }: { auth: Auth }) {
               {auth.error && <Text style={[styles.error, { color: c.error }]}>{auth.error}</Text>}
 
               <Button
-                label="Verify & continue"
+                label={t("auth.verifyContinue")}
                 onPress={() => auth.verifyOtp(mobile, code)}
                 disabled={code.length !== 4 || auth.loading}
                 loading={auth.loading}
               />
 
               <Pressable onPress={() => auth.requestOtp(mobile)} disabled={auth.loading} style={styles.resend}>
-                <Text style={[styles.resendText, { color: c.resend }]}>Resend OTP</Text>
+                <Text style={[styles.resendText, { color: c.resend }]}>{t('auth.resend')}</Text>
               </Pressable>
             </View>
           </ScrollView>

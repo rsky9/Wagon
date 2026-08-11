@@ -1,10 +1,11 @@
 import { View, Text, StyleSheet, Pressable } from 'react-native'
 import { useTheme, spacing, radius } from '@wagon/design'
+import { useI18n } from '@wagon/i18n'
 import { useActiveMode, modeActions, type ActiveMode } from '../mode'
 
-const OPTIONS: Array<{ key: ActiveMode; icon: string; label: string }> = [
-  { key: 'supplier', icon: '📦', label: 'Moving goods' },
-  { key: 'transporter', icon: '🚛', label: 'Hauling loads' },
+const OPTIONS: Array<{ key: ActiveMode; icon: string; labelKey: string }> = [
+  { key: 'supplier', icon: '📦', labelKey: 'nav.movingGoods' },
+  { key: 'transporter', icon: '🚛', labelKey: 'nav.haulingLoads' },
 ]
 
 /**
@@ -13,6 +14,7 @@ const OPTIONS: Array<{ key: ActiveMode; icon: string; label: string }> = [
  */
 export function ModeSwitcher() {
   const theme = useTheme()
+  const { t } = useI18n()
   const mode = useActiveMode()
 
   return (
@@ -27,7 +29,7 @@ export function ModeSwitcher() {
           >
             <Text style={styles.icon}>{o.icon}</Text>
             <Text style={[styles.label, active ? { color: '#fff', fontWeight: '800' } : { color: theme.mutedForeground, fontWeight: '700' }]}>
-              {o.label}
+              {t(o.labelKey)}
             </Text>
           </Pressable>
         )

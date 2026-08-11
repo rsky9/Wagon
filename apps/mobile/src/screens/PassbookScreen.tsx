@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { WalletHeader, EmptyState } from '@wagon/components'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 
 interface PassbookEntry {
   id: string
@@ -32,6 +33,7 @@ interface Props {
 
 export function PassbookScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [entries, setEntries] = useState<PassbookEntry[]>([])
   const [balance, setBalance] = useState(0)
   const [cashback, setCashback] = useState(0)
@@ -62,7 +64,7 @@ export function PassbookScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
         <Pressable onPress={onBack} hitSlop={8}>
           <Text style={[styles.back, { color: theme.mutedForeground }]}>←</Text>
         </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.foreground }]}>Passbook</Text>
+        <Text style={[styles.headerTitle, { color: theme.foreground }]}>{t('wallet.passbook')}</Text>
         <View style={{ width: 30 }} />
       </View>
 
@@ -74,8 +76,8 @@ export function PassbookScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
           <View style={styles.top}>
             <WalletHeader
               balance={balance}
-              primaryLabel="Withdraw"
-              secondaryLabel="Statement"
+              primaryLabel={t("wallet.withdraw")}
+              secondaryLabel={t("wallet.statement")}
               onPrimary={() => Alert.alert('Withdraw', 'Withdrawals are released after each delivered trip payout. Your available balance settles automatically.', [{ text: 'OK' }])}
               onSecondary={() => {
                 setLoading(true)
@@ -89,7 +91,7 @@ export function PassbookScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
             {cashback > 0 && (
               <View style={[styles.cashback, { backgroundColor: theme.card, borderColor: theme.primary + '44' }]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.cashbackLabel, { color: theme.mutedForeground }]}>Wagon Cash · rewards</Text>
+                  <Text style={[styles.cashbackLabel, { color: theme.mutedForeground }]}>{t('wallet.wagonCash')} · rewards</Text>
                   <Text style={[styles.cashbackAmount, { color: theme.foreground }]}>
                     {formatINR(cashback)}
                   </Text>
@@ -113,7 +115,7 @@ export function PassbookScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
               <Pressable style={[styles.bankRow, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={onOpenBank}>
                 <Text style={{ fontSize: 18 }}>🏦</Text>
                 <View style={{ flex: 1, marginLeft: spacing.md }}>
-                  <Text style={[styles.bankTitle, { color: theme.foreground }]}>Bank & payouts</Text>
+                  <Text style={[styles.bankTitle, { color: theme.foreground }]}>{t('wallet.bank')}</Text>
                   <Text style={[styles.bankSub, { color: theme.mutedForeground }]}>Manage your payout account</Text>
                 </View>
                 <Text style={{ color: theme.mutedForeground }}>›</Text>
@@ -123,19 +125,19 @@ export function PassbookScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
               <Pressable style={[styles.bankRow, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={onOpenInvoices}>
                 <Text style={{ fontSize: 18 }}>🧾</Text>
                 <View style={{ flex: 1, marginLeft: spacing.md }}>
-                  <Text style={[styles.bankTitle, { color: theme.foreground }]}>Invoices</Text>
+                  <Text style={[styles.bankTitle, { color: theme.foreground }]}>{t('wallet.invoices')}</Text>
                   <Text style={[styles.bankSub, { color: theme.mutedForeground }]}>GST & TDS breakups</Text>
                 </View>
                 <Text style={{ color: theme.mutedForeground }}>›</Text>
               </Pressable>
             )}
-            <Text style={[styles.sectionLabel, { color: theme.mutedForeground }]}>Transactions</Text>
+            <Text style={[styles.sectionLabel, { color: theme.mutedForeground }]}>{t('wallet.settlements')}</Text>
             {loading && <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: spacing.xl }}>Loading…</Text>}
             {error && <Text style={{ color: theme.danger, textAlign: 'center', marginTop: spacing.xl }}>{error}</Text>}
             {!loading && entries.length === 0 && (
               <EmptyState
-                title="No transactions yet"
-                message="Your payouts for delivered loads will show here"
+                title={t("wallet.noTransactions")}
+                message={t("wallet.noTransactionsHint")}
                 actionLabel="Browse loads"
                 onAction={onBack}
               />

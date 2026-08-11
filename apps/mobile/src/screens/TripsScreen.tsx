@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius, formatINR, formatWeight } from '@wagon/design'
 import { StatusChip, EmptyState, Button, StatusStepper, type StatusTone } from '@wagon/components'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 import { uploadToPresignedUrl } from '@wagon/api-client'
 import * as DocumentPicker from 'expo-document-picker'
 import { LocationShare } from '../components/LocationShare'
@@ -40,6 +41,7 @@ const TONE: Record<string, StatusTone> = {
 
 export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnLoads }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [trips, setTrips] = useState<TripInfo[]>([])
   const [pending, setPending] = useState<Array<{ id: string; load: Load }>>([])
   const [loading, setLoading] = useState(true)
@@ -155,9 +157,9 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
         <Pressable onPress={onBack} hitSlop={8}>
           <Text style={[styles.back, { color: theme.mutedForeground }]}>←</Text>
         </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.foreground }]}>Trips</Text>
+        <Text style={[styles.headerTitle, { color: theme.foreground }]}>{t('trip.title')}</Text>
         <Pressable onPress={onOpenPassbook}>
-          <Text style={{ color: theme.primary, fontSize: 15, fontWeight: '700' }}>Wallet</Text>
+          <Text style={{ color: theme.primary, fontSize: 15, fontWeight: '700' }}>{t('wallet.title')}</Text>
         </Pressable>
       </View>
 
@@ -165,7 +167,7 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
 
       {loading ? (
         <View style={styles.center}>
-          <Text style={{ color: theme.mutedForeground }}>Loading trips…</Text>
+          <Text style={{ color: theme.mutedForeground }}>{t('common.loading')}</Text>
         </View>
       ) : (
         <FlatList
@@ -178,7 +180,7 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
           ListHeaderComponent={
             pending.length > 0 ? (
               <View style={[styles.pendingCard, { backgroundColor: theme.card, borderColor: theme.primary + '44' }]}>
-                <Text style={[styles.pendingTitle, { color: theme.foreground }]}>Booking confirmation needed</Text>
+                <Text style={[styles.pendingTitle, { color: theme.foreground }]}>{t('trip.pendingConfirm')}</Text>
                 {pending.map((b) => (
                   <View key={b.id} style={[styles.pendingRow, { borderTopColor: theme.border }]}>
                     <View style={{ flex: 1 }}>

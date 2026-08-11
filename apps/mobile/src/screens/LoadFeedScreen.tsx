@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useTheme, spacing, formatINR, formatWeight, timeAgo } from '@wagon/design'
 import { LoadCard, StatusChip, FeedSkeleton, EmptyState, type StatusTone } from '@wagon/components'
 import { api } from '../config'
+import { useI18n } from '@wagon/i18n'
 import { AppLogo } from '../components/AppLogo'
 import type { LoadFilters } from './FiltersScreen'
 import type { Load } from '@wagon/contracts'
@@ -41,6 +42,7 @@ const TONE: Record<string, StatusTone> = {
 
 export function LoadFeedScreen({ onSelect, onOpenTrips, onOpenKyc, filters, onOpenFilters, embedded = false }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const [filter, setFilter] = useState<Filter>('all')
   const [loads, setLoads] = useState<Load[]>([])
   const [loading, setLoading] = useState(true)
@@ -168,9 +170,9 @@ export function LoadFeedScreen({ onSelect, onOpenTrips, onOpenKyc, filters, onOp
           contentContainerStyle={styles.list}
           ListEmptyComponent={
             <EmptyState
-              title="No matching loads right now"
-              message="New loads drop every 10–15 min. Try another tab or check back shortly."
-              actionLabel="Refresh"
+              title={t("market.noLoads")}
+              message={t("market.noLoadsHint")}
+              actionLabel={t("common.refresh")}
               onAction={fetchLoads}
             />
           }

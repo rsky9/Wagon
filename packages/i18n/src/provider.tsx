@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { resources, SUPPORTED_LANGUAGES } from './index'
 import type { LanguageCode } from '@wagon/contracts'
 
@@ -30,6 +30,15 @@ export function I18nProvider({
   children: React.ReactNode
 }) {
   const [lang, setLangState] = useState<LanguageCode>(initialLang)
+
+  // Sync when the initialLang prop changes (e.g. after the persisted language
+  // is loaded from AsyncStorage on startup).
+  useEffect(() => {
+    if (initialLang && initialLang !== lang) {
+      setLangState(initialLang)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialLang])
 
   const setLang = useCallback(
     (next: LanguageCode) => {

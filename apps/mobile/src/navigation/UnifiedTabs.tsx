@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { createTheme, useTheme, spacing, radius } from '@wagon/design'
 import { useThemeMode } from '../theme'
+import { useI18n } from '@wagon/i18n'
 import { useAuth } from '../auth'
 import { useActiveMode } from '../mode'
 import { useLoadFilters } from '../filters'
@@ -54,10 +55,19 @@ function baseTabOptions(theme: ReturnType<typeof createTheme>) {
   }
 }
 
+const TAB_LABEL_KEY: Record<string, string> = {
+  Home: 'nav.home',
+  Marketplace: 'nav.marketplace',
+  Trips: 'nav.trips',
+  Finance: 'nav.finance',
+  Account: 'nav.account',
+}
+
 /** Floating pill tab bar — a raised, rounded navigation dock. */
 function FloatingTabBar({ state, descriptors, navigation }: any) {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
+  const { t } = useI18n()
   return (
     <View style={[styles.floatingWrap, { bottom: Math.max(insets.bottom, spacing.md) }]}>
       <View style={[styles.floatingBar, styles.floatingShadow]}>
@@ -68,7 +78,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
             const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true })
             if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name)
           }
-          const label = options.tabBarLabel ?? options.title ?? route.name
+          const label = t(TAB_LABEL_KEY[route.name] ?? route.name) ?? options.tabBarLabel ?? options.title ?? route.name
           return (
             <Pressable key={route.key} style={styles.floatingTab} onPress={onPress} accessibilityRole="button" accessibilityState={isFocused ? { selected: true } : {}}>
               <View style={[styles.floatingIcon, isFocused && { backgroundColor: 'rgba(249,115,22,0.22)' }]}>
@@ -104,6 +114,7 @@ function HomeTab({ navigation }: any) {
 
 /** Marketplace adapts: transporters browse the feed, suppliers manage their loads. */
 function MarketplaceTab({ navigation }: any) {
+  const { t } = useI18n()
   const { session, logout } = useAuth()
   const activeMode = useActiveMode()
   const filters = useLoadFilters()
@@ -126,8 +137,8 @@ function MarketplaceTab({ navigation }: any) {
             <Segmented
               value={mode}
               onChange={setMode}
-              left={{ key: 'browse', label: 'Browse loads' }}
-              right={{ key: 'myloads', label: 'My loads' }}
+              left={{ key: 'browse', label: t('nav.browse') }}
+              right={{ key: 'myloads', label: t('nav.myLoads') }}
             />
           </View>
         </SafeAreaTop>

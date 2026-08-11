@@ -5,6 +5,7 @@ import { useTheme, spacing, radius, formatINR, shadows } from '@wagon/design'
 import { AppLogo } from '../components/AppLogo'
 import { ModeSwitcher } from '../components/ModeSwitcher'
 import { useActiveMode } from '../mode'
+import { useI18n } from '@wagon/i18n'
 import { useAuth } from '../auth'
 import { api } from '../config'
 
@@ -54,6 +55,7 @@ interface Props {
 
 export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, onPostLoad }: Props) {
   const theme = useTheme()
+  const { t } = useI18n()
   const { session } = useAuth()
   const activeMode = useActiveMode()
   const [data, setData] = useState<HomeSummary | null>(null)
@@ -92,16 +94,16 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
         contentContainerStyle={styles.body}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetch(); setRefreshing(false) }} tintColor={theme.primary} colors={[theme.primary]} />}
       >
-        {loading && <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 40 }}>Loading…</Text>}
+        {loading && <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 40 }}>{t('common.loading')}</Text>}
 
         {/* Transporter cockpit */}
         {data?.transporter && showTransporter && (
           <View style={{ gap: spacing.lg }}>
             <View style={[styles.hero, { backgroundColor: '#0B1B2B' }, shadows.lg]}>
-              <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '600' }}>Your fleet</Text>
-              <Text style={[styles.heroNum, { color: '#fff' }]}>{data.transporter.availableTrucks}<Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.7)' }}> / {data.transporter.fleetSize} trucks available</Text></Text>
+              <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '600' }}>{t('home.yourFleet')}</Text>
+              <Text style={[styles.heroNum, { color: '#fff' }]}>{data.transporter.availableTrucks}<Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.7)' }}> / {data.transporter.fleetSize} {t('home.trucksAvailable')}</Text></Text>
               <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 14, marginTop: 6 }}>
-                {data.transporter.matchingLoads} matching loads right now
+                {data.transporter.matchingLoads} {t('home.matchingLoads')}
               </Text>
               {data.transporter.truckNowAvailable && data.transporter.lastTripDrop && (
                 <View style={[styles.heroBadge, { backgroundColor: 'rgba(249,115,22,0.35)' }]}>
@@ -136,23 +138,23 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
         {data?.supplier && showSupplier && (
           <View style={{ gap: spacing.lg }}>
             <View style={[styles.hero, { backgroundColor: theme.primary }, shadows.orange]}>
-              <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600' }}>Your shipments</Text>
-              <Text style={[styles.heroNum, { color: '#fff' }]}>{data.supplier.activeLoads}<Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.85)' }}> active loads</Text></Text>
+              <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600' }}>{t('home.yourShipments')}</Text>
+              <Text style={[styles.heroNum, { color: '#fff' }]}>{data.supplier.activeLoads}<Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.85)' }}> {t('home.activeLoads')}</Text></Text>
               <View style={styles.heroStats}>
-                <Stat label="Awaiting bids" value={data.supplier.awaitingResponses} />
-                <Stat label="In transit" value={data.supplier.inTransit} />
-                <Stat label="Completed" value={data.supplier.completed} />
+                <Stat label={t("home.awaitingBids")} value={data.supplier.awaitingResponses} />
+                <Stat label={t("home.inTransit")} value={data.supplier.inTransit} />
+                <Stat label={t("home.completed")} value={data.supplier.completed} />
               </View>
               {data.supplier.canPostLoad && (
                 <Pressable style={[styles.cta, { backgroundColor: '#fff' }]} onPress={onPostLoad}>
-                  <Text style={{ color: theme.primary, fontWeight: '800', fontSize: 14 }}>+ Post a new load</Text>
+                  <Text style={{ color: theme.primary, fontWeight: '800', fontSize: 14 }}>{t('home.postNewLoad')}</Text>
                 </Pressable>
               )}
             </View>
 
             {data.supplier.inTransitTrips.length > 0 && (
               <>
-                <SectionTitle>In transit</SectionTitle>
+                <SectionTitle>{t('home.inTransit')}</SectionTitle>
                 {data.supplier.inTransitTrips.map((t) => (
                   <LoadCard key={t.id} load={t.load} onPress={onOpenTrips} theme={theme} />
                 ))}
@@ -164,19 +166,17 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
         {!loading && !data?.transporter && !data?.supplier && (
           <View style={{ alignItems: 'center', paddingTop: 60, gap: spacing.lg }}>
             <Text style={{ fontSize: 48 }}>🚀</Text>
-            <Text style={[styles.emptyTitle, { color: theme.foreground }]}>Welcome to Wagon</Text>
+            <Text style={[styles.emptyTitle, { color: theme.foreground }]}>{t('home.welcome')}</Text>
             <Text style={[styles.emptySub, { color: theme.mutedForeground }]}>
-              {isTransporter
-                ? 'Find loads for your fleet and start earning — browse the marketplace.'
-                : 'Post your first load and get matched with verified trucks.'}
+              {t('home.pickCapability')}
             </Text>
             {isTransporter ? (
               <Pressable style={[styles.emptyCta, { backgroundColor: theme.primary }]} onPress={onOpenMarketplace}>
-                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>Browse loads</Text>
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>{t('home.browseLoads')}</Text>
               </Pressable>
             ) : (
               <Pressable style={[styles.emptyCta, { backgroundColor: theme.primary }]} onPress={onPostLoad}>
-                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>+ Post a load</Text>
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>{t('load.postNew')}</Text>
               </Pressable>
             )}
           </View>
