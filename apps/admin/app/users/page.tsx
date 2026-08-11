@@ -13,6 +13,9 @@ interface UserRow {
   tier: string;
   kycStatus: string;
   verified: boolean;
+  capabilities?: string[];
+  supplierVerified?: boolean;
+  transporterVerified?: boolean;
   isActive?: boolean;
   createdAt: string;
 }
@@ -77,10 +80,10 @@ export default function Users() {
     return () => clearTimeout(t);
   }, [query, fetchUsers]);
 
-  const verify = async (id: string) => {
-    setBusy(id);
+  const verify = async (id: string, capability?: string) => {
+    setBusy(capability ? `${id}:${capability}` : id);
     try {
-      await api.post(`/admin/verify/${id}`);
+      await api.post(`/admin/verify/${id}`, capability ? { capability } : {});
       fetchUsers();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to verify");
@@ -89,11 +92,11 @@ export default function Users() {
     }
   };
 
-  const reject = async (id: string) => {
-    if (!window.confirm("Reject this user's KYC?")) return;
-    setBusy(id);
+  const reject = async (id: string, capability?: string) => {
+    if (!window.confirm(`Reject KYC${capability ? ` for ${capability}` : ""}?`)) return;
+    setBusy(capability ? `${id}:${capability}` : id);
     try {
-      await api.patch(`/admin/users/${id}/reject`);
+      await api.patch(`/admin/users/${id}/reject`, capability ? { capability } : {});
       fetchUsers();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to reject");
@@ -225,24 +228,7 @@ export default function Users() {
                     >
                       Docs
                     </button>
-                    {u.kycStatus !== "approved" && (
-                      <button
-                        onClick={() => verify(u.id)}
-                        disabled={busy === u.id}
-                        className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
-                      >
-                        {busy === u.id ? "…" : "Approve"}
-                      </button>
-                    )}
-                    {u.kycStatus !== "rejected" && (
-                      <button
-                        onClick={() => reject(u.id)}
-                        disabled={busy === u.id}
-                        className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-700"
-                      >
-                        Reject
-                      </button>
-                    )}
+                    <PerCapabilityActions u={u} busy={busy} onVerify={verify} onReject={reject} />
                     {u.isActive === false ? (
                       <button
                         onClick={() => activate(u.id)}
@@ -331,5 +317,81 @@ export default function Users() {
         </div>
       )}
     </ShellLayout>
+  );
+}
+
+/** KYC actions. Dual-capability users get per-side approve/reject; others a single action. */
+function PerCapabilityActions({
+  u,
+  busy,
+  onVerify,
+  onReject,
+}: {
+  u: UserRow;
+  busy: string | null;
+  onVerify: (id: string, capability?: string) => void;
+  onReject: (id: string, capability?: string) => void;
+}) {
+  const caps = u.capabilities?.length ? u.capabilities : [u.role];
+  const both = caps.includes("supplier") && caps.includes("transporter");
+
+  if (both) {
+    return (
+      <div className="flex items-center gap-1">
+        {(["supplier", "transporter"] as const).map((c) => {
+          const verified = c === "supplier" ? u.supplierVerified : u.transporterVerified;
+          const isBusy = busy === `${u.id}:${c}`;
+          return (
+            <div key={c} className="flex items-center gap-1">
+              <button
+                onClick={() => onVerify(u.id, c)}
+                disabled={verified || isBusy}
+                title={`Verify ${c}`}
+                className={`rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40 ${
+                  verified
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"
+                    : "bg-emerald-600 text-white hover:bg-emerald-700"
+                }`}
+              >
+                {verified ? `✓ ${c}` : isBusy ? "…" : c}
+              </button>
+              {!verified && (
+                <button
+                  onClick={() => onReject(u.id, c)}
+                  disabled={isBusy}
+                  title={`Reject ${c}`}
+                  className="rounded-lg border border-red-300 px-2 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 dark:border-red-700"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      {u.kycStatus !== "approved" && (
+        <button
+          onClick={() => onVerify(u.id)}
+          disabled={busy === u.id}
+          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+        >
+          {busy === u.id ? "…" : "Approve"}
+        </button>
+      )}
+      {u.kycStatus !== "rejected" && (
+        <button
+          onClick={() => onReject(u.id)}
+          disabled={busy === u.id}
+          className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-700"
+        >
+          Reject
+        </button>
+      )}
+    </div>
   );
 }

@@ -9,6 +9,10 @@ export function setAccessToken(token: string | null) {
   accessToken = token
 }
 
+export function getAccessToken() {
+  return accessToken
+}
+
 export const api = createApiClient({
   baseUrl: API_BASE_URL,
   getToken: () => accessToken,

@@ -162,10 +162,23 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
         )}
 
         {!loading && !data?.transporter && !data?.supplier && (
-          <View style={{ alignItems: 'center', paddingTop: 60, gap: spacing.md }}>
+          <View style={{ alignItems: 'center', paddingTop: 60, gap: spacing.lg }}>
             <Text style={{ fontSize: 48 }}>🚀</Text>
             <Text style={[styles.emptyTitle, { color: theme.foreground }]}>Welcome to Wagon</Text>
-            <Text style={[styles.emptySub, { color: theme.mutedForeground }]}>Pick a capability in Settings to get started.</Text>
+            <Text style={[styles.emptySub, { color: theme.mutedForeground }]}>
+              {isTransporter
+                ? 'Find loads for your fleet and start earning — browse the marketplace.'
+                : 'Post your first load and get matched with verified trucks.'}
+            </Text>
+            {isTransporter ? (
+              <Pressable style={[styles.emptyCta, { backgroundColor: theme.primary }]} onPress={onOpenMarketplace}>
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>Browse loads</Text>
+              </Pressable>
+            ) : (
+              <Pressable style={[styles.emptyCta, { backgroundColor: theme.primary }]} onPress={onPostLoad}>
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>+ Post a load</Text>
+              </Pressable>
+            )}
           </View>
         )}
       </ScrollView>
@@ -224,4 +237,5 @@ const styles = StyleSheet.create({
   loadMeta: { fontSize: 13 },
   emptyTitle: { fontSize: 20, fontWeight: '800' },
   emptySub: { fontSize: 14, textAlign: 'center', paddingHorizontal: spacing.xl },
+  emptyCta: { borderRadius: radius.full, paddingHorizontal: spacing.xl, paddingVertical: spacing.md, marginTop: spacing.sm },
 })

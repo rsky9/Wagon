@@ -33,11 +33,64 @@ jobs:
       - name: Build
         run: pnpm turbo run build
 
-      - name: Unit tests
-        run: pnpm --filter @wagon/backend test:unit
-
       - name: Prisma validate
         run: pnpm --filter @wagon/backend exec prisma validate
 
-      - name: Backend e2e tests
+      - name: Unit tests
+        run: pnpm --filter @wagon/backend test:unit
+
+  e2e:
+    name: Backend e2e tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: wagon
+          POSTGRES_PASSWORD: wagon_dev
+          POSTGRES_DB: wagon
+        ports:
+          - 5440:5432
+        options: >-
+          --health-cmd "pg_isready -U wagon -d wagon"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://wagon:wagon_dev@localhost:5440/wagon?schema=public
+      REDIS_URL: redis://localhost:6380
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.17.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @wagon/backend exec prisma generate
+
+      - name: Deploy migrations
+        run: pnpm --filter @wagon/backend exec prisma migrate deploy
+
+      - name: Seed demo data
+        run: pnpm --filter @wagon/backend db:seed
+
+      - name: Run e2e tests
         run: pnpm --filter @wagon/backend test:e2e

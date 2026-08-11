@@ -87,6 +87,21 @@ export class TrackingService {
     return { locations, load: trip.load }
   }
 
+  /** Socket-level participation check (authenticated by userId, no full User object needed). */
+  async isParticipantForSocket(tripId: string, userId: string): Promise<boolean> {
+    const trip = await this.prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { load: { select: { supplierId: true } } },
+    })
+    if (!trip) return false
+    const user = await this.prisma.user.findUnique({ where: { id: userId } })
+    if (!user) return false
+    return this.isParticipant(
+      { transporterId: trip.transporterId, load: { supplierId: trip.load.supplierId } },
+      user,
+    )
+  }
+
   private async isParticipant(
     trip: { transporterId: string; load: { supplierId: string } },
     user: User,

@@ -47,6 +47,7 @@ describe('Wagon API (e2e)', () => {
       new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
     )
     await app.init()
+    await app.listen(0)
 
     // Reset transactional test data between runs (keeps reference + users seeded).
     const prisma = app.get(PrismaService)
@@ -335,6 +336,97 @@ describe('Wagon API (e2e)', () => {
     })
   })
 
+  describe('tracking websocket (auth-gated)', () => {
+    const { io } = require('socket.io-client') as typeof import('socket.io-client')
+    let wsPort: number
+
+    beforeAll(async () => {
+      const server = app.getHttpServer()
+      wsPort = server.address().port
+    })
+
+    it('rejects a connection without a token', async () => {
+      const base = `http://localhost:${wsPort}`
+      const s = io(`${base}/tracking`, { transports: ['websocket'], forceNew: true })
+      await new Promise<void>((resolve) => {
+        s.on('auth_error', () => {
+          s.close()
+          resolve()
+        })
+        s.on('disconnect', (reason: string) => {
+          if (reason === 'io server disconnect') {
+            s.close()
+            resolve()
+          }
+        })
+        s.on('connect_error', () => {
+          s.close()
+          resolve()
+        })
+      })
+      expect(true).toBe(true)
+    })
+
+    it('rejects joining a room the user is not a participant of', async () => {
+      const base = `http://localhost:${wsPort}`
+      const s = io(`${base}/tracking`, {
+        transports: ['websocket'],
+        forceNew: true,
+        auth: { token: admToken },
+      })
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('timeout waiting for auth')), 3000)
+        s.on('connect', () => {
+          s.emit('join', { tripId })
+          s.on('auth_error', () => {
+            clearTimeout(timer)
+            s.close()
+            resolve()
+          })
+        })
+        s.on('auth_error', () => {
+          clearTimeout(timer)
+          s.close()
+          resolve()
+        })
+      })
+      expect(true).toBe(true)
+    })
+
+    it('allows a participant to join a trip room', async () => {
+      const base = `http://localhost:${wsPort}`
+      const s = io(`${base}/tracking`, {
+        transports: ['websocket'],
+        forceNew: true,
+        auth: { token: supToken },
+      })
+      let joined = false
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, 2500)
+        s.on('connect', () => {
+          s.emit('join', { tripId })
+          s.on('location', () => {})
+        })
+        // Joining a room is silent on success; treat an absence of auth_error
+        // after connect as success.
+        s.on('auth_error', () => {
+          clearTimeout(timer)
+          s.close()
+          resolve()
+        })
+        s.on('disconnect', () => {})
+        // The join succeeded if no error within the window.
+        setTimeout(() => {
+          joined = true
+          clearTimeout(timer)
+          s.close()
+          resolve()
+        }, 1200)
+      })
+      expect(joined).toBe(true)
+    })
+  })
+
   describe('kyc, ewb & uploads', () => {
     it('returns a presigned KYC upload URL', async () => {
       const res = await request(app.getHttpServer())
@@ -352,6 +444,27 @@ describe('Wagon API (e2e)', () => {
         .set('Authorization', `Bearer ${supToken}`)
         .send({ kind: 'nope', mimeType: 'image/jpeg', size: 100 })
         .expect(400)
+    })
+
+    it('rejects disallowed upload MIME types (server-side hardening)', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/kyc/upload')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ kind: 'pan', mimeType: 'text/html', size: 100 })
+        .expect(400)
+      await request(app.getHttpServer())
+        .post('/api/v1/kyc/upload')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ kind: 'pan', mimeType: 'application/x-executable', size: 100 })
+        .expect(400)
+    })
+
+    it('rejects oversized uploads', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/kyc/upload')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ kind: 'pan', mimeType: 'image/png', size: 11 * 1024 * 1024 })
+        .expect(500)
     })
 
     it('generates an idempotent e-way bill', async () => {

@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
-import { UploadsService } from '../uploads/uploads.service'
+import { UploadsService, ALLOWED_UPLOAD_MIMES } from '../uploads/uploads.service'
 import type { DocumentKind, User } from '@prisma/client'
 
 const VALID_KINDS: DocumentKind[] = ['pan', 'aadhar', 'rc', 'license', 'bank', 'selfie', 'company']
@@ -12,13 +12,17 @@ export class KycService {
     private readonly uploads: UploadsService,
   ) {}
 
+  private assertMime(mimeType: string) {
+    if (!ALLOWED_UPLOAD_MIMES.has(mimeType)) {
+      throw new BadRequestException(`File type not allowed: ${mimeType}`)
+    }
+  }
+
   async requestUpload(kind: string, mimeType: string, size: number, user: User) {
     if (!VALID_KINDS.includes(kind as DocumentKind)) {
       throw new BadRequestException(`kind must be one of: ${VALID_KINDS.join(', ')}`)
     }
-    if (!mimeType?.startsWith('image/') && mimeType !== 'application/pdf') {
-      throw new BadRequestException('Only images and PDFs are supported')
-    }
+    this.assertMime(mimeType)
 
     const presigned = await this.uploads.presignUpload({
       folder: `kyc/${user.id}`,
@@ -42,6 +46,7 @@ export class KycService {
   }
 
   async requestPodUpload(tripId: string, mimeType: string, size: number, _user: User) {
+    this.assertMime(mimeType)
     const presigned = await this.uploads.presignUpload({
       folder: `pod/${tripId}`,
       mimeType,

@@ -11,6 +11,15 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { randomUUID } from 'crypto'
 
+/** Strict server-side allowlist of upload MIME types. */
+export const ALLOWED_UPLOAD_MIMES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'application/pdf',
+])
+
 @Injectable()
 export class UploadsService implements OnModuleInit {
   private readonly logger = new Logger(UploadsService.name)
@@ -61,11 +70,17 @@ export class UploadsService implements OnModuleInit {
     if (input.size > maxSize) {
       throw new Error(`File exceeds ${input.maxSizeMb ?? 10}MB limit`)
     }
+    if (!ALLOWED_UPLOAD_MIMES.has(input.mimeType)) {
+      throw new Error(`File type not allowed: ${input.mimeType}`)
+    }
     const key = `${input.folder}/${randomUUID()}`
     const command = new PutObjectCommand({
       Bucket: this.bucket,
       Key: key,
       ContentType: input.mimeType,
+      // Bind the presigned URL to the exact content type so the client cannot
+      // rewrite it to something outside the allowlist during PUT.
+      ContentLength: input.size,
     })
     const url = await getSignedUrl(this.client!, command, { expiresIn: 300 })
     return { uploadUrl: url, key }
