@@ -188,7 +188,14 @@ function LoadDetailRoute({ route, navigation }: NativeStackScreenProps<RootStack
 function TripDetailRoute({ route, navigation }: NativeStackScreenProps<RootStackParamList, 'TripDetail'>) {
   const p = route.params as { loadId?: string; tripId?: string }
   const loadId = p?.loadId ?? p?.tripId ?? ''
-  return <TripDetailScreen loadId={loadId} onBack={() => navigation.goBack()} onTrack={(tripId) => navigation.navigate('Track', { tripId })} />
+  return (
+    <TripDetailScreen
+      loadId={loadId}
+      onBack={() => navigation.goBack()}
+      onTrack={(tripId) => navigation.navigate('Track', { tripId })}
+      onOpenShipment={(shipmentId) => navigation.navigate('ShipmentDetail', { shipmentId })}
+    />
+  )
 }
 
 function TrackRoute({ route, navigation }: NativeStackScreenProps<RootStackParamList, 'Track'>) {
@@ -323,7 +330,13 @@ function ShipmentsRoute({ navigation }: any) {
 }
 
 function ShipmentDetailRoute({ navigation, route }: any) {
-  return <ShipmentDetailScreen shipmentId={route.params?.shipmentId} onBack={() => navigation.goBack()} />
+  return (
+    <ShipmentDetailScreen
+      shipmentId={route.params?.shipmentId}
+      onBack={() => navigation.goBack()}
+      onOpenLoad={(loadId) => navigation.navigate('TripDetail', { loadId })}
+    />
+  )
 }
 
 function ForwardingRoute({ navigation }: any) {

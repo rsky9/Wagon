@@ -11,9 +11,18 @@ interface Detail extends Shipment {
   forwardOrder?: ForwardOrder | null
 }
 
+interface SourceLoad {
+  id: string
+  pickupAddr: string
+  dropAddr: string
+  status: string
+  date: string
+}
+
 interface Props {
   shipmentId: string
   onBack: () => void
+  onOpenLoad?: (loadId: string) => void
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -21,14 +30,15 @@ const STATUS_COLORS: Record<string, string> = {
   delivered: '#10B981', closed: '#64748B', cancelled: '#EF4444',
 }
 
-export function ShipmentDetailScreen({ shipmentId, onBack }: Props) {
+export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) {
   const theme = useTheme()
   const [shipment, setShipment] = useState<Detail | null>(null)
+  const [sourceLoad, setSourceLoad] = useState<SourceLoad | null>(null)
   const [loading, setLoading] = useState(true)
 
   const fetch = useCallback(() => {
-    api.get<{ shipment: Detail }>(`/foundation/shipments/${shipmentId}`)
-      .then((r) => setShipment(r.shipment))
+    api.get<{ shipment: Detail; sourceLoad: SourceLoad | null }>(`/foundation/shipments/${shipmentId}`)
+      .then((r) => { setShipment(r.shipment); setSourceLoad(r.sourceLoad ?? null) })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [shipmentId])
@@ -84,6 +94,18 @@ export function ShipmentDetailScreen({ shipmentId, onBack }: Props) {
             {shipment.mode} · {shipment.weightKg ? `${shipment.weightKg} kg` : '—'} · {shipment.value ? `₹${shipment.value.toLocaleString('en-IN')}` : '—'} · {shipment.pieces ?? '—'} pcs
           </Text>
         </View>
+
+        {sourceLoad && (
+          <Pressable style={[styles.card, { backgroundColor: 'rgba(249,115,22,0.08)', borderColor: '#F97316' }]} onPress={() => onOpenLoad?.(sourceLoad.id)}>
+            <View style={styles.cardTop}>
+              <Text style={[styles.cardTitle, { color: theme.foreground }]}>🚚 From load · {sourceLoad.status}</Text>
+              <Text style={{ color: '#F97316', fontWeight: '800', fontSize: 14 }}>Open →</Text>
+            </View>
+            <Text style={[styles.meta, { color: theme.mutedForeground }]}>
+              {sourceLoad.pickupAddr} → {sourceLoad.dropAddr}
+            </Text>
+          </Pressable>
+        )}
 
         <Text style={[styles.sectionTitle, { color: theme.foreground }]}>Legs ({shipment.legs.length})</Text>
         {shipment.legs.map((l, i) => (

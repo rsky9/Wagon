@@ -22,6 +22,6 @@ const PaymentProviderFactory = {
   imports: [NotificationsModule],
   controllers: [PaymentsController],
   providers: [PaymentsService, PaymentProviderFactory],
-  exports: [PaymentsService],
+  exports: [PaymentsService, PaymentProviderFactory, PAYMENT_PROVIDER],
 })
 export class PaymentsModule {}

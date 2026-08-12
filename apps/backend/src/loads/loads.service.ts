@@ -274,7 +274,9 @@ export class LoadsService {
     if (!load) {
       throw new NotFoundException('Load not found')
     }
-    return { load }
+    // Enablement linkage: the canonical shipment projected from this load.
+    const shipment = await this.prisma.shipment.findFirst({ where: { ref: id } })
+    return { load, shipmentId: shipment?.id ?? null, shipment: shipment ?? null }
   }
 
   /** Supplier: all quotes/interest received on their posted loads. */

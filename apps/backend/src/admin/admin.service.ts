@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'
+import { Injectable, NotFoundException, BadRequestException, Inject } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { AuditService } from '../audit/audit.service'
 import { UploadsService } from '../uploads/uploads.service'
 import { NotificationsService } from '../notifications/notifications.service'
+import { PAYMENT_PROVIDER, PaymentProvider } from '../payments/payment-provider.service'
 import type { User } from '@prisma/client'
 
 @Injectable()
@@ -12,6 +13,7 @@ export class AdminService {
     private readonly audit: AuditService,
     private readonly uploads: UploadsService,
     private readonly notifications: NotificationsService,
+    @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
   ) {}
 
   async dashboard() {
@@ -736,12 +738,40 @@ export class AdminService {
     const settlement = await this.prisma.settlement.findUnique({ where: { id: settlementId } })
     if (!settlement) throw new NotFoundException('Settlement not found')
     if (settlement.status === 'cleared') throw new BadRequestException('Settlement already cleared')
-    const updated = await this.prisma.settlement.update({
-      where: { id: settlementId },
-      data: { status: 'cleared', settledAt: new Date() },
+    const amount = settlement.amount ?? 0
+    if (amount <= 0) throw new BadRequestException('Settlement has no amount to collect')
+    const idempotencyKey = `settlement_${settlementId}`
+    const existing = await this.prisma.payment.findUnique({ where: { idempotencyKey } })
+    if (existing) {
+      return { settlement: { ...settlement, status: 'cleared', settledAt: settlement.settledAt }, payment: existing, alreadyPaid: true }
+    }
+    const result = await this.provider.capture({
+      amount,
+      currency: settlement.currency || 'INR',
+      reference: idempotencyKey,
+      metadata: { settlementId, shipmentId: settlement.shipmentId },
+    })
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.create({
+        data: {
+          settlementId,
+          type: 'settlement',
+          amount,
+          currency: settlement.currency || 'INR',
+          method: 'mock',
+          providerRef: result.providerRef,
+          idempotencyKey,
+          status: result.status === 'succeeded' ? 'succeeded' : 'failed',
+        },
+      })
+      const changed = await tx.settlement.update({
+        where: { id: settlementId },
+        data: { status: 'cleared', settledAt: new Date() },
+      })
+      return { changed, payment }
     })
     await this.audit.log({ actorId: actor.id, action: 'settlement_clear', resource: settlementId })
-    return { settlement: updated }
+    return { settlement: updated.changed, payment: updated.payment }
   }
 
   /** Admin decline/supersede a selected plan. */

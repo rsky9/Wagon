@@ -4,9 +4,10 @@ import { AdminService } from './admin.service'
 import { AuditModule } from '../audit/audit.module'
 import { UploadsModule } from '../uploads/uploads.module'
 import { NotificationsModule } from '../notifications/notifications.module'
+import { PaymentsModule } from '../payments/payments.module'
 
 @Module({
-  imports: [AuditModule, UploadsModule, NotificationsModule],
+  imports: [AuditModule, UploadsModule, NotificationsModule, PaymentsModule],
   controllers: [AdminController],
   providers: [AdminService],
 })

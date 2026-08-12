@@ -65,6 +65,7 @@ enum PaymentType {
   escrow
   payout
   refund
+  settlement
 }
 
 enum PaymentMethod {
@@ -556,10 +557,13 @@ model TripLocation {
 
 model Payment {
   id              String        @id @default(cuid())
-  tripId          String
-  trip            Trip          @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  tripId          String?
+  trip            Trip?         @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  settlementId    String?       @unique
+  settlement      Settlement?   @relation(fields: [settlementId], references: [id])
   type            PaymentType
   amount          Float
+  currency        String        @default("INR")
   gstAmount       Float?
   tdsAmount       Float?
   method          PaymentMethod @default(mock)
@@ -569,6 +573,7 @@ model Payment {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   @@index([tripId])
+  @@index([settlementId])
 }
 
 model Notification {
@@ -1177,11 +1182,12 @@ model Settlement {
   payer      Organization? @relation("SettPayer", fields: [payerId], references: [id])
   payeeId    String?
   payee      Organization? @relation("SettPayee", fields: [payeeId], references: [id])
-  type       String   // freight | advance | balance | commission
+  type       String   // freight | advance | balance | commission | claim
   amount     Float?
   currency   String   @default("INR")
   status     String   @default("due") // due | cleared
   settledAt  DateTime?
+  payment    Payment?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   @@index([shipmentId])

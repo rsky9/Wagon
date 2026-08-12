@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException, ForbiddenException,
 import { PrismaService } from '../prisma/prisma.service'
 import { OutboxRelay } from '../outbox/outbox-relay.service'
 import { OrgAccessService } from '../org-access/org-access.service'
+import { PAYMENT_PROVIDER, PaymentProvider } from '../payments/payment-provider.service'
 import type { User } from '@prisma/client'
 
 @Injectable()
@@ -10,6 +11,7 @@ export class FinanceService {
     private readonly prisma: PrismaService,
     private readonly orgAccess: OrgAccessService,
     @Inject(OutboxRelay) private readonly outbox: OutboxRelay,
+    @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
   ) {}
 
   /** Assert the caller can access a shipment (for claims/policies/settlements/risk). */
@@ -254,24 +256,44 @@ export class FinanceService {
     if (!settlement) throw new NotFoundException('Settlement not found')
     await this.requireShipmentAccess(user, settlement.shipmentId)
     if (settlement.status !== 'due') throw new BadRequestException('Only due settlements can be cleared')
+    const amount = settlement.amount ?? 0
+    if (amount <= 0) throw new BadRequestException('Settlement has no amount to collect')
+    // Idempotent: one real payment per settlement (escrow-style capture).
+    const idempotencyKey = `settlement_${settlementId}`
+    const existing = await this.prisma.payment.findUnique({ where: { idempotencyKey } })
+    if (existing) return { settlement: { ...settlement, status: 'cleared', settledAt: settlement.settledAt }, payment: existing, alreadyPaid: true }
+
+    const result = await this.provider.capture({ amount, currency: settlement.currency || 'INR', reference: idempotencyKey, metadata: { settlementId, shipmentId: settlement.shipmentId } })
     const updated = await this.prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.create({
+        data: {
+          settlementId,
+          type: 'settlement',
+          amount,
+          currency: settlement.currency || 'INR',
+          method: 'mock',
+          providerRef: result.providerRef,
+          idempotencyKey,
+          status: result.status === 'succeeded' ? 'succeeded' : 'failed',
+        },
+      })
       const changed = await tx.settlement.update({
         where: { id: settlementId },
         data: { status: 'cleared', settledAt: new Date() },
       })
       await this.outbox.emit(tx as never, {
         eventType: 'FINANCE',
-        eventCode: 'SETTLEMENT_CLEARED',
+        eventCode: result.status === 'succeeded' ? 'SETTLEMENT_PAID' : 'SETTLEMENT_CLEARED',
         entityType: 'shipment',
         entityId: settlement.shipmentId,
         orgId: settlement.payerId ?? null,
         shipmentId: settlement.shipmentId,
         actorId: user.id,
-        payload: { type: settlement.type, amount: settlement.amount },
+        payload: { type: settlement.type, amount, providerRef: result.providerRef, status: result.status },
       })
-      return changed
+      return { changed, payment }
     })
-    return { settlement: updated }
+    return { settlement: updated.changed, payment: updated.payment }
   }
 
   async listSettlements(user: User, status?: string) {
@@ -283,7 +305,7 @@ export class FinanceService {
           ...(status ? [{ status }] : []),
         ],
       },
-      include: { shipment: { select: { id: true, ref: true, commodity: true } }, payer: true, payee: true },
+      include: { shipment: { select: { id: true, ref: true, commodity: true } }, payer: true, payee: true, payment: true },
       orderBy: { createdAt: 'desc' },
       take: 100,
     })

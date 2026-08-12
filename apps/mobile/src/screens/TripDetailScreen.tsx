@@ -27,6 +27,7 @@ interface Props {
   loadId: string
   onBack: () => void
   onTrack?: (tripId: string) => void
+  onOpenShipment?: (shipmentId: string) => void
 }
 
 const TONE: Record<string, StatusTone> = {
@@ -37,7 +38,7 @@ const TONE: Record<string, StatusTone> = {
   cancelled: 'danger',
 }
 
-export function TripDetailScreen({ loadId, onBack, onTrack }: Props) {
+export function TripDetailScreen({ loadId, onBack, onTrack, onOpenShipment }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
   const [trip, setTrip] = useState<TripInfo | null>(null)
@@ -46,6 +47,7 @@ export function TripDetailScreen({ loadId, onBack, onTrack }: Props) {
   const [paying, setPaying] = useState(false)
   const [rating, setRating] = useState(0)
   const [ewb, setEwb] = useState<string | null>(null)
+  const [shipmentId, setShipmentId] = useState<string | null>(null)
 
   useEffect(() => {
     api
@@ -62,6 +64,10 @@ export function TripDetailScreen({ loadId, onBack, onTrack }: Props) {
       })
       .catch((e) => Alert.alert(t('ui.error'), e.message))
       .finally(() => setLoading(false))
+    // Enablement linkage: this load is also a canonical shipment.
+    api.get<{ shipmentId: string | null }>(`/loads/${loadId}`)
+      .then((r) => setShipmentId(r.shipmentId))
+      .catch(() => {})
   }, [loadId])
 
   if (loading) {
@@ -144,6 +150,18 @@ export function TripDetailScreen({ loadId, onBack, onTrack }: Props) {
         <Text style={[styles.escrowNote, { color: theme.mutedForeground }]}>
           Escrow held by Wagon · released on delivery
         </Text>
+
+        {shipmentId && (
+          <Pressable style={[styles.card, { backgroundColor: 'rgba(249,115,22,0.08)', borderColor: '#F97316' }]} onPress={() => onOpenShipment?.(shipmentId)}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={[styles.cardTitle, { color: theme.foreground }]}>📦 Also a shipment</Text>
+              <Text style={{ color: '#F97316', fontWeight: '800', fontSize: 14 }}>Open →</Text>
+            </View>
+            <Text style={[styles.route, { color: theme.mutedForeground, fontSize: 12 }]}>
+              Track plans, bookings, claims & documents on the canonical shipment
+            </Text>
+          </Pressable>
+        )}
 
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <Text style={[styles.cardTitle, { color: theme.foreground }]}>{t('tripDetail.tripStatus')}</Text>

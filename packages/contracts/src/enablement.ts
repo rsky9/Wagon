@@ -224,6 +224,17 @@ export interface Settlement {
   currency: string
   status: 'due' | 'cleared'
   settledAt?: string | null
+  payment?: SettlementPayment | null
+  createdAt: string
+}
+
+export interface SettlementPayment {
+  id: string
+  amount: number
+  currency: string
+  providerRef?: string | null
+  status: 'pending' | 'succeeded' | 'failed'
+  method?: string | null
   createdAt: string
 }
 

@@ -326,12 +326,22 @@ export class FoundationService {
         plans: { orderBy: { createdAt: 'desc' }, take: 20 },
         forwardOrder: true,
         claims: { orderBy: { createdAt: 'desc' } },
-        settlements: { orderBy: { createdAt: 'desc' } },
+        settlements: { orderBy: { createdAt: 'desc' }, include: { payment: true } },
         warehouseOps: { orderBy: { createdAt: 'desc' } },
+        consolidations: true,
       },
     })
     if (!shipment) throw new NotFoundException('Shipment not found')
-    return { shipment }
+    // Load↔shipment linkage: a load-projected shipment (ref = load.id) surfaces its source load.
+    let sourceLoad: { id: string; pickupAddr: string; dropAddr: string; status: string; date: string } | null = null
+    if (shipment.ref && shipment.ref.length > 8) {
+      const load = await this.prisma.load.findUnique({
+        where: { id: shipment.ref },
+        select: { id: true, pickupAddr: true, dropAddr: true, status: true, date: true },
+      })
+      if (load) sourceLoad = { ...load, date: load.date.toISOString() }
+    }
+    return { shipment, sourceLoad }
   }
 
   // ---------- Events ----------
