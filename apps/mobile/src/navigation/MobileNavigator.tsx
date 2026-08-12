@@ -605,7 +605,7 @@ export function MobileNavigator() {
             <StatusBar style="light" />
             <CapabilitySelection onSelect={chooseCapabilities} />
           </ThemeContext.Provider>
-        ) : showOnboarding && auth.session.profile.role !== 'driver' ? (
+        ) : showOnboarding && auth.session.profile.role !== 'driver' && !auth.session.profile.capabilities?.some((c: string) => ['forwarder', 'warehouse', 'carrier'].includes(c)) ? (
           <ThemeContext.Provider value={theme}>
             <StatusBar style="light" />
             {auth.session.profile.role === 'supplier' ? (
