@@ -75,6 +75,12 @@ describe('Enablement platform (e2e)', () => {
       prisma.shipment.deleteMany(),
       prisma.logisticsEvent.deleteMany(),
       prisma.outboxMessage.deleteMany(),
+      prisma.marketQuote.deleteMany(),
+      prisma.marketRequest.deleteMany(),
+      prisma.marketListing.deleteMany(),
+      prisma.orgRating.deleteMany(),
+      prisma.carrierService.deleteMany(),
+      prisma.lane.deleteMany(),
     ])
     // Keep the supplier's forwarder org for order ownership assertions.
     supToken = await verify(SUP, await requestOtp(SUP))
@@ -276,6 +282,65 @@ describe('Enablement platform (e2e)', () => {
       const list = await api(supToken).get('/finance/settlements').expect(200)
       const mine = list.body.settlements.find((x: { id: string }) => x.id === st.body.settlement.id)
       expect(mine.payment?.providerRef).toBeTruthy()
+    })
+  })
+
+  describe('Marketplace (cross-type capability exchange)', () => {
+    it('publishes + browses listings across orgs (Phase A)', async () => {
+      const lane = await api(supToken).post('/market/lanes', { originRef: 'Mumbai', destinationRef: 'Pune', mode: 'road' }).expect(201)
+      expect(lane.body.lane.originRef).toBe('mumbai')
+      const listing = await api(supToken).post('/market/listings', {
+        kind: 'warehouse_space', laneId: lane.body.lane.id, originRef: 'Mumbai', destinationRef: 'Pune',
+        city: 'Pune', capacityAvailable: 1000, capacityUnit: 'm3', price: 5000,
+      }).expect(201)
+      expect(listing.body.listing.status).toBe('live')
+      // A different org (transporter) can browse the supplier's listing.
+      const browse = await api(trToken).get('/market/listings?kind=warehouse_space').expect(200)
+      expect(browse.body.listings.some((l: { id: string }) => l.id === listing.body.listing.id)).toBe(true)
+    })
+
+    it('posts demand, quotes with own listing, accepts (Phase B)', async () => {
+      const req = await api(supToken).post('/market/requests', {
+        kind: 'warehouse', originRef: 'Mumbai', destinationRef: 'Pune', capacityNeeded: 800, capacityUnit: 'm3', budget: 6000,
+      }).expect(201)
+      expect(req.body.request.status).toBe('open')
+      // Transporter publishes their own truck capacity, then quotes the demand.
+      const lane = await api(trToken).post('/market/lanes', { originRef: 'Mumbai', destinationRef: 'Pune', mode: 'road' }).expect(201)
+      const tlst = await api(trToken).post('/market/listings', {
+        kind: 'truck_capacity', laneId: lane.body.lane.id, originRef: 'Mumbai', destinationRef: 'Pune',
+        capacityAvailable: 5000, capacityUnit: 'kg', price: 18000,
+      }).expect(201)
+      const quote = await api(trToken).post(`/market/requests/${req.body.request.id}/quotes`, { listingId: tlst.body.listing.id, amount: 5500 }).expect(201)
+      expect(quote.body.quote.status).toBe('submitted')
+      // Can't quote with another org's listing.
+      await api(trToken).post(`/market/requests/${req.body.request.id}/quotes`, { listingId: (await api(supToken).get('/market/listings?kind=warehouse_space').expect(200)).body.listings[0].id }).expect(400)
+      // Requester accepts.
+      const accepted = await api(supToken).post(`/market/quotes/${quote.body.quote.id}/accept`).expect(201)
+      expect(accepted.body.quote.status).toBe('accepted')
+    })
+
+    it('ranks matches and gates org reputation (Phase C)', async () => {
+      const req = await api(supToken).post('/market/requests', { kind: 'transport', originRef: 'Mumbai', destinationRef: 'Pune', capacityNeeded: 2000 }).expect(201)
+      const matches = await api(supToken).get(`/market/requests/${req.body.request.id}/match`).expect(200)
+      expect(Array.isArray(matches.body.matches)).toBe(true)
+      // Cross-org rating works; self-rating blocked.
+      const supOrg = (await api(supToken).get('/foundation/organizations').expect(200)).body.organizations[0].id
+      const rated = await api(trToken).post('/market/ratings', { subjectOrgId: supOrg, axis: 'supplier', score: 4, review: 'prompt' }).expect(201)
+      expect(rated.body.rating.axis).toBe('supplier')
+      await api(supToken).post('/market/ratings', { subjectOrgId: supOrg, axis: 'supplier', score: 1 }).expect(400)
+    })
+
+    it('publishes carrier schedules with bookable slots (Phase D)', async () => {
+      await api(supToken).post('/foundation/organizations', { name: 'E2E Carrier', kind: 'carrier' }).expect(201)
+      const svc = await api(supToken).post('/market/carrier-services', {
+        originRef: 'Mundra', destinationRef: 'Singapore', mode: 'ocean', vessel: 'MV E2E', voyage: '001', totalSlots: 1, rate: 120000,
+      }).expect(201)
+      expect(svc.body.service.availableSlots).toBe(1)
+      const publicBrowse = await api(trToken).get('/market/carrier-services').expect(200)
+      expect(publicBrowse.body.services.some((x: { id: string }) => x.id === svc.body.service.id)).toBe(true)
+      const booked = await api(trToken).post(`/market/carrier-services/${svc.body.service.id}/book`).expect(201)
+      expect(booked.body.service.status).toBe('sold_out')
+      await api(trToken).post(`/market/carrier-services/${svc.body.service.id}/book`).expect(400)
     })
   })
 })
