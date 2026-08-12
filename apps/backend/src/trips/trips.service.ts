@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config'
 import { PrismaService } from '../prisma/prisma.service'
 import { NotificationsService } from '../notifications/notifications.service'
 import { ShipmentProjector } from '../shipments/shipment-projector.service'
+import { MarketService } from '../market/market.service'
 import type { User, TripStage } from '@prisma/client'
 
 @Injectable()
@@ -12,6 +13,7 @@ export class TripsService {
     private readonly notifications: NotificationsService,
     private readonly config: ConfigService,
     private readonly shipments: ShipmentProjector,
+    private readonly market: MarketService,
   ) {}
 
   async quote(loadId: string, amount: number, user: User) {
@@ -190,6 +192,11 @@ export class TripsService {
       location: status === 'delivered' && load ? load.dropAddr : undefined,
       payload: { tripId: trip.id, loadId: trip.loadId, status },
     })
+
+    // Marketplace trust: auto-rate the transporter's org after delivery.
+    if (status === 'delivered') {
+      await this.market.autoRateFromTrip(trip as never, user).catch(() => {})
+    }
 
     return { trip: updated }
   }

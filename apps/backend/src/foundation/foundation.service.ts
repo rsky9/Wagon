@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service'
 import { OutboxRelay } from '../outbox/outbox-relay.service'
 import { OrgAccessService } from '../org-access/org-access.service'
+import { MarketService } from '../market/market.service'
 import type { User } from '@prisma/client'
 
 const VALID_KINDS = ['shipper', 'transporter', 'forwarder', 'warehouse', 'carrier', 'broker', 'other']
@@ -31,6 +32,7 @@ export class FoundationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orgAccess: OrgAccessService,
+    private readonly market: MarketService,
     @Inject(OutboxRelay) private readonly outbox: OutboxRelay,
   ) {}
 
@@ -205,6 +207,8 @@ export class FoundationService {
       })
       return created
     })
+    // Marketplace bridge: planned shipments publish transport demand.
+    await this.market.publishShipmentRequest(shipment, user).catch(() => {})
     return { shipment }
   }
 

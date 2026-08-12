@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException, ForbiddenException,
 import { PrismaService } from '../prisma/prisma.service'
 import { PlanningService, PlanLeg } from '../planning/planning.service'
 import { OrgAccessService } from '../org-access/org-access.service'
+import { MarketService } from '../market/market.service'
 import type { User } from '@prisma/client'
 
 const MAX_OPTIONS = 50
@@ -24,6 +25,7 @@ export class AiService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orgAccess: OrgAccessService,
+    private readonly market: MarketService,
     @Inject(PlanningService) private readonly planning: PlanningService,
   ) {}
 
@@ -192,6 +194,31 @@ export class AiService {
       data: { status, guardrails: { ...(rec.guardrails as object | null), decidedBy: user.id, decidedAt: new Date().toISOString() } as never },
     })
     return { recommendation: updated }
+  }
+
+  /**
+   * Market agent: rank live listings against a market request (any capability)
+   * and log a guardrailed recommendation. Never auto-books — human must act.
+   */
+  async recommendMarket(requestId: string, user: User) {
+    const request = await this.prisma.marketRequest.findUnique({ where: { id: requestId } })
+    if (!request) throw new NotFoundException('Market request not found')
+    const matches = await this.market.matchRequest(requestId, user)
+
+    const recommendation = await this.prisma.aiRecommendation.create({
+      data: {
+        agent: 'market',
+        entityType: 'request',
+        entityId: requestId,
+        summary: `Matched ${matches.matches.length} listing(s) for ${request.kind} demand`,
+        output: matches.matches.map((m) => ({ listingId: m.id, kind: m.kind, origin: m.originRef, destination: m.destinationRef, price: m.price, score: m.score, orgRating: m.orgRating })) as never,
+        constraints: { kind: request.kind, city: request.city, origin: request.originRef } as never,
+        rationale: { laneFit: 'ranked by lane/city/capacity/rating/verified' } as never,
+        guardrails: { neverAutoBooks: true, humanMustQuote: true } as never,
+        createdBy: user.id,
+      },
+    })
+    return { recommendation, matches: matches.matches }
   }
 
   /**

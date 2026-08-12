@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { AlertsService } from '../alerts/alerts.service'
 import { NotificationsService } from '../notifications/notifications.service'
 import { ShipmentProjector } from '../shipments/shipment-projector.service'
+import { MarketService } from '../market/market.service'
 import type { User } from '@prisma/client'
 import type { Load } from '@wagon/contracts'
 
@@ -66,6 +67,7 @@ export class LoadsService {
     private readonly alerts: AlertsService,
     private readonly notifications: NotificationsService,
     private readonly shipments: ShipmentProjector,
+    private readonly market: MarketService,
   ) {}
 
   async create(input: CreateLoadInput, user: User) {
@@ -157,6 +159,9 @@ export class LoadsService {
       location: input.pickupAddr,
       payload: { ref: load.id, route: `${input.pickupAddr} → ${input.dropAddr}` },
     })
+
+    // Marketplace bridge: every posted Load is transport demand on the lane.
+    await this.market.publishLoadRequest(load as never, user).catch(() => {})
 
     return { load }
   }

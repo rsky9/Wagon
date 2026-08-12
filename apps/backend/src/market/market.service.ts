@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException, ForbiddenException,
 import { PrismaService } from '../prisma/prisma.service'
 import { OutboxRelay } from '../outbox/outbox-relay.service'
 import { OrgAccessService } from '../org-access/org-access.service'
+import { NotificationsService } from '../notifications/notifications.service'
 import type { User } from '@prisma/client'
 
 const LISTING_KINDS = ['truck_capacity', 'warehouse_space', 'carrier_service', 'forwarder_service']
@@ -12,6 +13,7 @@ export class MarketService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orgAccess: OrgAccessService,
+    private readonly notifications: NotificationsService,
     @Inject(OutboxRelay) private readonly outbox: OutboxRelay,
   ) {}
 
@@ -218,6 +220,85 @@ export class MarketService {
     return { listing }
   }
 
+  /** Auto-publish a Load as a transport MarketRequest (marketplace bridge). */
+  async publishLoadRequest(load: { id: string; pickupAddr: string; dropAddr: string; weight: number; date?: Date | null }, user: User) {
+    const org = await this.orgAccess.primaryOrg(user)
+    const existing = await this.prisma.marketRequest.findFirst({
+      where: { sourceType: 'load', sourceId: load.id },
+    })
+    if (existing) return { request: existing }
+    const request = await this.prisma.marketRequest.create({
+      data: {
+        requesterOrgId: org.id,
+        kind: 'transport',
+        originRef: load.pickupAddr.toLowerCase(),
+        destinationRef: load.dropAddr.toLowerCase(),
+        capacityNeeded: load.weight * 1000,
+        capacityUnit: 'kg',
+        date: load.date ?? undefined,
+        description: `Transport demand from load ${load.id.slice(-6)}`,
+        sourceType: 'load',
+        sourceId: load.id,
+        status: 'open',
+      },
+    })
+    return { request }
+  }
+
+  /** Auto-publish a Shipment as a transport MarketRequest when it's planned. */
+  async publishShipmentRequest(shipment: { id: string; commodity?: string | null; weightKg?: number | null }, user: User) {
+    const org = await this.orgAccess.primaryOrg(user)
+    const existing = await this.prisma.marketRequest.findFirst({
+      where: { sourceType: 'shipment', sourceId: shipment.id },
+    })
+    if (existing) return { request: existing }
+    const request = await this.prisma.marketRequest.create({
+      data: {
+        requesterOrgId: org.id,
+        kind: 'transport',
+        capacityNeeded: shipment.weightKg ?? undefined,
+        capacityUnit: 'kg',
+        description: `Transport demand for ${shipment.commodity ?? 'shipment'} ${shipment.id.slice(-6)}`,
+        sourceType: 'shipment',
+        sourceId: shipment.id,
+        status: 'open',
+      },
+    })
+    return { request }
+  }
+
+  /** Auto-publish a truck as truck_capacity supply. */
+  async publishTruck(truck: { id: string; type: string; origin?: string | null; activeStatus?: boolean | null }, user: User) {
+    const org = await this.orgAccess.primaryOrg(user)
+    const existing = await this.prisma.marketListing.findFirst({
+      where: { sourceType: 'truck', sourceId: truck.id },
+    })
+    if (existing) {
+      // Keep availability in sync with activeStatus.
+      if (truck.activeStatus === false && existing.status === 'live') {
+        await this.prisma.marketListing.update({ where: { id: existing.id }, data: { status: 'paused' } })
+      } else if (truck.activeStatus !== false && existing.status === 'paused') {
+        await this.prisma.marketListing.update({ where: { id: existing.id }, data: { status: 'live' } })
+      }
+      return { listing: existing }
+    }
+    const listing = await this.prisma.marketListing.create({
+      data: {
+        providerOrgId: org.id,
+        kind: 'truck_capacity',
+        city: truck.origin?.toLowerCase() ?? undefined,
+        originRef: truck.origin?.toLowerCase(),
+        equipment: truck.type,
+        capacityUnit: 'kg',
+        description: `${truck.type} truck available from ${truck.origin ?? 'origin'}`,
+        sourceType: 'truck',
+        sourceId: truck.id,
+        status: truck.activeStatus === false ? 'paused' : 'live',
+      },
+    })
+    return { listing }
+  }
+
   // ---------- Phase B: Requests (demand) + Quotes ----------
 
   /** Post a universal demand request (transport | warehouse | forwarding | carrier | insurance). */
@@ -266,6 +347,23 @@ export class MarketService {
       actorId: user.id,
       payload: { kind: input.kind, requesterOrgId: org.id },
     })
+    // Notify providers who subscribed to lane alerts matching this demand.
+    if (request.originRef) {
+      const alerts = await this.prisma.laneAlert.findMany({
+        where: { isActive: true, OR: [{ fromLane: { contains: request.originRef } }, { fromLane: { contains: request.city ?? request.originRef } }] },
+        include: { transporter: { include: { user: true } } },
+      })
+      for (const a of alerts) {
+        await this.notifications.create({
+          userId: a.transporter.userId,
+          type: 'market_request',
+          title: 'New demand near your lane',
+          body: `${request.kind} demand: ${request.originRef} → ${request.destinationRef ?? '—'}`,
+          data: { requestId: request.id, kind: request.kind },
+          category: 'market',
+        }).catch(() => {})
+      }
+    }
     return { request }
   }
 
@@ -322,12 +420,27 @@ export class MarketService {
       },
     })
     await this.prisma.marketRequest.update({ where: { id: requestId }, data: { status: 'quoted' } })
+    // Notify the requester's org members that a quote arrived.
+    const members = await this.prisma.organizationMember.findMany({ where: { organizationId: request.requesterOrgId } })
+    for (const m of members) {
+      await this.notifications.create({
+        userId: m.userId,
+        type: 'market_quote',
+        title: 'New quote received',
+        body: `Your ${request.kind} demand got a quote of ${quote.amount != null ? `${quote.currency} ${quote.amount}` : '—'}`,
+        data: { requestId, quoteId: quote.id },
+        category: 'market',
+      }).catch(() => {})
+    }
     return { quote }
   }
 
-  /** The requester accepts a quote -> request booked. */
+  /** The requester accepts a quote -> request booked + operational object created. */
   async acceptQuote(quoteId: string, user: User) {
-    const quote = await this.prisma.marketQuote.findUnique({ where: { id: quoteId }, include: { request: true } })
+    const quote = await this.prisma.marketQuote.findUnique({
+      where: { id: quoteId },
+      include: { request: { include: { lane: true } }, listing: true, providerOrg: true },
+    })
     if (!quote) throw new NotFoundException('Quote not found')
     const orgIds = await this.orgAccess.memberOrgIds(user)
     if (!orgIds.includes(quote.request.requesterOrgId)) throw new ForbiddenException('Only the requester can accept')
@@ -339,9 +452,97 @@ export class MarketService {
       })
       const accepted = await tx.marketQuote.update({ where: { id: quoteId }, data: { status: 'accepted' } })
       await tx.marketRequest.update({ where: { id: quote.requestId }, data: { status: 'booked' } })
+      // Materialize the booked request into an operational object so the
+      // execute/settle layers can run (not just a paper booking).
+      await this.materializeBooking(tx as unknown as Record<string, never>, quote)
       return accepted
     })
     return { quote: updated }
+  }
+
+  /** Map an accepted request to its operational object by kind. */
+  private async materializeBooking(tx: { [k: string]: any }, quote: {
+    request: { id: string; kind: string; requesterOrgId: string; originRef?: string | null; destinationRef?: string | null; city?: string | null; capacityNeeded?: number | null }
+    providerOrgId: string
+    amount?: number | null
+    currency: string
+    listing?: { id: string; sourceType?: string | null; sourceId?: string | null } | null
+  }) {
+    const r = quote.request
+    switch (r.kind) {
+      case 'warehouse': {
+        // Find an operator facility near the requested city and open an operation.
+        const facility = await tx.facility.findFirst({
+          where: { operatorId: quote.providerOrgId, city: { contains: r.city ?? r.originRef ?? '' } },
+        })
+        if (facility) {
+          const shipment = await tx.shipment.findFirst({ where: { ownerOrgId: r.requesterOrgId } })
+          await tx.warehouseOperation.create({
+            data: {
+              facilityId: facility.id,
+              shipmentId: shipment?.id ?? null,
+              operatorId: quote.providerOrgId,
+              ref: `MK-${r.id.slice(-6)}`,
+              status: 'appointment',
+              appointmentAt: new Date(),
+            },
+          })
+        }
+        break
+      }
+      case 'carrier': {
+        await tx.carrierBooking.create({
+          data: {
+            shipmentId: (await tx.shipment.findFirst({ where: { ownerOrgId: r.requesterOrgId } }))?.id ?? '',
+            carrierId: quote.providerOrgId,
+            bookingRef: `MK-${r.id.slice(-6)}`,
+            rate: quote.amount,
+            currency: quote.currency,
+            status: 'confirmed',
+          },
+        })
+        break
+      }
+      case 'forwarding': {
+        const shipment = await tx.shipment.findFirst({ where: { ownerOrgId: r.requesterOrgId } })
+        if (shipment) {
+          await tx.forwardOrder.create({
+            data: {
+              forwarderId: quote.providerOrgId,
+              customerId: r.requesterOrgId,
+              shipmentId: shipment.id,
+              ref: `MK-${r.id.slice(-6)}`,
+              buyAmount: quote.amount ?? null,
+              sellAmount: null,
+              currency: quote.currency,
+              status: 'intake',
+            },
+          })
+        }
+        break
+      }
+      case 'insurance': {
+        const shipment = await tx.shipment.findFirst({ where: { ownerOrgId: r.requesterOrgId } })
+        if (shipment) {
+          await tx.insurancePolicy.create({
+            data: {
+              shipmentId: shipment.id,
+              insurerId: quote.providerOrgId,
+              policyRef: `MK-${r.id.slice(-6)}`,
+              premium: quote.amount ?? null,
+              coverage: quote.amount ? quote.amount * 10 : null,
+              currency: quote.currency,
+              status: 'active',
+            },
+          })
+        }
+        break
+      }
+      default:
+        // transport: no operational object (road trips are created by the
+        // classic accept/bid flow). The market request links the intent.
+        break
+    }
   }
 
   /** Quotes on a request (requester or participants). */
@@ -544,6 +745,34 @@ export class MarketService {
       payload: { serviceId, remaining: updated.availableSlots },
     })
     return { service: updated }
+  }
+
+  /** Auto-create org ratings after a completed trip (both directions). */
+  async autoRateFromTrip(trip: { id: string; transporterId: string; load: { supplierId: string } }, user: User) {
+    const transporter = await this.prisma.transporter.findUnique({ where: { id: trip.transporterId } }).catch(() => null)
+    if (!transporter) return null
+    // Transporter's org (subject: transporter) rated by supplier's org (axis transporter)
+    const transporterOrg = await this.orgOfUser(transporter.userId)
+    const supplier = await this.prisma.supplier.findUnique({ where: { id: trip.load.supplierId } }).catch(() => null)
+    const supplierOrg = await this.orgOfUser(supplier?.userId ?? '')
+    if (transporterOrg && supplierOrg) {
+      const existing = await this.prisma.orgRating.findFirst({
+        where: { subjectOrgId: transporterOrg, axis: 'transporter', referenceId: trip.id },
+      })
+      if (!existing) {
+        await this.prisma.orgRating.create({
+          data: { subjectOrgId: transporterOrg, giverOrgId: supplierOrg, axis: 'transporter', score: 5, referenceType: 'trip', referenceId: trip.id },
+        })
+      }
+    }
+    return null
+  }
+
+  /** Resolve the first org of a user, if any. */
+  private async orgOfUser(userId: string) {
+    if (!userId) return null
+    const member = await this.prisma.organizationMember.findFirst({ where: { userId }, include: { organization: true } })
+    return member?.organizationId ?? null
   }
 
   // ---------- Helpers ----------

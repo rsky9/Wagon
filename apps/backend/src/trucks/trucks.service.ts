@@ -1,12 +1,16 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { MarketService } from '../market/market.service'
 import type { User, TruckType } from '@prisma/client'
 
 const VALID_TYPES: TruckType[] = ['open', 'container', 'trailer']
 
 @Injectable()
 export class TrucksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly market: MarketService,
+  ) {}
 
   private async transporterId(user: User) {
     const t = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
@@ -98,6 +102,8 @@ export class TrucksService {
         odometerKm: input.odometerKm,
       },
     })
+    // Marketplace bridge: every truck is publishable capacity.
+    await this.market.publishTruck(truck, user).catch(() => {})
     return { truck }
   }
 

@@ -22,6 +22,11 @@ export class AiController {
     return this.ai.matchTransporters(loadId, user)
   }
 
+  @Post('market/:requestId')
+  recommendMarket(@Param('requestId') requestId: string, @CurrentUser() user: User) {
+    return this.ai.recommendMarket(requestId, user)
+  }
+
   @Post('invite/:loadId/:transporterId')
   inviteTransporter(@Param('loadId') loadId: string, @Param('transporterId') transporterId: string, @CurrentUser() user: User) {
     return this.ai.inviteTransporter(loadId, transporterId, user)

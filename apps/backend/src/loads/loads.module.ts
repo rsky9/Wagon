@@ -4,9 +4,10 @@ import { LoadsService } from './loads.service'
 import { AlertsModule } from '../alerts/alerts.module'
 import { NotificationsModule } from '../notifications/notifications.module'
 import { ShipmentsModule } from '../shipments/shipments.module'
+import { MarketModule } from '../market/market.module'
 
 @Module({
-  imports: [AlertsModule, NotificationsModule, ShipmentsModule],
+  imports: [AlertsModule, NotificationsModule, ShipmentsModule, MarketModule],
   controllers: [LoadsController],
   providers: [LoadsService],
   exports: [LoadsService],
