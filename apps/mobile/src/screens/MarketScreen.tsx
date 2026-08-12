@@ -51,6 +51,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
   const [carrierServices, setCarrierServices] = useState<Array<{ id: string; carrierOrg?: { name: string; verified: boolean } | null; vessel?: string | null; flight?: string | null; originRef?: string | null; destinationRef?: string | null; rate?: number | null; currency: string; availableSlots: number; totalSlots: number; status: string }>>([])
   const [partners, setPartners] = useState<Array<{ id: string; name: string; kind: string; baseUrl?: string | null; org?: { name: string; verified: boolean } | null }>>([])
   const [aiRecs, setAiRecs] = useState<AiRec[]>([])
+  const [compareRequest, setCompareRequest] = useState<MarketRequest | null>(null)
 
   const canPublishCarrier = capabilities.includes('carrier')
 
@@ -289,6 +290,11 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
         {withQuotes && r.status !== 'open' && (
           <Pressable style={[styles.actionBtn, { backgroundColor: '#F97316' }]} onPress={() => runMatch(r)}>
             <Text style={styles.actionText}>Match</Text>
+          </Pressable>
+        )}
+        {withQuotes && r.quotes && r.quotes.length > 0 && (
+          <Pressable style={[styles.actionBtn, { backgroundColor: '#8B5CF6' }]} onPress={() => setCompareRequest(r)}>
+            <Text style={styles.actionText}>Compare ({r.quotes.length})</Text>
           </Pressable>
         )}
         {!withQuotes && r.status === 'open' && (
@@ -553,6 +559,38 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
               <Pressable style={[styles.modalBtn, { backgroundColor: theme.muted }]} onPress={() => setQuoteFor(null)}><Text style={{ color: theme.foreground, fontWeight: '700' }}>Cancel</Text></Pressable>
               <Pressable style={[styles.modalBtn, { backgroundColor: '#F97316' }]} onPress={submitQuote} disabled={busy}><Text style={{ color: '#fff', fontWeight: '800' }}>{busy ? 'Sending…' : 'Send quote'}</Text></Pressable>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Quote comparison modal */}
+      <Modal visible={!!compareRequest} transparent animationType="slide">
+        <View style={styles.modalWrap}>
+          <View style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Text style={[styles.modalTitle, { color: theme.foreground }]}>Compare quotes · {compareRequest?.kind}</Text>
+            <Text style={{ color: theme.mutedForeground, fontSize: 13 }}>
+              {compareRequest?.originRef ?? compareRequest?.city ?? '—'} → {compareRequest?.destinationRef ?? '—'}
+            </Text>
+            <ScrollView style={{ maxHeight: 360 }}>
+              {(compareRequest?.quotes ?? []).slice().sort((a, b) => (a.amount ?? 0) - (b.amount ?? 0)).map((q, idx) => (
+                <View key={q.id} style={[styles.quoteRow, { borderTopColor: theme.border }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: theme.foreground, fontWeight: '700' }}>
+                      #{idx + 1} {q.providerOrg?.name ?? 'Provider'} · {q.amount != null ? `${q.currency} ${q.amount.toLocaleString('en-IN')}` : '—'} · {q.etaHours ?? '—'}h
+                    </Text>
+                    <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>{q.status}</Text>
+                  </View>
+                  {q.status === 'submitted' && (
+                    <Pressable style={[styles.smallBtn, { backgroundColor: theme.success }]} onPress={() => acceptQuote(q)}>
+                      <Text style={styles.actionText}>Accept</Text>
+                    </Pressable>
+                  )}
+                </View>
+              ))}
+            </ScrollView>
+            <Pressable style={[styles.modalBtn, { backgroundColor: theme.muted }]} onPress={() => setCompareRequest(null)}>
+              <Text style={{ color: theme.foreground, fontWeight: '700' }}>Close</Text>
+            </Pressable>
           </View>
         </View>
       </Modal>

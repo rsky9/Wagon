@@ -501,7 +501,7 @@ export class MarketService {
   }
 
   /** Browse open demand — PUBLIC read (providers discover what's needed). */
-  async browseRequests(query?: { kind?: string; city?: string; status?: string }) {
+  async browseRequests(query?: { kind?: string; city?: string; status?: string; lat?: number; lng?: number; radiusKm?: number }) {
     // Request expiry: open/quoted requests older than 30 days with no booking auto-close.
     const expiryCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     await this.prisma.marketRequest.updateMany({
@@ -517,9 +517,17 @@ export class MarketService {
       orderBy: { createdAt: 'desc' },
       take: 100,
     })
+    // Radius filter on the request's lane origin.
+    let filtered = requests
+    if (query?.lat != null && query.lng != null && query.radiusKm != null) {
+      filtered = requests.filter((r) => {
+        if (!r.lane?.originLat || !r.lane.originLng) return false
+        return haversineKm(query.lat!, query.lng!, r.lane.originLat, r.lane.originLng) <= query.radiusKm!
+      })
+    }
     // Attach requester trust so providers can decide whether to quote.
     const withTrust = await Promise.all(
-      requests.map(async (r) => {
+      filtered.map(async (r) => {
         const rating = await this.orgAverageRating(r.requesterOrgId)
         const trust = await this.orgTrust(r.requesterOrgId)
         return { ...r, requesterRating: rating.avg, requesterCompletion: trust.completionRate }
