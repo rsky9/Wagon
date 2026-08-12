@@ -383,5 +383,24 @@ describe('Enablement platform (e2e)', () => {
       expect(ai.body.recommendation.agent).toBe('market')
       expect(ai.body.recommendation.guardrails.neverAutoBooks).toBe(true)
     })
+
+    it('materializes transport accept into shipment + settlement; admin can pause listing', async () => {
+      // Transport demand -> quote (different org) -> accept creates shipment + settlement.
+      const req = await api(supToken).post('/market/requests', { kind: 'transport', originRef: 'Mumbai', destinationRef: 'Pune', capacityNeeded: 3000 }).expect(201)
+      const quote = await api(trToken).post(`/market/requests/${req.body.request.id}/quotes`, { amount: 15000 }).expect(201)
+      await api(supToken).post(`/market/quotes/${quote.body.quote.id}/accept`).expect(201)
+      const settlements = await api(supToken).get('/finance/settlements').expect(200)
+      expect(settlements.body.settlements.some((x: { payeeId: string }) => x.payeeId === quote.body.quote.providerOrgId)).toBe(true)
+      const ships = await api(supToken).get('/foundation/shipments').expect(200)
+      expect(ships.body.shipments.some((x: { ref: string }) => x.ref.startsWith('MK-TR-'))).toBe(true)
+      // Admin can pause a live listing.
+      const listings = await api(trToken).get('/market/listings').expect(200)
+      if (listings.body.listings.length > 0) {
+        const paused = await api(admToken).post(`/admin/market/listings/${listings.body.listings[0].id}/pause`).expect(201)
+        expect(paused.body.listing.status).toBe('paused')
+      }
+      const stats = await api(admToken).get('/admin/market/stats').expect(200)
+      expect(typeof stats.body.listings).toBe('number')
+    })
   })
 })
