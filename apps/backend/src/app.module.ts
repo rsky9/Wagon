@@ -42,6 +42,7 @@ import { StorageModule } from './storage/storage.module'
 import { ForwardingModule } from './forwarding/forwarding.module'
 import { PlanningModule } from './planning/planning.module'
 import { IntegrationsModule } from './integrations/integrations.module'
+import { FinanceModule } from './finance/finance.module'
 
 @Module({
   imports: [
@@ -93,6 +94,7 @@ import { IntegrationsModule } from './integrations/integrations.module'
     ForwardingModule,
     PlanningModule,
     IntegrationsModule,
+    FinanceModule,
   ],
   controllers: [AppController],
   providers: [

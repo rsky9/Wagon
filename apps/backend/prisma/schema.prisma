@@ -768,6 +768,11 @@ model Organization {
   documents ForwardDocument[]
   connectors IntegrationConnector[]
   webhookSubscriptions WebhookSubscription[]
+  claimsFiled Claim[] @relation("Claimant")
+  claimsHandled Claim[] @relation("Handler")
+  policiesUnderwritten InsurancePolicy[]
+  settlementsPayer Settlement[] @relation("SettPayer")
+  settlementsPayee Settlement[] @relation("SettPayee")
   @@index([kind])
 }
 
@@ -813,6 +818,10 @@ model Shipment {
   documents ForwardDocument[]
   forwardOrder ForwardOrder?
   plans     Plan[]
+  claims    Claim[]
+  policies  InsurancePolicy[]
+  settlements Settlement[]
+  riskAssessments RiskAssessment[]
   activePlanId String?
   activePlan Plan? @relation("ActivePlan", fields: [activePlanId], references: [id])
   @@index([status])
@@ -1084,5 +1093,79 @@ model ForwardDocument {
   status     String   @default("draft") // draft | issued | cleared
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  @@index([shipmentId])
+}
+
+// ============================================================
+// Phase 6 — Finance & risk
+// ============================================================
+
+/// A claim filed against a shipment (loss/damage/delay). Decide = approve or reject.
+model Claim {
+  id         String   @id @default(cuid())
+  shipmentId String
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  claimantId String?
+  claimant   Organization? @relation("Claimant", fields: [claimantId], references: [id])
+  handlerId  String?
+  handler    Organization? @relation("Handler", fields: [handlerId], references: [id])
+  reason     String   // loss | damage | delay | other
+  amount     Float?
+  currency   String   @default("INR")
+  status     String   @default("filed") // filed | assessed | approved | rejected
+  decision   String?
+  decidedBy  String?
+  decidedAt  DateTime?
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@index([shipmentId])
+}
+
+/// An insurance policy covering a shipment, underwritten by a partner insurer.
+model InsurancePolicy {
+  id         String   @id @default(cuid())
+  shipmentId String
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  insurerId  String?
+  insurer    Organization? @relation(fields: [insurerId], references: [id])
+  policyRef  String
+  premium    Float?
+  coverage   Float?
+  currency   String   @default("INR")
+  status     String   @default("active") // active | expired | claimed
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@index([shipmentId])
+}
+
+/// A settlement between two parties on a shipment (freight / advance / balance).
+model Settlement {
+  id         String   @id @default(cuid())
+  shipmentId String
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  payerId    String?
+  payer      Organization? @relation("SettPayer", fields: [payerId], references: [id])
+  payeeId    String?
+  payee      Organization? @relation("SettPayee", fields: [payeeId], references: [id])
+  type       String   // freight | advance | balance | commission
+  amount     Float?
+  currency   String   @default("INR")
+  status     String   @default("due") // due | cleared
+  settledAt  DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@index([shipmentId])
+}
+
+/// A risk assessment of a shipment (score 0..1 + factors).
+model RiskAssessment {
+  id          String   @id @default(cuid())
+  shipmentId  String
+  shipment    Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  score       Float
+  factors     Json
+  assessedBy  String?
+  createdAt   DateTime @default(now())
   @@index([shipmentId])
 }
