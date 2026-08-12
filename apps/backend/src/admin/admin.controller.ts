@@ -192,8 +192,8 @@ export class AdminController {
   }
 
   @Post('organizations/:id/verify')
-  verifyOrganization(@Param('id') id: string, @Body() body: { verified?: boolean }, @CurrentUser() actor: User) {
-    return this.admin.verifyOrganization(id, body.verified ?? true, actor)
+  verifyOrganization(@Param('id') id: string, @Body() body: { verified?: boolean; capability?: string }, @CurrentUser() actor: User) {
+    return this.admin.verifyOrganization(id, body.verified ?? true, actor, body.capability)
   }
 
   @Patch('shipments/:id/status')

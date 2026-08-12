@@ -676,12 +676,28 @@ export class AdminService {
 
   // ---------- Enablement admin actions ----------
 
-  /** Verify an organization (trust signal for onboarding). */
-  async verifyOrganization(orgId: string, verified: boolean, actor: User) {
+  /** Verify an organization (trust signal for onboarding), optionally per-kind. */
+  async verifyOrganization(orgId: string, verified: boolean, actor: User, capability?: string) {
     const org = await this.prisma.organization.findUnique({ where: { id: orgId } })
     if (!org) throw new NotFoundException('Organization not found')
-    const updated = await this.prisma.organization.update({ where: { id: orgId }, data: { verified } })
-    await this.audit.log({ actorId: actor.id, action: `org_${verified ? 'verify' : 'unverify'}`, resource: orgId })
+    const current: string[] = (org.verifiedCapabilities as string[] | null) ?? []
+    let verifiedCapabilities = current
+    if (capability) {
+      verifiedCapabilities = verified ? [...new Set([...current, capability])] : current.filter((c) => c !== capability)
+    }
+    const updated = await this.prisma.organization.update({
+      where: { id: orgId },
+      data: {
+        verified: verified || verifiedCapabilities.length > 0,
+        verifiedCapabilities: verifiedCapabilities as never,
+      },
+    })
+    await this.audit.log({
+      actorId: actor.id,
+      action: `org_${verified ? 'verify' : 'unverify'}${capability ? `:${capability}` : ''}`,
+      resource: orgId,
+      after: { verifiedCapabilities },
+    })
     return { organization: updated }
   }
 

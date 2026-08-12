@@ -61,12 +61,28 @@ export function StorageScreen({ onBack }: Props) {
     ])
   }
 
+  const postTransportNeed = () => {
+    Alert.prompt('Post transport need', 'Origin (city)', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Next', onPress: (origin?: string) => {
+        Alert.prompt('Destination (city)', 'Destination for the transport need', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Post', onPress: (dest?: string) => {
+            api.post('/market/requests', { kind: 'transport', originRef: origin?.trim(), destinationRef: dest?.trim() })
+              .then(() => Alert.alert('Posted', 'Transport demand published to the marketplace'))
+              .catch((e) => Alert.alert('Error', e.message))
+          } },
+        ])
+      } },
+    ])
+  }
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
         <Text style={[styles.title, { color: theme.foreground }]}>Warehouse & Storage</Text>
-        <View style={{ width: 20 }} />
+        <Pressable onPress={postTransportNeed} hitSlop={8}><Text style={{ color: '#F97316', fontSize: 14, fontWeight: '800' }}>+ Haul</Text></Pressable>
       </View>
 
       <FlatList

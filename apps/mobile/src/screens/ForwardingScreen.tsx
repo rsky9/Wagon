@@ -73,13 +73,42 @@ export function ForwardingScreen({ onBack, onOpenShipments }: Props) {
   }
 
   const bookConsolidation = (id: string) => {
-    Alert.prompt('Book consolidation', 'Carrier org id', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Book', onPress: (cid?: string) => {
-        api.post(`/forwarding/consolidations/${id}/book`, { carrierId: cid?.trim() })
-          .then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
-      } },
-    ])
+    // Discover live carrier services on the market and let the forwarder pick one.
+    api.get<{ services: Array<{ id: string; carrierOrg: { name: string } | null; vessel?: string | null; flight?: string | null; originRef?: string | null; destinationRef?: string | null; rate?: number | null; currency: string; availableSlots: number }> }>('/market/carrier-services')
+      .then((res) => {
+        if (res.services.length === 0) {
+          Alert.prompt('Book consolidation', 'Carrier org id', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Book', onPress: (cid?: string) => {
+              api.post(`/forwarding/consolidations/${id}/book`, { carrierId: cid?.trim() })
+                .then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
+            } },
+          ])
+          return
+        }
+        const labels = res.services.map((svc, i) => `${i + 1}. ${svc.carrierOrg?.name ?? 'Carrier'} · ${svc.vessel ?? svc.flight ?? 'service'} · ${svc.originRef ?? '—'}→${svc.destinationRef ?? '—'} · ${svc.rate != null ? `${svc.currency} ${svc.rate}` : '—'} (${svc.availableSlots} slots)`)
+        Alert.alert('Pick a carrier service', labels.join('\n'), [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Use carrier id', onPress: () => {
+            Alert.prompt('Book consolidation', 'Carrier org id', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Book', onPress: (cid?: string) => {
+                api.post(`/forwarding/consolidations/${id}/book`, { carrierId: cid?.trim() })
+                  .then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
+              } },
+            ])
+          } },
+          ...res.services.map((svc, i) => ({
+            text: `Book #${i + 1}`,
+            onPress: () => {
+              api.post(`/market/carrier-services/${svc.id}/book`)
+                .then(() => { Alert.alert('Booked', 'Carrier space booked'); fetch() })
+                .catch((e) => Alert.alert('Error', e.message))
+            },
+          })),
+        ])
+      })
+      .catch(() => Alert.alert('Error', 'Could not load carrier services'))
   }
 
   const renderOrderCard = (o: ForwardOrder) => (

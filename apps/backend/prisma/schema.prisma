@@ -760,6 +760,7 @@ model Organization {
   gst       String?
   countryCode String @default("IN")
   verified  Boolean  @default(false)
+  verifiedCapabilities Json? // per-kind trust, e.g. ["transporter","forwarder","warehouse","carrier"]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

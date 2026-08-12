@@ -98,6 +98,16 @@ export class MarketController {
     return this.market.orgAverageRating(orgId, axis)
   }
 
+  @Get('trust/:orgId')
+  orgTrust(@Param('orgId') orgId: string) {
+    return this.market.orgTrust(orgId)
+  }
+
+  @Get('partners')
+  browsePartners() {
+    return this.market.browsePartners()
+  }
+
   // Carrier schedules
   @Post('carrier-services')
   createCarrierService(@Body() body: Record<string, unknown>, @CurrentUser() user: User) {

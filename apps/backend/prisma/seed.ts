@@ -159,6 +159,22 @@ async function main() {
     })
   }
 
+  // Marketplace reference lanes (cold-start: the network needs lanes to match on).
+  const SEED_LANES = [
+    { originRef: 'mumbai', destinationRef: 'pune', distanceKm: 150 },
+    { originRef: 'delhi', destinationRef: 'jaipur', distanceKm: 280 },
+    { originRef: 'mumbai', destinationRef: 'mundra', distanceKm: 1100 },
+    { originRef: 'mundra', destinationRef: 'singapore', distanceKm: 4200, mode: 'ocean' },
+    { originRef: 'mumbai', destinationRef: 'dubai', distanceKm: 2100, mode: 'ocean' },
+  ]
+  for (const l of SEED_LANES) {
+    await prisma.lane.upsert({
+      where: { originRef_destinationRef_mode: { originRef: l.originRef, destinationRef: l.destinationRef, mode: l.mode ?? 'road' } },
+      update: {},
+      create: { originRef: l.originRef, destinationRef: l.destinationRef, distanceKm: l.distanceKm, mode: l.mode ?? 'road' },
+    })
+  }
+
   console.log('Seeding complete.')
   console.log(`  admin:        ${admin.mobile}`)
   console.log(`  supplier:     ${supplier.mobile}`)

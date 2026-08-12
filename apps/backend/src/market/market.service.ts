@@ -139,7 +139,7 @@ export class MarketService {
     if (query?.destination) where.destinationRef = { contains: query.destination.toLowerCase() }
     const listings = await this.prisma.marketListing.findMany({
       where: where as never,
-      include: { providerOrg: { select: { id: true, name: true, verified: true } }, lane: true },
+      include: { providerOrg: { select: { id: true, name: true, verified: true, verifiedCapabilities: true } }, lane: true },
       orderBy: { createdAt: 'desc' },
       take: 100,
     })
@@ -153,7 +153,7 @@ export class MarketService {
   async listingDetail(id: string) {
     const listing = await this.prisma.marketListing.findUnique({
       where: { id },
-      include: { providerOrg: { select: { id: true, name: true, verified: true } }, lane: true },
+      include: { providerOrg: { select: { id: true, name: true, verified: true, verifiedCapabilities: true } }, lane: true },
     })
     if (!listing) throw new NotFoundException('Listing not found')
     return { listing: { ...listing, orgRating: await this.orgAverageRating(listing.providerOrgId) } }
@@ -571,7 +571,7 @@ export class MarketService {
     if (!orgIds.includes(request.requesterOrgId)) throw new ForbiddenException('Not your request')
     const quotes = await this.prisma.marketQuote.findMany({
       where: { requestId },
-      include: { providerOrg: { select: { id: true, name: true, verified: true } } },
+      include: { providerOrg: { select: { id: true, name: true, verified: true, verifiedCapabilities: true } } },
       orderBy: { amount: 'asc' },
     })
     return { quotes }
@@ -739,7 +739,7 @@ export class MarketService {
     return { services }
   }
 
-  /** Book slots on a carrier service: decrement available slots. */
+  /** Book slots on a carrier service: decrement slots + create a real CarrierBooking. */
   async bookCarrierService(serviceId: string, user: User) {
     const service = await this.prisma.carrierService.findUnique({ where: { id: serviceId } })
     if (!service) throw new NotFoundException('Service not found')
@@ -750,6 +750,33 @@ export class MarketService {
       const next = await tx.carrierService.update({
         where: { id: serviceId },
         data: { availableSlots: { decrement: 1 }, ...(service.availableSlots - 1 <= 0 ? { status: 'sold_out' } : {}) },
+      })
+      // Operational bridge: create a canonical Shipment + CarrierBooking so the
+      // booking flows into the forwarding/execution model, not just the market.
+      const shipment = await tx.shipment.create({
+        data: {
+          ref: `SVC-${serviceId.slice(-6)}-${Date.now().toString(36).toUpperCase()}`,
+          ownerOrgId: org.id,
+          commodity: `${service.mode} cargo`,
+          status: 'booked',
+          mode: service.mode,
+          originId: service.carrierOrgId,
+          destinationId: service.carrierOrgId,
+        },
+      })
+      await tx.carrierBooking.create({
+        data: {
+          shipmentId: shipment.id,
+          carrierId: service.carrierOrgId,
+          bookingRef: `SVC-${serviceId.slice(-6)}`,
+          vessel: service.vessel,
+          voyage: service.voyage,
+          flight: service.flight,
+          equipment: service.equipment,
+          rate: service.rate,
+          currency: service.currency,
+          status: 'confirmed',
+        },
       })
       return next
     })
@@ -786,11 +813,57 @@ export class MarketService {
     return null
   }
 
+  /** Partner directory: publicly browse active integration connectors (Phase 5). */
+  async browsePartners() {
+    const partners = await this.prisma.integrationConnector.findMany({
+      where: { status: 'active' },
+      include: { org: { select: { id: true, name: true, verified: true, verifiedCapabilities: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    })
+    return { partners }
+  }
+
   /** Resolve the first org of a user, if any. */
   private async orgOfUser(userId: string) {
     if (!userId) return null
     const member = await this.prisma.organizationMember.findFirst({ where: { userId }, include: { organization: true } })
     return member?.organizationId ?? null
+  }
+
+  /** Reliability summary for an org, derived from real activity. */
+  async orgTrust(orgId: string) {
+    const [rating, tripsAsTransporter, tripsAsSupplier, claims, shipments, warehouseOps] = await Promise.all([
+      this.orgAverageRating(orgId),
+      this.prisma.trip.count({ where: { transporter: { user: { memberships: { some: { organizationId: orgId } } } } } }),
+      this.prisma.trip.count({ where: { load: { supplier: { user: { memberships: { some: { organizationId: orgId } } } } } } }),
+      this.prisma.claim.count({ where: { claimantId: orgId } }),
+      this.prisma.shipment.count({ where: { ownerOrgId: orgId } }),
+      this.prisma.warehouseOperation.count({ where: { operatorId: orgId } }),
+    ])
+    const trips = tripsAsTransporter + tripsAsSupplier
+    const delivered = await this.prisma.trip.count({
+      where: {
+        AND: [
+          { status: 'delivered' },
+          { OR: [
+            { transporter: { user: { memberships: { some: { organizationId: orgId } } } } },
+            { load: { supplier: { user: { memberships: { some: { organizationId: orgId } } } } } },
+          ] },
+        ],
+      },
+    })
+    return {
+      orgId,
+      rating: rating.avg,
+      ratingCount: rating.count,
+      trips,
+      completionRate: trips > 0 ? Math.round((delivered / trips) * 100) : null,
+      claims,
+      claimRate: trips > 0 ? claims / trips : null,
+      shipments,
+      warehouseOps,
+    }
   }
 
   // ---------- Helpers ----------
