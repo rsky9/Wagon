@@ -48,6 +48,7 @@ export function StatCard({ label, value, icon, tone = "orange", sub }: { label: 
     emerald: "from-emerald-500 to-teal-500",
     sky: "from-sky-500 to-blue-500",
     violet: "from-violet-500 to-purple-500",
+    amber: "from-amber-500 to-yellow-500",
     red: "from-rose-500 to-red-500",
   };
   return (

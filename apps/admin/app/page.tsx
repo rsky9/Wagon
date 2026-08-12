@@ -49,6 +49,7 @@ const STATUS_COLORS: Record<string, string> = {
 export default function Home() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [enablement, setEnablement] = useState<EnablementData | null>(null);
+  const [market, setMarket] = useState<{ listings: number; liveListings: number; requests: number; openRequests: number; quotes: number; ratings: number; carrierServices: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -59,6 +60,10 @@ export default function Home() {
     api
       .get<EnablementData>("/admin/enablement-dashboard")
       .then(setEnablement)
+      .catch(() => {});
+    api
+      .get<{ listings: number; liveListings: number; requests: number; openRequests: number; quotes: number; ratings: number; carrierServices: number }>("/admin/market/stats")
+      .then(setMarket)
       .catch(() => {});
   }, []);
 
@@ -110,6 +115,19 @@ export default function Home() {
                 </div>
               </div>
             </>
+          )}
+
+          {market && (
+            <div className="mt-6">
+              <h2 className="mb-3 text-sm font-semibold text-slate-500 dark:text-slate-400">Marketplace</h2>
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+                <StatCard label="Listings" value={String(market.listings)} icon="🏪" tone="orange" sub={`${market.liveListings} live`} />
+                <StatCard label="Requests" value={String(market.requests)} icon="📢" tone="emerald" sub={`${market.openRequests} open`} />
+                <StatCard label="Quotes" value={String(market.quotes)} icon="🧾" tone="sky" />
+                <StatCard label="Ratings" value={String(market.ratings)} icon="⭐" tone="amber" />
+                <StatCard label="Carrier services" value={String(market.carrierServices)} icon="🚢" tone="violet" />
+              </div>
+            </div>
           )}
 
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">

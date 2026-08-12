@@ -96,6 +96,11 @@ export class MarketController {
     return this.market.submitQuote(id, body as never, user)
   }
 
+  @Post('requests/:id/close')
+  closeRequest(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.market.closeRequest(id, user)
+  }
+
   @Post('quotes/:id/accept')
   acceptQuote(@Param('id') id: string, @CurrentUser() user: User) {
     return this.market.acceptQuote(id, user)

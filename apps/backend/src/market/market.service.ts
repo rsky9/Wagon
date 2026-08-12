@@ -130,6 +130,9 @@ export class MarketService {
     origin?: string
     destination?: string
     status?: string
+    lat?: number
+    lng?: number
+    radiusKm?: number
   }) {
     // Expiry sweep: listings past their availableTo window go off-market.
     await this.prisma.marketListing.updateMany({
@@ -147,9 +150,18 @@ export class MarketService {
       orderBy: { createdAt: 'desc' },
       take: 100,
     })
+    // Radius filter: keep listings whose lane origin is within radiusKm of lat/lng.
+    let filtered = listings
+    if (query?.lat != null && query.lng != null && query.radiusKm != null) {
+      filtered = listings.filter((l) => {
+        if (!l.lane?.originLat || !l.lane.originLng) return false
+        const d = haversineKm(query.lat!, query.lng!, l.lane.originLat, l.lane.originLng)
+        return d <= query.radiusKm!
+      })
+    }
     // Attach org reputation for trust signals.
     const withRating = await Promise.all(
-      listings.map(async (l) => ({
+      filtered.map(async (l) => ({
         ...l,
         orgRating: await this.orgAverageRating(l.providerOrgId),
         completionRate: (await this.orgTrust(l.providerOrgId)).completionRate,
@@ -490,6 +502,12 @@ export class MarketService {
 
   /** Browse open demand — PUBLIC read (providers discover what's needed). */
   async browseRequests(query?: { kind?: string; city?: string; status?: string }) {
+    // Request expiry: open/quoted requests older than 30 days with no booking auto-close.
+    const expiryCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    await this.prisma.marketRequest.updateMany({
+      where: { status: { in: ['open', 'quoted'] }, createdAt: { lte: expiryCutoff } },
+      data: { status: 'closed' },
+    })
     const where: Record<string, unknown> = { status: query?.status ?? 'open' }
     if (query?.kind) where.kind = query.kind
     if (query?.city) where.city = { contains: query.city.toLowerCase() }
@@ -508,6 +526,17 @@ export class MarketService {
       }),
     )
     return { requests: withTrust }
+  }
+
+  /** The requester manually closes their own open request. */
+  async closeRequest(requestId: string, user: User) {
+    const request = await this.prisma.marketRequest.findUnique({ where: { id: requestId } })
+    if (!request) throw new NotFoundException('Request not found')
+    const orgIds = await this.orgAccess.memberOrgIds(user)
+    if (!orgIds.includes(request.requesterOrgId)) throw new ForbiddenException('Not your request')
+    if (request.status === 'booked' || request.status === 'closed') throw new BadRequestException(`Request is ${request.status}`)
+    const updated = await this.prisma.marketRequest.update({ where: { id: requestId }, data: { status: 'closed' } })
+    return { request: updated }
   }
 
   /** My posted requests. */
@@ -632,9 +661,10 @@ export class MarketService {
       // execute/settle layers can run (not just a paper booking).
       await this.materializeBooking(tx as unknown as Record<string, never>, quote)
       // Money flow: the accepted quote becomes a settlement (requester pays provider).
+      let settlementId: string | null = null
       if (quote.amount != null) {
         const shipment = await tx.shipment.findFirst({ where: { ownerOrgId: quote.request.requesterOrgId } })
-        await tx.settlement.create({
+        const settlement = await tx.settlement.create({
           data: {
             shipmentId: shipment?.id ?? quote.request.id,
             payerId: quote.request.requesterOrgId,
@@ -645,8 +675,9 @@ export class MarketService {
             status: 'due',
           },
         })
+        settlementId = settlement.id
       }
-      return accepted
+      return { accepted, settlementId }
     })
     // Notify the provider's org members that their quote was accepted.
     const providerMembers = await this.prisma.organizationMember.findMany({ where: { organizationId: quote.providerOrgId } })
@@ -660,7 +691,7 @@ export class MarketService {
         category: 'market',
       }).catch(() => {})
     }
-    return { quote: updated }
+    return { quote: updated.accepted, settlementId: updated.settlementId }
   }
 
   /** A provider withdraws their own submitted quote. */
@@ -1153,4 +1184,16 @@ export class MarketService {
       },
     }
   }
+}
+
+/** Great-circle distance in km (haversine). */
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const R = 6371
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const dLat = toRad(lat2 - lat1)
+  const dLng = toRad(lng2 - lng1)
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2)
+  return 2 * R * Math.asin(Math.sqrt(a))
 }

@@ -164,7 +164,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
 
   const acceptQuote = (q: MarketQuote) => {    setBusy(true)
     api.post(`/market/quotes/${q.id}/accept`)
-      .then(() => { Alert.alert('Accepted', 'Request booked'); fetch() })
+      .then(() => { Alert.alert('Accepted', 'Request booked — settle the payment in Finance to release'); fetch() })
       .catch((e) => Alert.alert('Error', e.message))
       .finally(() => setBusy(false))
   }
