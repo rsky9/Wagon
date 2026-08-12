@@ -79,7 +79,12 @@ export class StorageService {
   }
 
   async facilities(user: User) {
-    const facilities = await this.prisma.facility.findMany({ orderBy: { createdAt: 'desc' }, take: 100 })
+    const orgIds = await this.orgAccess.memberOrgIds(user)
+    const facilities = await this.prisma.facility.findMany({
+      where: { OR: [{ operatorId: { in: orgIds } }, { operatorId: null }] },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    })
     return { facilities }
   }
 
@@ -89,6 +94,9 @@ export class StorageService {
       include: { operator: true, appointments: { orderBy: { updatedAt: 'desc' }, take: 20 } },
     })
     if (!facility) throw new NotFoundException('Facility not found')
+    if (facility.operatorId && !(await this.orgAccess.isMember(user, facility.operatorId))) {
+      throw new ForbiddenException('Not the operator of this facility')
+    }
     return { facility }
   }
 

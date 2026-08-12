@@ -20,6 +20,16 @@ const ORDER_TRANSITIONS: Record<string, string[]> = {
   closed: [],
   cancelled: [],
 }
+
+/** Forward order status -> canonical Shipment status propagation. */
+const ORDER_TO_SHIPMENT: Record<string, string> = {
+  consolidated: 'planned',
+  booked: 'booked',
+  in_transit: 'in_transit',
+  delivered: 'delivered',
+  closed: 'closed',
+  cancelled: 'cancelled',
+}
 const DOC_TRANSITIONS: Record<string, string[]> = {
   draft: ['issued'],
   issued: ['cleared', 'draft'],
@@ -68,6 +78,8 @@ export class ForwardingService {
     const forwarder = await this.requireForwarder(user)
     const shipment = await this.orgAccess.assertShipmentAccess(user, input.shipmentId)
     this.validateAmounts(input.buyAmount, input.sellAmount)
+    const existing = await this.prisma.forwardOrder.findUnique({ where: { shipmentId: input.shipmentId } })
+    if (existing) throw new BadRequestException('A forward order already exists for this shipment')
     const order = await this.prisma.$transaction(async (tx) => {
       const created = await tx.forwardOrder.create({
         data: {
@@ -115,6 +127,14 @@ export class ForwardingService {
     if (!allowed?.includes(status)) throw new BadRequestException(`Cannot go ${order.status} -> ${status}`)
     const updated = await this.prisma.$transaction(async (tx) => {
       const changed = await tx.forwardOrder.update({ where: { id: orderId }, data: { status } })
+      // Propagate the order lifecycle to the canonical shipment so the two don't diverge.
+      const shipmentStatus = ORDER_TO_SHIPMENT[status]
+      if (shipmentStatus) {
+        await tx.shipment.updateMany({
+          where: { id: order.shipmentId, status: { not: shipmentStatus } } as never,
+          data: { status: shipmentStatus as never },
+        })
+      }
       await this.outbox.emit(tx as never, {
         eventType: 'SHIPMENT',
         eventCode: `ORDER_${status.toUpperCase().replace('-', '_')}`,
@@ -123,7 +143,7 @@ export class ForwardingService {
         orgId: order.forwarderId,
         shipmentId: order.shipmentId,
         actorId: user.id,
-        payload: { orderRef: order.ref, from: order.status, to: status },
+        payload: { orderRef: order.ref, from: order.status, to: status, shipmentStatus },
       })
       return changed
     })
@@ -208,6 +228,22 @@ export class ForwardingService {
     if (booking.status !== 'requested') throw new BadRequestException('Only requested bookings can be confirmed')
     const updated = await this.prisma.$transaction(async (tx) => {
       const confirmed = await tx.carrierBooking.update({ where: { id: bookingId }, data: { status: 'confirmed' } })
+      // Propagate the confirmed booking into the operational model:
+      // shipment -> booked, leg -> booked + bookedAt, forward order -> booked.
+      await tx.shipment.updateMany({
+        where: { id: booking.shipmentId, status: { not: 'booked' } },
+        data: { status: 'booked' as never },
+      })
+      if (booking.legId) {
+        await tx.shipmentLeg.updateMany({
+          where: { id: booking.legId, status: { not: 'booked' } },
+          data: { status: 'booked', bookedAt: new Date(), providerId: booking.carrierId },
+        })
+      }
+      await tx.forwardOrder.updateMany({
+        where: { shipmentId: booking.shipmentId, status: { in: ['intake', 'consolidated'] } },
+        data: { status: 'booked' },
+      })
       await this.outbox.emit(tx as never, {
         eventType: 'TRANSPORT',
         eventCode: 'BOOKING_CONFIRMED',
@@ -216,7 +252,7 @@ export class ForwardingService {
         orgId: (await this.orgAccess.primaryOrg(user)).id,
         shipmentId: booking.shipmentId,
         actorId: user.id,
-        payload: { bookingRef: booking.bookingRef },
+        payload: { bookingRef: booking.bookingRef, carrierId: booking.carrierId },
       })
       return confirmed
     })
@@ -229,7 +265,20 @@ export class ForwardingService {
     await this.orgAccess.assertShipmentAccess(user, booking.shipmentId)
     if (booking.status === 'confirmed') throw new BadRequestException('Confirmed bookings cannot be cancelled (contact carrier)')
     if (booking.status === 'cancelled') throw new BadRequestException('Booking already cancelled')
-    const updated = await this.prisma.carrierBooking.update({ where: { id: bookingId }, data: { status: 'cancelled' } })
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const cancelled = await tx.carrierBooking.update({ where: { id: bookingId }, data: { status: 'cancelled' } })
+      await this.outbox.emit(tx as never, {
+        eventType: 'TRANSPORT',
+        eventCode: 'BOOKING_CANCELLED',
+        entityType: 'leg',
+        entityId: booking.legId ?? booking.id,
+        orgId: (await this.orgAccess.primaryOrg(user)).id,
+        shipmentId: booking.shipmentId,
+        actorId: user.id,
+        payload: { bookingRef: booking.bookingRef },
+      })
+      return cancelled
+    })
     return { booking: updated }
   }
 
@@ -341,6 +390,10 @@ export class ForwardingService {
             where: { id: orderId },
             data: { consolidationId: created.id, status: 'consolidated' },
           })
+          // Anchor the consolidation to the first order's shipment (LCL unit).
+          if (!created.shipmentId) {
+            await tx.consolidation.update({ where: { id: created.id }, data: { shipmentId: order.shipmentId } })
+          }
         }
       }
       await this.outbox.emit(tx as never, {
@@ -421,6 +474,63 @@ export class ForwardingService {
         orgId: forwarder.id,
         actorId: user.id,
         payload: { ref: consolidation.ref, orderCount: consolidation.orders.length },
+      })
+      return changed
+    })
+    return { consolidation: updated }
+  }
+
+  /**
+   * Book a consolidation with a carrier: sets bookedCarrierId, marks the
+   * consolidation + its orders booked, propagates the shipment to 'booked',
+   * and records a CarrierBooking.
+   */
+  async markConsolidationBooked(input: { consolidationId: string; carrierId: string; bookingRef?: string; rate?: number; equipment?: string }, user: User) {
+    const forwarder = await this.requireForwarder(user)
+    const consolidation = await this.prisma.consolidation.findUnique({
+      where: { id: input.consolidationId },
+      include: { orders: { include: { shipment: true } } },
+    })
+    if (!consolidation) throw new NotFoundException('Consolidation not found')
+    if (consolidation.forwarderId !== forwarder.id) throw new ForbiddenException('Not your consolidation')
+    if (consolidation.status !== 'ready' && consolidation.status !== 'grouping') {
+      throw new BadRequestException('Only grouping/ready consolidations can be booked')
+    }
+    if (consolidation.orders.length === 0) throw new BadRequestException('Consolidation has no orders')
+    const carrier = await this.prisma.organization.findUnique({ where: { id: input.carrierId } })
+    if (!carrier) throw new NotFoundException('Carrier not found')
+    if (carrier.kind !== 'carrier') throw new BadRequestException('Organization is not a carrier')
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const changed = await tx.consolidation.update({
+        where: { id: input.consolidationId },
+        data: { status: 'booked', bookedCarrierId: input.carrierId },
+      })
+      await tx.carrierBooking.create({
+        data: {
+          shipmentId: consolidation.orders[0]!.shipmentId,
+          carrierId: input.carrierId,
+          bookingRef: input.bookingRef,
+          equipment: input.equipment ?? consolidation.equipment,
+          rate: input.rate,
+          status: 'confirmed',
+        },
+      })
+      for (const order of consolidation.orders) {
+        await tx.forwardOrder.update({ where: { id: order.id }, data: { status: 'booked' } })
+        await tx.shipment.updateMany({
+          where: { id: order.shipmentId, status: { not: 'booked' } },
+          data: { status: 'booked' as never },
+        })
+      }
+      await this.outbox.emit(tx as never, {
+        eventType: 'SHIPMENT',
+        eventCode: 'CONSOLIDATION_BOOKED',
+        entityType: 'shipment',
+        entityId: input.consolidationId,
+        orgId: forwarder.id,
+        actorId: user.id,
+        payload: { ref: consolidation.ref, carrierId: input.carrierId, orderCount: consolidation.orders.length },
       })
       return changed
     })

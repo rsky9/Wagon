@@ -33,6 +33,11 @@ export class PlanningController {
     return this.planning.rePlan(id, body.failedLegIndex, body.replacement as never, user)
   }
 
+  @Get('plans')
+  listAll(@CurrentUser() user: User) {
+    return this.planning.listAll(user)
+  }
+
   @Get('plans/:id')
   detail(@Param('id') id: string, @CurrentUser() user: User) {
     return this.planning.detail(id, user)

@@ -137,13 +137,17 @@ export class AiService {
 
   /**
    * Match agent: rank verified transporters for a load by rating, trips and
-   * capacity. Guardrail: only verified/active transporters are surfaced.
+   * capacity. Guardrail: only verified/active transporters are surfaced, and
+   * only the load's supplier (or their org members) may run it.
    */
   async matchTransporters(loadId: string, user: User) {
     const load = await this.prisma.load.findUnique({ where: { id: loadId } })
     if (!load) throw new NotFoundException('Load not found')
     const supplier = await this.prisma.supplier.findUnique({ where: { id: load.supplierId }, include: { user: true } })
     const isOwner = supplier?.userId === user.id
+    if (!isOwner && !(await this.orgAccess.isMember(user, supplier?.user ? (await this.orgOfSupplier(supplier.userId)) : '__none__'))) {
+      throw new ForbiddenException('Only the load supplier or their organization can run the match agent')
+    }
 
     const transporters = await this.prisma.user.findMany({
       where: { role: 'transporter', transporterVerified: true, isActive: true, NOT: { id: isOwner ? user.id : '__none__' } },
@@ -176,11 +180,49 @@ export class AiService {
     const rec = await this.prisma.aiRecommendation.findUnique({ where: { id } })
     if (!rec) throw new NotFoundException('Recommendation not found')
     if (!['proposed', 'accepted', 'dismissed'].includes(rec.status)) throw new BadRequestException('Recommendation is final')
+    // Only the creator (or an org member of the creator) may act on it.
+    if (rec.createdBy && rec.createdBy !== user.id) {
+      const member = await this.prisma.organizationMember.findFirst({ where: { userId: rec.createdBy } })
+      if (!member || !(await this.orgAccess.isMember(user, member.organizationId))) {
+        throw new ForbiddenException('Not your recommendation')
+      }
+    }
     const updated = await this.prisma.aiRecommendation.update({
       where: { id },
       data: { status, guardrails: { ...(rec.guardrails as object | null), decidedBy: user.id, decidedAt: new Date().toISOString() } as never },
     })
     return { recommendation: updated }
+  }
+
+  /**
+   * Invite a matched transporter to bid on a load (the actionable follow-up to
+   * the match agent). Creates a shortlist entry + a notification.
+   */
+  async inviteTransporter(loadId: string, transporterId: string, user: User) {
+    const load = await this.prisma.load.findUnique({ where: { id: loadId } })
+    if (!load) throw new NotFoundException('Load not found')
+    const supplier = await this.prisma.supplier.findUnique({ where: { id: load.supplierId }, include: { user: true } })
+    if (!supplier || supplier.userId !== user.id) throw new ForbiddenException('Only the load supplier can invite transporters')
+
+    const transporter = await this.prisma.user.findUnique({
+      where: { id: transporterId },
+      include: { transporter: true },
+    })
+    if (!transporter?.transporter || !transporter.transporterVerified) {
+      throw new BadRequestException('Transporter is not verified')
+    }
+
+    // Persist a shortlist (Load.shortlistedTransporters is a String[]).
+    const updated = await this.prisma.load.update({
+      where: { id: loadId },
+      data: { shortlistedTransporters: { push: transporterId } },
+    })
+    return { load: updated, invited: transporterId, note: 'Transporter can now be shortlisted on this load' }
+  }
+
+  private async orgOfSupplier(userId: string) {
+    const member = await this.prisma.organizationMember.findFirst({ where: { userId }, include: { organization: true } })
+    return member?.organizationId ?? '__none__'
   }
 
   async list(entityType: string, entityId: string, user: User, agent?: string, status?: string) {

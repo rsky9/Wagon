@@ -42,8 +42,17 @@ export class IntegrationsService {
 
   // ---------- Connectors ----------
 
+  /** Management actions (create/update/delete/rotate) require owner/admin org-role. */
+  private async assertOrgAdmin(user: User, orgId: string) {
+    const member = await this.prisma.organizationMember.findFirst({
+      where: { organizationId: orgId, userId: user.id, role: { in: ['owner', 'admin'] } },
+    })
+    if (!member) throw new ForbiddenException('Requires owner/admin role in this organization')
+  }
+
   async createConnector(input: { kind: string; name: string; baseUrl?: string; apiKeyRef?: string; config?: unknown }, user: User) {
     const org = await this.orgAccess.primaryOrg(user)
+    await this.assertOrgAdmin(user, org.id)
     if (!CONNECTOR_KINDS.includes(input.kind)) throw new BadRequestException('Invalid connector kind')
     if (!input.name?.trim()) throw new BadRequestException('Connector name required')
     const connector = await this.prisma.integrationConnector.create({
@@ -86,6 +95,7 @@ export class IntegrationsService {
     const connector = await this.prisma.integrationConnector.findUnique({ where: { id } })
     if (!connector) throw new NotFoundException('Connector not found')
     if (!(await this.orgAccess.isMember(user, connector.orgId))) throw new ForbiddenException('Not your connector')
+    await this.assertOrgAdmin(user, connector.orgId)
     const updated = await this.prisma.integrationConnector.update({ where: { id }, data: { status } })
     return { connector: updated }
   }
@@ -94,6 +104,7 @@ export class IntegrationsService {
     const connector = await this.prisma.integrationConnector.findUnique({ where: { id } })
     if (!connector) throw new NotFoundException('Connector not found')
     if (!(await this.orgAccess.isMember(user, connector.orgId))) throw new ForbiddenException('Not your connector')
+    await this.assertOrgAdmin(user, connector.orgId)
     await this.prisma.integrationConnector.delete({ where: { id } })
     return { deleted: true }
   }
@@ -104,6 +115,7 @@ export class IntegrationsService {
     this.validateWebhookUrl(input.url)
     if (!input.eventTypes?.length) throw new BadRequestException('Need at least one event type')
     const org = await this.orgAccess.primaryOrg(user)
+    await this.assertOrgAdmin(user, org.id)
     const secret = randomBytes(32).toString('hex')
     const webhook = await this.prisma.webhookSubscription.create({
       data: { orgId: org.id, name: input.name, url: input.url, secret, eventTypes: input.eventTypes as never, status: 'active' },
@@ -128,6 +140,7 @@ export class IntegrationsService {
     const webhook = await this.prisma.webhookSubscription.findUnique({ where: { id } })
     if (!webhook) throw new NotFoundException('Webhook not found')
     if (!(await this.orgAccess.isMember(user, webhook.orgId))) throw new ForbiddenException('Not your webhook')
+    await this.assertOrgAdmin(user, webhook.orgId)
     if (input.url) this.validateWebhookUrl(input.url)
     if (input.eventTypes && !input.eventTypes.length) throw new BadRequestException('Need at least one event type')
     const updated = await this.prisma.webhookSubscription.update({
@@ -145,6 +158,7 @@ export class IntegrationsService {
     const webhook = await this.prisma.webhookSubscription.findUnique({ where: { id } })
     if (!webhook) throw new NotFoundException('Webhook not found')
     if (!(await this.orgAccess.isMember(user, webhook.orgId))) throw new ForbiddenException('Not your webhook')
+    await this.assertOrgAdmin(user, webhook.orgId)
     const updated = await this.prisma.webhookSubscription.update({ where: { id }, data: { status } })
     return { webhook: this.stripSecret(updated) }
   }
@@ -153,6 +167,7 @@ export class IntegrationsService {
     const webhook = await this.prisma.webhookSubscription.findUnique({ where: { id } })
     if (!webhook) throw new NotFoundException('Webhook not found')
     if (!(await this.orgAccess.isMember(user, webhook.orgId))) throw new ForbiddenException('Not your webhook')
+    await this.assertOrgAdmin(user, webhook.orgId)
     const secret = randomBytes(32).toString('hex')
     await this.prisma.webhookSubscription.update({ where: { id }, data: { secret } })
     return { rotated: true, secret }

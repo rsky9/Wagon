@@ -93,4 +93,9 @@ export class ForwardingController {
   markConsolidationReady(@Param('id') id: string, @CurrentUser() user: User) {
     return this.forwarding.markConsolidationReady(id, user)
   }
+
+  @Post('consolidations/:id/book')
+  markConsolidationBooked(@Param('id') id: string, @Body() body: { carrierId: string; bookingRef?: string; rate?: number; equipment?: string }, @CurrentUser() user: User) {
+    return this.forwarding.markConsolidationBooked({ consolidationId: id, ...body }, user)
+  }
 }

@@ -185,4 +185,44 @@ export class AdminController {
   settlements() {
     return this.admin.settlements()
   }
+
+  @Get('enablement-dashboard')
+  enablementDashboard() {
+    return this.admin.enablementDashboard()
+  }
+
+  @Post('organizations/:id/verify')
+  verifyOrganization(@Param('id') id: string, @Body() body: { verified?: boolean }, @CurrentUser() actor: User) {
+    return this.admin.verifyOrganization(id, body.verified ?? true, actor)
+  }
+
+  @Patch('shipments/:id/status')
+  forceShipmentStatus(@Param('id') id: string, @Body() body: { status: string }, @CurrentUser() actor: User) {
+    return this.admin.forceShipmentStatus(id, body.status, actor)
+  }
+
+  @Post('claims/:id/decide')
+  decideClaim(@Param('id') id: string, @Body() body: { decision: 'approved' | 'rejected'; notes?: string }, @CurrentUser() actor: User) {
+    return this.admin.decideClaim(id, body.decision, body.notes, actor)
+  }
+
+  @Post('settlements/:id/clear')
+  clearSettlement(@Param('id') id: string, @CurrentUser() actor: User) {
+    return this.admin.clearSettlement(id, actor)
+  }
+
+  @Post('plans/:id/cancel')
+  cancelPlan(@Param('id') id: string, @CurrentUser() actor: User) {
+    return this.admin.cancelPlan(id, actor)
+  }
+
+  @Patch('webhooks/:id/status')
+  setWebhookStatus(@Param('id') id: string, @Body() body: { status: 'active' | 'paused' }, @CurrentUser() actor: User) {
+    return this.admin.setWebhookStatus(id, body.status, actor)
+  }
+
+  @Post('webhook-deliveries/:id/retry')
+  retryWebhookDelivery(@Param('id') id: string, @CurrentUser() actor: User) {
+    return this.admin.retryWebhookDelivery(id, actor)
+  }
 }

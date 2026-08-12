@@ -123,6 +123,9 @@ export class PlanningService {
     const { plan, shipment } = await this.requirePlanAccess(user, planId)
     if (plan.status !== 'proposed') throw new BadRequestException(`Only proposed plans can be selected (current: ${plan.status})`)
 
+    const planLegs = plan.legs as unknown as PlanLeg[]
+    this.validateLegs(planLegs)
+
     const tx = await this.prisma.$transaction(async (p) => {
       await p.plan.updateMany({
         where: { shipmentId: plan.shipmentId, status: 'selected' },
@@ -136,8 +139,27 @@ export class PlanningService {
       const keepStatus = shipment.status === 'draft' || shipment.status === 'planned' ? 'planned' : shipment.status
       await p.shipment.update({
         where: { id: plan.shipmentId },
-        data: { activePlanId: plan.id, status: keepStatus, mode: (plan.legs as { mode: string }[])[0]?.mode ?? 'multimodal' },
+        data: { activePlanId: plan.id, status: keepStatus, mode: planLegs[0]?.mode ?? 'multimodal' },
       })
+      // Materialize the selected plan's legs as ShipmentLeg rows so the plan
+      // becomes executable operations (modes, route, cost, ETA).
+      await p.shipmentLeg.deleteMany({ where: { shipmentId: plan.shipmentId, status: 'planned' } })
+      for (let i = 0; i < planLegs.length; i++) {
+        const leg = planLegs[i]!
+        await p.shipmentLeg.create({
+          data: {
+            shipmentId: plan.shipmentId,
+            sequence: i + 1,
+            mode: leg.mode,
+            pickupAddr: leg.origin,
+            dropAddr: leg.destination,
+            distanceKm: null,
+            equipment: leg.equipment,
+            providerId: leg.providerId,
+            status: 'planned',
+          },
+        })
+      }
       await this.outbox.emit(p as never, {
         eventType: 'SHIPMENT',
         eventCode: 'PLAN_SELECTED',
@@ -146,7 +168,7 @@ export class PlanningService {
         orgId: shipment.ownerOrgId ?? null,
         shipmentId: plan.shipmentId,
         actorId: user.id,
-        payload: { planRef: plan.ref, cost: plan.cost, etaHours: plan.etaHours },
+        payload: { planRef: plan.ref, cost: plan.cost, etaHours: plan.etaHours, legCount: planLegs.length },
       })
       return updated
     })
@@ -237,6 +259,22 @@ export class PlanningService {
       where: { shipmentId },
       orderBy: { createdAt: 'desc' },
       take: 50,
+    })
+    return { plans }
+  }
+
+  /** List all plans across the caller's orgs' shipments (mobile hub). */
+  async listAll(user: User) {
+    const orgIds = await this.orgAccess.memberOrgIds(user)
+    const shipments = await this.prisma.shipment.findMany({
+      where: { ownerOrgId: { in: orgIds } },
+      select: { id: true },
+    })
+    const plans = await this.prisma.plan.findMany({
+      where: { shipmentId: { in: shipments.map((s) => s.id) } },
+      include: { shipment: { select: { id: true, ref: true, commodity: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
     })
     return { plans }
   }

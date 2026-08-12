@@ -114,6 +114,8 @@ export class FoundationService {
     if (!target) throw new NotFoundException('User not found')
     const newRole = role ?? 'member'
     if (!VALID_ROLES.includes(newRole)) throw new BadRequestException('Invalid member role')
+    // Only the owner can create another owner; admins can add admin/operator/member.
+    if (newRole === 'owner' && member.role !== 'owner') throw new ForbiddenException('Only the owner can grant owner role')
     const created = await this.prisma.organizationMember.upsert({
       where: { organizationId_userId: { organizationId, userId: target.id } },
       update: { role: newRole },
@@ -129,11 +131,13 @@ export class FoundationService {
     if (!member || !['owner', 'admin'].includes(member.role)) {
       throw new ForbiddenException('Only owners/admins can remove members')
     }
-    if (member.role === 'owner' && member.userId === userId) throw new BadRequestException('Owner cannot remove self')
     const target = await this.prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId, userId } },
     })
     if (!target) throw new NotFoundException('Member not found')
+    // An admin cannot remove the owner; only the owner can.
+    if (target.role === 'owner' && member.role !== 'owner') throw new ForbiddenException('Only the owner can remove the owner')
+    if (member.role === 'owner' && member.userId === userId) throw new BadRequestException('Owner cannot remove self')
     await this.prisma.organizationMember.delete({ where: { organizationId_userId: { organizationId, userId } } })
     return { removed: true }
   }
@@ -252,8 +256,16 @@ export class FoundationService {
   }, user: User) {
     const shipment = await this.orgAccess.assertShipmentAccess(user, shipmentId)
     this.validateMode(input.mode)
-    const seq = input.sequence ?? (await this.prisma.shipmentLeg.count({ where: { shipmentId } })) + 1
     const leg = await this.prisma.$transaction(async (tx) => {
+      // Compute the next sequence inside the transaction to avoid the
+      // @@unique([shipmentId, sequence]) race under concurrent adds.
+      const seq = input.sequence ?? (await tx.shipmentLeg.count({ where: { shipmentId } })) + 1
+      if (input.sequence != null) {
+        const clash = await tx.shipmentLeg.findUnique({
+          where: { shipmentId_sequence: { shipmentId, sequence: input.sequence } },
+        })
+        if (clash) throw new BadRequestException(`Sequence ${input.sequence} already exists on this shipment`)
+      }
       const created = await tx.shipmentLeg.create({
         data: {
           shipmentId,

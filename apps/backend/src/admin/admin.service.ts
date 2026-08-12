@@ -671,4 +671,132 @@ export class AdminService {
     })
     return { settlements }
   }
+
+  // ---------- Enablement admin actions ----------
+
+  /** Verify an organization (trust signal for onboarding). */
+  async verifyOrganization(orgId: string, verified: boolean, actor: User) {
+    const org = await this.prisma.organization.findUnique({ where: { id: orgId } })
+    if (!org) throw new NotFoundException('Organization not found')
+    const updated = await this.prisma.organization.update({ where: { id: orgId }, data: { verified } })
+    await this.audit.log({ actorId: actor.id, action: `org_${verified ? 'verify' : 'unverify'}`, resource: orgId })
+    return { organization: updated }
+  }
+
+  /** Force-transition a shipment's status (admin override of the whitelist). */
+  async forceShipmentStatus(shipmentId: string, status: string, actor: User) {
+    const shipment = await this.prisma.shipment.findUnique({ where: { id: shipmentId } })
+    if (!shipment) throw new NotFoundException('Shipment not found')
+    const updated = await this.prisma.shipment.update({ where: { id: shipmentId }, data: { status: status as never } })
+    await this.audit.log({
+      actorId: actor.id,
+      action: 'shipment_force_status',
+      resource: shipmentId,
+      before: { status: shipment.status },
+      after: { status },
+    })
+    return { shipment: updated }
+  }
+
+  /** Admin decide on a claim (approve/reject) regardless of org membership. */
+  async decideClaim(claimId: string, decision: 'approved' | 'rejected', notes: string | undefined, actor: User) {
+    const claim = await this.prisma.claim.findUnique({ where: { id: claimId } })
+    if (!claim) throw new NotFoundException('Claim not found')
+    if (!['filed', 'assessed'].includes(claim.status)) throw new BadRequestException(`Cannot decide a ${claim.status} claim`)
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const changed = await tx.claim.update({
+        where: { id: claimId },
+        data: { status: decision, decision, decidedBy: actor.id, decidedAt: new Date(), notes: notes ?? claim.notes },
+      })
+      if (decision === 'approved' && claim.amount) {
+        await tx.settlement.create({
+          data: {
+            shipmentId: claim.shipmentId,
+            payerId: claim.handlerId ?? undefined,
+            payeeId: claim.claimantId ?? undefined,
+            type: 'claim',
+            amount: claim.amount,
+            currency: claim.currency,
+            status: 'due',
+          },
+        })
+        await tx.insurancePolicy.updateMany({
+          where: { shipmentId: claim.shipmentId, status: 'active' },
+          data: { status: 'claimed' },
+        })
+      }
+      return changed
+    })
+    await this.audit.log({ actorId: actor.id, action: `claim_${decision}`, resource: claimId })
+    return { claim: updated }
+  }
+
+  /** Admin clear a settlement (reconciliation override). */
+  async clearSettlement(settlementId: string, actor: User) {
+    const settlement = await this.prisma.settlement.findUnique({ where: { id: settlementId } })
+    if (!settlement) throw new NotFoundException('Settlement not found')
+    if (settlement.status === 'cleared') throw new BadRequestException('Settlement already cleared')
+    const updated = await this.prisma.settlement.update({
+      where: { id: settlementId },
+      data: { status: 'cleared', settledAt: new Date() },
+    })
+    await this.audit.log({ actorId: actor.id, action: 'settlement_clear', resource: settlementId })
+    return { settlement: updated }
+  }
+
+  /** Admin decline/supersede a selected plan. */
+  async cancelPlan(planId: string, actor: User) {
+    const plan = await this.prisma.plan.findUnique({ where: { id: planId } })
+    if (!plan) throw new NotFoundException('Plan not found')
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const changed = await tx.plan.update({ where: { id: planId }, data: { status: 'declined' } })
+      if (plan.status === 'selected') {
+        await tx.shipment.update({ where: { id: plan.shipmentId }, data: { activePlanId: null } })
+      }
+      return changed
+    })
+    await this.audit.log({ actorId: actor.id, action: 'plan_cancel', resource: planId })
+    return { plan: updated }
+  }
+
+  /** Admin pause/resume a webhook. */
+  async setWebhookStatus(webhookId: string, status: 'active' | 'paused', actor: User) {
+    const webhook = await this.prisma.webhookSubscription.findUnique({ where: { id: webhookId } })
+    if (!webhook) throw new NotFoundException('Webhook not found')
+    const updated = await this.prisma.webhookSubscription.update({ where: { id: webhookId }, data: { status } })
+    await this.audit.log({ actorId: actor.id, action: `webhook_${status}`, resource: webhookId })
+    return { webhook: updated }
+  }
+
+  /** Admin retry a failed webhook delivery. */
+  async retryWebhookDelivery(deliveryId: string, actor: User) {
+    const delivery = await this.prisma.webhookDelivery.findUnique({ where: { id: deliveryId } })
+    if (!delivery) throw new NotFoundException('Delivery not found')
+    const updated = await this.prisma.webhookDelivery.update({
+      where: { id: deliveryId },
+      data: { status: 'pending', attempts: 0, nextRetryAt: null, responseStatus: null },
+    })
+    await this.audit.log({ actorId: actor.id, action: 'webhook_retry', resource: deliveryId })
+    return { delivery: updated }
+  }
+
+  /** Dashboard KPIs including enablement counts. */
+  async enablementDashboard() {
+    const [organizations, shipments, plans, claims, webhookDeliveries, settlements, facilities, consolidations] = await Promise.all([
+      this.prisma.organization.count(),
+      this.prisma.shipment.count(),
+      this.prisma.plan.count(),
+      this.prisma.claim.count(),
+      this.prisma.webhookDelivery.count(),
+      this.prisma.settlement.count(),
+      this.prisma.facility.count(),
+      this.prisma.consolidation.count(),
+    ])
+    const claimOpen = await this.prisma.claim.count({ where: { status: { in: ['filed', 'assessed'] } } })
+    const webhookFailed = await this.prisma.webhookDelivery.count({ where: { status: { in: ['failed', 'dead'] } } })
+    return {
+      organizations, shipments, plans, claims, claimOpen,
+      webhookDeliveries, webhookFailed, settlements, facilities, consolidations,
+    }
+  }
 }

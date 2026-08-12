@@ -64,6 +64,10 @@ export class FinanceService {
     if (claim.status !== 'filed') throw new BadRequestException('Only filed claims can be assessed')
     if (input.recommendedAmount != null && input.recommendedAmount < 0) throw new BadRequestException('Recommended amount cannot be negative')
     const org = await this.orgAccess.primaryOrg(user)
+    // Segregation of duties: the claimant cannot assess their own claim.
+    if (claim.claimantId && claim.claimantId === org.id) {
+      throw new ForbiddenException('The claimant cannot assess their own claim')
+    }
     const updated = await this.prisma.$transaction(async (tx) => {
       const changed = await tx.claim.update({
         where: { id: claimId },
@@ -94,11 +98,34 @@ export class FinanceService {
     const claim = await this.requireClaimAccess(user, claimId)
     if (!['filed', 'assessed'].includes(claim.status)) throw new BadRequestException(`Cannot decide a ${claim.status} claim`)
     const org = await this.orgAccess.primaryOrg(user)
+    // Segregation of duties: the claimant cannot approve their own claim.
+    if (claim.claimantId && claim.claimantId === org.id) {
+      throw new ForbiddenException('The claimant cannot decide their own claim')
+    }
     const updated = await this.prisma.$transaction(async (tx) => {
       const changed = await tx.claim.update({
         where: { id: claimId },
         data: { status: decision, decision, decidedBy: org.id, handlerId: org.id, decidedAt: new Date(), notes: notes ?? claim.notes },
       })
+      // Approved claim -> auto-create a settlement payable to the claimant.
+      if (decision === 'approved' && claim.amount) {
+        await tx.settlement.create({
+          data: {
+            shipmentId: claim.shipmentId,
+            payerId: org.id,
+            payeeId: claim.claimantId ?? undefined,
+            type: 'claim',
+            amount: claim.amount,
+            currency: claim.currency,
+            status: 'due',
+          },
+        })
+        // Mark any active insurance policy on this shipment as claimed.
+        await tx.insurancePolicy.updateMany({
+          where: { shipmentId: claim.shipmentId, status: 'active' },
+          data: { status: 'claimed' },
+        })
+      }
       await this.outbox.emit(tx as never, {
         eventType: 'FINANCE',
         eventCode: 'CLAIM_DECISION',
@@ -107,7 +134,7 @@ export class FinanceService {
         orgId: claim.claimantId ?? null,
         shipmentId: claim.shipmentId,
         actorId: user.id,
-        payload: { claimId, decision },
+        payload: { claimId, decision, settlementCreated: decision === 'approved' },
       })
       return changed
     })
@@ -136,7 +163,8 @@ export class FinanceService {
     const shipment = await this.requireShipmentAccess(user, input.shipmentId)
     if (input.premium != null && input.premium < 0) throw new BadRequestException('Premium cannot be negative')
     if (input.coverage != null && input.coverage <= 0) throw new BadRequestException('Coverage must be positive')
-    const org = await this.orgAccess.primaryOrg(user)
+    // Only an insurer/carrier org can underwrite policies.
+    const org = await this.orgAccess.requireOrgOfKind(user, ['carrier', 'broker', 'other'])
     const policy = await this.prisma.$transaction(async (tx) => {
       const created = await tx.insurancePolicy.create({
         data: {
@@ -180,9 +208,20 @@ export class FinanceService {
   // ---------- Settlements ----------
 
   async createSettlement(input: { shipmentId: string; payerId?: string; payeeId?: string; type: string; amount?: number; currency?: string }, user: User) {
-    if (!['freight', 'advance', 'balance', 'commission'].includes(input.type)) throw new BadRequestException('Invalid settlement type')
+    if (!['freight', 'advance', 'balance', 'commission', 'claim'].includes(input.type)) throw new BadRequestException('Invalid settlement type')
     if (input.amount != null && input.amount <= 0) throw new BadRequestException('Settlement amount must be positive')
     const shipment = await this.requireShipmentAccess(user, input.shipmentId)
+    // Validate counterparties exist; at least one must be the caller's org.
+    const memberOrgIds = await this.orgAccess.memberOrgIds(user)
+    for (const side of ['payerId', 'payeeId'] as const) {
+      const orgId = input[side]
+      if (!orgId) continue
+      const org = await this.prisma.organization.findUnique({ where: { id: orgId } })
+      if (!org) throw new NotFoundException(`Unknown organization for ${side}`)
+    }
+    if (!(input.payerId && memberOrgIds.includes(input.payerId)) && !(input.payeeId && memberOrgIds.includes(input.payeeId))) {
+      throw new ForbiddenException('A settlement must involve one of your organizations')
+    }
     const settlement = await this.prisma.$transaction(async (tx) => {
       const created = await tx.settlement.create({
         data: {

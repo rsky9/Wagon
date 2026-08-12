@@ -22,6 +22,11 @@ export class AiController {
     return this.ai.matchTransporters(loadId, user)
   }
 
+  @Post('invite/:loadId/:transporterId')
+  inviteTransporter(@Param('loadId') loadId: string, @Param('transporterId') transporterId: string, @CurrentUser() user: User) {
+    return this.ai.inviteTransporter(loadId, transporterId, user)
+  }
+
   @Patch('recommendations/:id/status')
   setRecommendationStatus(@Param('id') id: string, @Body() body: { status: 'accepted' | 'dismissed' }, @CurrentUser() user: User) {
     return this.ai.setRecommendationStatus(id, body.status, user)

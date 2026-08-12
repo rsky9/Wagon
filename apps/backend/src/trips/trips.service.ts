@@ -250,6 +250,14 @@ export class TripsService {
       })
     }
 
+    // Phase 1 — keep the canonical Shipment in sync when the trip stage crosses
+    // 'loaded' (shipment in_transit) and 'delivered' (shipment delivered).
+    if (next === 'loaded') {
+      await this.shipments.syncFromLoad(trip.loadId, 'in_transit', 'TRIP_IN_TRANSIT', 'TRANSPORT', user.id)
+    } else if (isDelivered) {
+      await this.shipments.syncFromLoad(trip.loadId, 'delivered', 'DELIVERED', 'TRANSPORT', user.id, load?.dropAddr)
+    }
+
     return { trip: updated }
   }
 
