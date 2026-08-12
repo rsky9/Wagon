@@ -31,14 +31,14 @@ export class MarketController {
     return this.market.browseListings(query as never)
   }
 
-  @Get('listings/:id')
-  listingDetail(@Param('id') id: string) {
-    return this.market.listingDetail(id)
-  }
-
   @Get('listings/mine')
   myListings(@CurrentUser() user: User) {
     return this.market.myListings(user)
+  }
+
+  @Get('listings/:id')
+  listingDetail(@Param('id') id: string) {
+    return this.market.listingDetail(id)
   }
 
   @Patch('listings/:id/status')
