@@ -150,6 +150,7 @@ export class LoadsService {
       eventCode: 'LOAD_CREATED',
       entityType: 'load',
       entityId: load.id,
+      orgId: shipment?.ownerOrgId ?? null,
       shipmentId: shipment?.id,
       legId: shipment ? (await this.prisma.shipmentLeg.findFirst({ where: { shipmentId: shipment.id }, orderBy: { sequence: 'asc' } }))?.id : null,
       actorId: user.id,
@@ -315,6 +316,7 @@ export class LoadsService {
       throw new BadRequestException('Cannot pause an active load')
     }
     const updated = await this.prisma.load.update({ where: { id }, data: { status: 'paused' } })
+    await this.shipments.syncFromLoad(id, 'paused', 'LOAD_PAUSED', 'SHIPMENT', user.id)
     return { load: updated }
   }
 
@@ -322,6 +324,7 @@ export class LoadsService {
     const load = await this.ownedLoad(id, user)
     if (load.status !== 'paused') throw new BadRequestException('Only paused loads can be reopened')
     const updated = await this.prisma.load.update({ where: { id }, data: { status: 'posted' } })
+    await this.shipments.syncFromLoad(id, 'posted', 'LOAD_REOPENED', 'SHIPMENT', user.id)
     return { load: updated }
   }
 
@@ -360,6 +363,8 @@ export class LoadsService {
       })
     }
 
+    await this.shipments.syncFromLoad(id, 'cancelled', 'LOAD_CANCELLED', 'EXCEPTION', user.id)
+
     return { load: cancelled }
   }
 
@@ -367,6 +372,7 @@ export class LoadsService {
     const load = await this.ownedLoad(id, user)
     if (load.status !== 'delivered') throw new BadRequestException('Only delivered loads can be completed')
     const updated = await this.prisma.load.update({ where: { id }, data: { status: 'completed' } })
+    await this.shipments.syncFromLoad(id, 'completed', 'LOAD_COMPLETED', 'SHIPMENT', user.id)
     return { load: updated }
   }
 

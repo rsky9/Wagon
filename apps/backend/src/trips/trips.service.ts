@@ -100,11 +100,13 @@ export class TripsService {
 
     // Phase 1 — canonical event: trip booked/started on the road leg.
     const shipmentId = await this.shipments.shipmentIdFor(loadId)
+    await this.shipments.syncFromLoad(loadId, 'accepted', 'TRIP_STARTED', 'TRANSPORT', user.id)
     await this.shipments.emit({
       eventType: 'TRANSPORT',
       eventCode: 'TRIP_STARTED',
       entityType: 'trip',
       entityId: trip.id,
+      orgId: shipmentId ? await this.shipments.shipmentOrgId(shipmentId) : null,
       shipmentId,
       actorId: user.id,
       payload: { loadId, tripId: trip.id },
@@ -169,11 +171,20 @@ export class TripsService {
     // Phase 1 — canonical events for road lifecycle.
     const shipmentId = await this.shipments.shipmentIdFor(trip.loadId)
     const eventCode = status === 'in_transit' ? 'TRIP_IN_TRANSIT' : 'DELIVERED'
+    await this.shipments.syncFromLoad(
+      trip.loadId,
+      status,
+      eventCode,
+      'TRANSPORT',
+      user.id,
+      status === 'delivered' && load ? load.dropAddr : undefined,
+    )
     await this.shipments.emit({
       eventType: 'TRANSPORT',
       eventCode,
       entityType: 'trip',
       entityId: trip.id,
+      orgId: shipmentId ? await this.shipments.shipmentOrgId(shipmentId) : null,
       shipmentId,
       actorId: user.id,
       location: status === 'delivered' && load ? load.dropAddr : undefined,
@@ -326,6 +337,9 @@ export class TripsService {
         category: 'trips',
       })
     }
+
+    // Phase 1 — canonical event: cancelled trip syncs the shipment back to planned.
+    await this.shipments.syncFromLoad(trip.loadId, 'posted', 'TRIP_CANCELLED', 'EXCEPTION', user.id)
 
     return { trip: updated }
   }

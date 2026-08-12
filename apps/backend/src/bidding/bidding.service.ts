@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service'
 import { NotificationsService } from '../notifications/notifications.service'
 import { RatingsService } from '../ratings/ratings.service'
+import { ShipmentProjector } from '../shipments/shipment-projector.service'
 import type { User } from '@prisma/client'
 
 export interface SubmitBidInput {
@@ -22,6 +23,7 @@ export class BiddingService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly ratings: RatingsService,
+    private readonly shipments: ShipmentProjector,
   ) {}
 
   private async supplierFor(user: User) {
@@ -403,6 +405,7 @@ export class BiddingService {
         category: 'booking',
       })
     }
+    await this.shipments.syncFromLoad(loadId, 'accepted', 'TRIP_STARTED', 'TRANSPORT', user.id)
     return { trip, snapshot: { rate: bid.amount } }
   }
 

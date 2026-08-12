@@ -1,14 +1,19 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common'
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common'
 import { createHmac } from 'node:crypto'
 import { PrismaService } from '../prisma/prisma.service'
 
+const MAX_ATTEMPTS = 3
+const MAX_DELIVERIES_PER_CYCLE = 20
+
 /**
- * Webhook fan-out (Phase 5): after the outbox relay marks a message published,
- * matching subscriptions get a WebhookDelivery. This loop retries pending/failed
- * deliveries up to 3 attempts with HMAC-SHA256 signing.
+ * Webhook fan-out (Phase 5): after the outbox relay publishes a message, matching
+ * subscriptions owned by the SAME org get a WebhookDelivery. The dispatcher loop
+ * claims pending deliveries, retries with exponential backoff up to MAX_ATTEMPTS,
+ * then marks them 'dead'. Payloads are signed with HMAC-SHA256 and carry a stable
+ * dedupeKey so consumers can dedupe replays.
  */
 @Injectable()
-export class WebhookDispatcher implements OnModuleInit {
+export class WebhookDispatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WebhookDispatcher.name)
   private running = false
 
@@ -19,16 +24,27 @@ export class WebhookDispatcher implements OnModuleInit {
     void this.loop()
   }
 
-  /** Enqueue deliveries for every active subscription matching the event code. */
-  async enqueue(eventCode: string, payload: unknown) {
+  onModuleDestroy() {
+    this.running = false
+  }
+
+  /** Enqueue deliveries for active subscriptions of the SAME org matching the event code. */
+  async enqueue(eventCode: string, payload: unknown, orgId?: string | null, sourceId?: string) {
+    if (!orgId) return
     const subs = await this.prisma.webhookSubscription.findMany({
-      where: { status: 'active' },
+      where: { status: 'active', orgId },
     })
     for (const sub of subs) {
       const types = sub.eventTypes as string[]
       if (!types?.includes(eventCode)) continue
+      // Idempotency: one delivery per (subscription, source outbox message).
+      const dedupeKey = sourceId ? `${sub.id}:${sourceId}` : null
+      if (dedupeKey) {
+        const existing = await this.prisma.webhookDelivery.findUnique({ where: { dedupeKey } })
+        if (existing) continue
+      }
       await this.prisma.webhookDelivery.create({
-        data: { subscriptionId: sub.id, eventCode, payload: payload as never },
+        data: { subscriptionId: sub.id, eventCode, payload: payload as never, dedupeKey },
       })
     }
   }
@@ -44,44 +60,86 @@ export class WebhookDispatcher implements OnModuleInit {
     }
   }
 
+  /** Claim + deliver pending deliveries, skipping rows that are in-flight or on backoff. */
   private async deliver() {
-    const pending = await this.prisma.webhookDelivery.findMany({
-      where: { status: { in: ['pending', 'failed'] }, OR: [{ nextRetryAt: null }, { nextRetryAt: { lte: new Date() } }] },
-      include: { subscription: true },
-      orderBy: { createdAt: 'asc' },
-      take: 20,
+    const pending = await this.prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw`
+        UPDATE "WebhookDelivery" SET "lastAttemptAt" = now()
+        WHERE id IN (
+          SELECT id FROM "WebhookDelivery"
+          WHERE status IN ('pending','failed')
+            AND ("nextRetryAt" IS NULL OR "nextRetryAt" <= now())
+          ORDER BY "createdAt" ASC
+          LIMIT ${MAX_DELIVERIES_PER_CYCLE}
+          FOR UPDATE SKIP LOCKED
+        )
+        RETURNING *`
+      return rows as Array<{
+        id: string
+        subscriptionId: string
+        eventCode: string
+        payload: unknown
+        attempts: number
+        nextRetryAt: Date | null
+      }>
     })
+
     for (const d of pending) {
-      if (d.attempts >= 3) {
-        await this.prisma.webhookDelivery.update({ where: { id: d.id }, data: { status: 'failed' } })
+      const sub = await this.prisma.webhookSubscription.findUnique({ where: { id: d.subscriptionId } })
+      if (!sub) {
+        await this.prisma.webhookDelivery.update({ where: { id: d.id }, data: { status: 'dead' } })
         continue
       }
+      // Increment attempts under the same transaction as the state write.
+      const nextAttempt = d.attempts + 1
       const body = JSON.stringify({
         event: d.eventCode,
         timestamp: new Date().toISOString(),
         data: d.payload,
       })
-      const signature = createHmac('sha256', d.subscription.secret).update(body).digest('hex')
+      const signature = createHmac('sha256', sub.secret).update(body).digest('hex')
       let ok = false
+      let responseStatus: number | null = null
       try {
-        const res = await fetch(d.subscription.url, {
+        const res = await fetch(sub.url, {
           method: 'POST',
-          headers: { 'content-type': 'application/json', 'x-wagon-signature': `sha256=${signature}` },
+          headers: { 'content-type': 'application/json', 'x-wagon-signature': `sha256=${signature}`, 'x-wagon-delivery-id': d.id },
           body,
           signal: AbortSignal.timeout(5000),
         })
         ok = res.ok
-        await this.prisma.webhookDelivery.update({
-          where: { id: d.id },
-          data: { status: ok ? 'sent' : 'failed', responseStatus: res.status, lastAttemptAt: new Date() },
-        })
+        responseStatus = res.status
       } catch {
-        await this.prisma.webhookDelivery.update({
-          where: { id: d.id },
-          data: { status: 'failed', lastAttemptAt: new Date(), nextRetryAt: new Date(Date.now() + 30_000) },
-        })
+        ok = false
       }
-      if (ok) this.logger.log(`[webhook] ${d.eventCode} → ${d.subscription.url} (${d.subscription.name})`)
+
+      const fatal = nextAttempt >= MAX_ATTEMPTS
+      await this.prisma.webhookDelivery.update({
+        where: { id: d.id },
+        data: ok
+          ? { status: 'sent', attempts: nextAttempt, responseStatus, lastAttemptAt: new Date() }
+          : {
+              status: fatal ? 'dead' : 'failed',
+              attempts: nextAttempt,
+              responseStatus,
+              lastAttemptAt: new Date(),
+              nextRetryAt: fatal ? null : new Date(Date.now() + backoffMs(nextAttempt)),
+            },
+      })
+      if (ok) this.logger.log(`[webhook] ${d.eventCode} → ${sub.url} (${sub.name})`)
+      else if (fatal) this.logger.error(`[webhook] ${d.eventCode} → ${sub.url} dead after ${MAX_ATTEMPTS} attempts`)
     }
   }
+
+  /** Manually retry a delivery now (admin action). */
+  async retryNow(deliveryId: string) {
+    return this.prisma.webhookDelivery.update({
+      where: { id: deliveryId },
+      data: { status: 'pending', attempts: 0, nextRetryAt: null, responseStatus: null },
+    })
+  }
+}
+
+function backoffMs(attempt: number) {
+  return Math.min(30_000 * Math.pow(2, attempt - 1), 3_600_000)
 }

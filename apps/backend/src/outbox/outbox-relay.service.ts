@@ -2,10 +2,19 @@ import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { WebhookDispatcher } from '../integrations/webhook-dispatcher.service'
 
+const MAX_ATTEMPTS = 5
+const CLAIM_TIMEOUT_MS = 60_000
+const BATCH_SIZE = 20
+
 /**
- * Transactional outbox relay: claims pending OutboxMessage rows and "publishes"
- * them. Currently delivery is logging + marking published; a real bus (NATS
- * JetStream) plugs in here later. Consumers must be idempotent.
+ * Transactional outbox relay: claims pending OutboxMessage rows, publishes the
+ * ledger row FIRST (status = published), then fans out to webhooks. Claims that
+ * are left 'publishing' by a crashed instance are reclaimed by a sweep. Messages
+ * that exhaust MAX_ATTEMPTS go to a dead-letter state ('dead').
+ *
+ * Ordering matters: the outbox row is marked published before webhook fan-out so
+ * a crash between the two never loses the event from the ledger — subscribers
+ * that were missed are reconciled by the idempotent webhook dispatcher.
  */
 @Injectable()
 export class OutboxRelay implements OnModuleInit {
@@ -25,39 +34,75 @@ export class OutboxRelay implements OnModuleInit {
   private async loop() {
     while (this.running) {
       try {
+        await this.reapStaleClaims()
         await this.drain()
       } catch (e) {
-        this.logger.warn(`outbox drain error: ${e instanceof Error ? e.message : e}`)
+        this.logger.warn(`outbox loop error: ${e instanceof Error ? e.message : e}`)
       }
       await new Promise((r) => setTimeout(r, 1000))
     }
   }
 
-  /** Claim + publish a batch of pending messages. */
+  /** Reclaim rows stuck in 'publishing' past the timeout (crash recovery). */
+  private async reapStaleClaims() {
+    const stale = await this.prisma.outboxMessage.updateMany({
+      where: {
+        status: 'publishing',
+        claimedAt: { lte: new Date(Date.now() - CLAIM_TIMEOUT_MS) },
+      },
+      data: { status: 'pending' },
+    })
+    if (stale.count > 0) this.logger.warn(`[outbox] reclaimed ${stale.count} stale 'publishing' messages`)
+  }
+
+  /** Claim a batch with SKIP LOCKED, then publish ledger + fan out per message. */
   private async drain() {
     const batch = await this.prisma.$transaction(async (tx) => {
-      // For each aggregate: oldest first, claim with SKIP LOCKED semantics via updateMany.
       const claimed = await tx.$queryRaw`
-        UPDATE "OutboxMessage" SET status = 'publishing', attempts = attempts + 1
+        UPDATE "OutboxMessage" SET status = 'publishing', attempts = attempts + 1, "claimedAt" = now()
         WHERE id IN (
           SELECT id FROM "OutboxMessage"
-          WHERE status = 'pending'
+          WHERE status = 'pending' AND ("nextRetryAt" IS NULL OR "nextRetryAt" <= now())
           ORDER BY "createdAt" ASC
-          LIMIT 20
+          LIMIT ${BATCH_SIZE}
           FOR UPDATE SKIP LOCKED
         )
         RETURNING *`
-      return claimed as Array<{ id: string; aggregateType: string; aggregateId: string; eventType: string; payload: unknown }>
+      return claimed as Array<{
+        id: string
+        orgId: string | null
+        aggregateType: string
+        aggregateId: string
+        eventType: string
+        payload: unknown
+        attempts: number
+      }>
     })
 
     for (const msg of batch) {
-      // Publish to subscribers: webhook fan-out + logging.
-      this.logger.log(`[outbox] ${msg.aggregateType}:${msg.aggregateId} → ${msg.eventType} (webhooks=${!!this.webhooks})`)
-      await this.webhooks?.enqueue(msg.eventType, msg.payload)
-      await this.prisma.outboxMessage.update({
-        where: { id: msg.id },
-        data: { status: 'published', publishedAt: new Date() },
-      })
+      // Per-message error isolation: one failure must not strand the batch.
+      try {
+        // 1. Mark the ledger row published (crash-safe: event is durably recorded).
+        await this.prisma.outboxMessage.update({
+          where: { id: msg.id },
+          data: { status: 'published', publishedAt: new Date() },
+        })
+        // 2. Fan out to webhooks (idempotent by outbox message id).
+        await this.webhooks?.enqueue(msg.eventType, msg.payload, msg.orgId, msg.id)
+        this.logger.log(`[outbox] ${msg.aggregateType}:${msg.aggregateId} → ${msg.eventType}`)
+      } catch (e) {
+        const error = e instanceof Error ? e.message : String(e)
+        const fatal = msg.attempts >= MAX_ATTEMPTS
+        await this.prisma.outboxMessage.update({
+          where: { id: msg.id },
+          data: {
+            status: fatal ? 'dead' : 'failed',
+            lastError: error,
+            nextRetryAt: fatal ? null : new Date(Date.now() + backoffMs(msg.attempts)),
+          },
+        })
+        this.logger.error(`[outbox] ${msg.eventType} failed (attempt ${msg.attempts}): ${error}${fatal ? ' → dead' : ''}`)
+      }
     }
   }
 
@@ -78,6 +123,7 @@ export class OutboxRelay implements OnModuleInit {
       classifier?: string
       entityType: string
       entityId: string
+      orgId?: string | null
       shipmentId?: string | null
       legId?: string | null
       occurredAt?: Date
@@ -97,6 +143,7 @@ export class OutboxRelay implements OnModuleInit {
         classifier: event.classifier ?? 'ACT',
         entityType: event.entityType,
         entityId: event.entityId,
+        orgId: event.orgId ?? null,
         shipmentId: event.shipmentId ?? null,
         legId: event.legId ?? null,
         occurredAt,
@@ -110,11 +157,17 @@ export class OutboxRelay implements OnModuleInit {
     })
     await tx.outboxMessage.create({
       data: {
+        orgId: event.orgId ?? null,
         aggregateType: event.entityType,
         aggregateId: event.entityId,
         eventType: event.eventCode,
         payload: (event.payload as never) ?? { eventType: event.eventCode },
+        dedupeKey: event.correlationId ?? null,
       },
     })
   }
+}
+
+function backoffMs(attempt: number) {
+  return Math.min(30_000 * Math.pow(2, attempt), 3_600_000)
 }

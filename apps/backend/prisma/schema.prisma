@@ -757,6 +757,7 @@ model Organization {
 
   members   OrganizationMember[]
   shipments Shipment[] @relation("Origin")
+  ownedShipments Shipment[] @relation("OwnerShipments")
   destShipments Shipment[] @relation("Destination")
   legOrigins ShipmentLeg[] @relation("LegOrigin")
   legDestinations ShipmentLeg[] @relation("LegDestination")
@@ -766,9 +767,12 @@ model Organization {
   bookings  CarrierBooking[]
   forwarderOrders ForwardOrder[] @relation("ForwarderOrders")
   customerOrders ForwardOrder[] @relation("CustomerOrders")
+  consolidations Consolidation[] @relation("Consolidations")
+  bookedConsolidations Consolidation[] @relation("BookedConsolidations")
   documents ForwardDocument[]
   connectors IntegrationConnector[]
   webhookSubscriptions WebhookSubscription[]
+  orgEvents LogisticsEvent[]
   claimsFiled Claim[] @relation("Claimant")
   claimsHandled Claim[] @relation("Handler")
   policiesUnderwritten InsurancePolicy[]
@@ -795,6 +799,8 @@ model OrganizationMember {
 model Shipment {
   id            String    @id @default(cuid())
   ref           String
+  ownerOrgId    String?
+  ownerOrg      Organization? @relation("OwnerShipments", fields: [ownerOrgId], references: [id])
   originId      String?
   origin        Organization? @relation("Origin", fields: [originId], references: [id])
   destinationId String?
@@ -823,9 +829,12 @@ model Shipment {
   policies  InsurancePolicy[]
   settlements Settlement[]
   riskAssessments RiskAssessment[]
+  consolidations Consolidation[]
   activePlanId String?
   activePlan Plan? @relation("ActivePlan", fields: [activePlanId], references: [id])
   @@index([status])
+  @@index([ownerOrgId])
+  @@unique([ref])
 }
 
 /// One physical movement within a shipment — mode + equipment + route.
@@ -855,6 +864,7 @@ model ShipmentLeg {
   events LogisticsEvent[]
   bookings CarrierBooking[]
   @@index([shipmentId])
+  @@unique([shipmentId, sequence])
 }
 
 enum ShipmentStatus {
@@ -899,6 +909,8 @@ model LogisticsEvent {
   classifier    String    @default("ACT") // PLN | ACT | EST
   entityType    String    // shipment | leg | equipment | organization
   entityId      String
+  orgId         String?
+  organization  Organization? @relation(fields: [orgId], references: [id])
   shipmentId    String?
   shipment      Shipment?  @relation(fields: [shipmentId], references: [id])
   legId         String?
@@ -918,21 +930,29 @@ model LogisticsEvent {
   @@index([shipmentId])
   @@index([entityType, entityId])
   @@index([eventType, eventCode])
+  @@index([orgId])
 }
 
 /// Transactional outbox — domain writes + outbox row commit atomically.
 model OutboxMessage {
   id        String   @id @default(cuid())
+  orgId     String?
   aggregateType String
   aggregateId   String
   eventType     String
   payload       Json
-  status        String   @default("pending") // pending | published | failed
+  status        String   @default("pending") // pending | publishing | published | failed | dead
   attempts      Int      @default(0)
+  dedupeKey     String?
+  lastError     String?
+  nextRetryAt   DateTime?
+  claimedAt     DateTime?
   createdAt     DateTime @default(now())
   publishedAt   DateTime?
 
   @@index([status, createdAt])
+  @@index([status, claimedAt])
+  @@unique([dedupeKey])
 }
 
 // ============================================================
@@ -1004,6 +1024,8 @@ model ForwardOrder {
   sellAmount  Float?
   currency    String   @default("INR")
   notes       String?
+  consolidationId String?
+  consolidation   Consolidation? @relation(fields: [consolidationId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   @@index([forwarderId])
@@ -1071,14 +1093,17 @@ model WebhookDelivery {
   subscription   WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
   eventCode      String
   payload        Json?
-  status         String   @default("pending") // pending | sent | failed
+  status         String   @default("pending") // pending | sent | failed | dead
   attempts       Int      @default(0)
+  dedupeKey      String?
   lastAttemptAt  DateTime?
   responseStatus Int?
   nextRetryAt    DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   @@index([subscriptionId, status])
+  @@index([status, nextRetryAt])
+  @@unique([dedupeKey])
 }
 
 /// A trade/transport/customs document on a shipment.
@@ -1172,6 +1197,35 @@ model RiskAssessment {
 }
 
 // ============================================================
+// Phase 3b — Consolidation / LCL groupage
+// ============================================================
+
+/// A grouping of multiple customer orders onto one carrier shipment (LCL/groupage).
+model Consolidation {
+  id          String   @id @default(cuid())
+  ref         String
+  forwarderId String
+  forwarder   Organization @relation("Consolidations", fields: [forwarderId], references: [id])
+  shipmentId  String?
+  shipment    Shipment? @relation(fields: [shipmentId], references: [id])
+  mode        String   @default("ocean") // ocean | air | road | rail
+  origin      String?
+  destination String?
+  equipment   String?  // e.g. 20GP | 40HC | ULD | full_truck
+  cargoWeightKg Float?
+  cargoVolumeM3 Float?
+  cargoPieces Int?
+  status      String   @default("grouping") // grouping | ready | booked | in_transit | delivered | closed
+  bookedCarrierId String?
+  bookedCarrier   Organization? @relation("BookedConsolidations", fields: [bookedCarrierId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  orders      ForwardOrder[]
+  @@index([forwarderId])
+  @@index([status])
+}
+
+// ============================================================
 // Phase 7 — Guardrailed AI
 // ============================================================
 
@@ -1208,6 +1262,8 @@ model CountryPack {
   language           String   @default("en")
   unitSystem         String   @default("metric") // metric | imperial
   customsRegime      String   @default("general")
+  baseCurrency       String   @default("INR")
+  exchangeRateToBase Float?   @default(1)
   documentRequirements Json?  // e.g. ["commercial_invoice","packing_list","customs_declaration"]
   laneDefaults       Json?    // preferred modes per lane
   incotermsSupported Json?    // ["FOB","CIF","EXW",...]
