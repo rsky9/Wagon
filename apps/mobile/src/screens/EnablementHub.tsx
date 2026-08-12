@@ -3,9 +3,10 @@ import { StyleSheet, Text, View, FlatList, Pressable } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius } from '@wagon/design'
 import { api } from '../config'
-import type { Shipment, ForwardOrder, Claim, Plan } from '@wagon/contracts'
+import type { Shipment, ForwardOrder, Claim, Plan, Organization } from '@wagon/contracts'
 
 interface Props {
+  capabilities?: string[]
   onOpen: (screen: 'shipments' | 'forwarding' | 'planning' | 'finance' | 'storage' | 'global') => void
 }
 
@@ -25,19 +26,33 @@ interface Section {
   screen: Props['onOpen'] extends (s: infer S) => void ? S : never
 }
 
-export function EnablementHub({ onOpen }: Props) {
+/** Warehouse-ish org kinds that unlock the storage workspace. */
+const WAREHOUSE_KINDS = ['warehouse', 'cfs', 'icd', 'cross_dock', 'yard', 'cold']
+
+export function EnablementHub({ capabilities = [], onOpen }: Props) {
   const theme = useTheme()
   const [shipments, setShipments] = useState(0)
   const [orders, setOrders] = useState(0)
   const [claims, setClaims] = useState(0)
   const [plans, setPlans] = useState(0)
+  const [orgKinds, setOrgKinds] = useState<string[]>([])
 
   useEffect(() => {
+    api.get<{ organizations: Organization[] }>('/foundation/organizations')
+      .then((r) => setOrgKinds(r.organizations.map((o) => o.kind)))
+      .catch(() => {})
     api.get<{ shipments: Shipment[] }>('/foundation/shipments').then((r) => setShipments(r.shipments.length)).catch(() => {})
     api.get<{ orders: ForwardOrder[] }>('/forwarding/orders').then((r) => setOrders(r.orders.length)).catch(() => {})
     api.get<{ claims: Claim[] }>('/finance/claims').then((r) => setClaims(r.claims.length)).catch(() => {})
     api.get<{ plans: Plan[] }>('/planning/plans').then((r) => setPlans(r.plans.length)).catch(() => {})
   }, [])
+
+  // What the user can actually act on: their orgs (authoritative) merged with
+  // their declared capabilities (before orgs load). Backend still enforces the
+  // real gate — this only decides what's visible.
+  const canForward = orgKinds.length ? orgKinds.includes('forwarder') : capabilities.includes('forwarder')
+  const canStore = orgKinds.length ? orgKinds.some((k) => WAREHOUSE_KINDS.includes(k)) : capabilities.includes('warehouse')
+  const isEnablementUser = capabilities.includes('forwarder') || capabilities.includes('warehouse') || capabilities.includes('carrier')
 
   const stats: Stat[] = [
     { key: 'shipments', label: 'Shipments', value: shipments, icon: '📦' },
@@ -46,20 +61,31 @@ export function EnablementHub({ onOpen }: Props) {
     { key: 'claims', label: 'Claims', value: claims, icon: '⚖️' },
   ]
 
-  const sections: Section[] = [
+  const allSections: Section[] = [
     { key: 'shipments', title: 'Shipments & Org', subtitle: 'Create and track shipments across modes', icon: '🚚', count: shipments, screen: 'shipments' },
-    { key: 'forwarding', title: 'Forwarding', subtitle: 'Orders, margins, carrier bookings & consolidation', icon: '🧳', count: orders, screen: 'forwarding' },
     { key: 'planning', title: 'Multimodal Planning', subtitle: 'Compare routes, select plans, re-plan on failure', icon: '🗺️', count: plans, screen: 'planning' },
     { key: 'finance', title: 'Finance & Risk', subtitle: 'Claims, insurance, settlements & risk scores', icon: '💰', count: claims, screen: 'finance' },
+    { key: 'forwarding', title: 'Forwarding', subtitle: 'Orders, margins, carrier bookings & consolidation', icon: '🧳', count: orders, screen: 'forwarding' },
     { key: 'storage', title: 'Warehouse & Storage', subtitle: 'Facilities and gate-in → gate-out operations', icon: '🏭', count: 0, screen: 'storage' },
     { key: 'global', title: 'Global', subtitle: 'Country packs, FX and document checklists', icon: '🌍', count: 0, screen: 'global' },
   ]
+
+  // Gate sections to what the user can actually do.
+  const sections = allSections.filter((s) => {
+    switch (s.key) {
+      case 'forwarding': return canForward
+      case 'storage': return canStore
+      default: return true
+    }
+  })
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Text style={[styles.title, { color: theme.foreground }]}>Enablement</Text>
-        <Text style={[styles.subtitle, { color: theme.mutedForeground }]}>Orchestrate. Don't operate.</Text>
+        <Text style={[styles.subtitle, { color: theme.mutedForeground }]}>
+          {isEnablementUser ? 'Orchestrate. Don\u2019t operate.' : 'Track & plan your shipments'}
+        </Text>
       </View>
 
       <FlatList

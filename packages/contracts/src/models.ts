@@ -114,6 +114,7 @@ export interface UserProfile {
   verified: boolean
   supplierVerified?: boolean
   transporterVerified?: boolean
+  capabilities?: string[]
 }
 
 export interface Notification {

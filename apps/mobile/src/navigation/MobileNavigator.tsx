@@ -311,8 +311,10 @@ function TripExceptionsRoute({ navigation, route }: any) {
 }
 
 function EnablementHubRoute({ navigation }: any) {
+  const { session } = useAuth()
   return (
     <EnablementHub
+      capabilities={session?.profile?.capabilities ?? []}
       onOpen={(screen) => {
         if (screen === 'shipments') navigation.navigate('Shipments')
         else if (screen === 'forwarding') navigation.navigate('Forwarding')

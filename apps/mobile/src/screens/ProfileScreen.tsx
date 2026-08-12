@@ -148,16 +148,18 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <Text style={{ color: theme.mutedForeground }}>›</Text>
         </Pressable>
 
-        <Pressable style={[styles.row, { backgroundColor: theme.background, borderColor: theme.border }]} onPress={onOpenEnablement}>
-          <View style={styles.rowLeft}>
-            <Text style={[styles.rowIcon, { color: theme.primary }]}>🧩</Text>
-            <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>Enablement</Text>
-              <Text style={[styles.rowStatus, { color: theme.mutedForeground }]}>Shipments · forwarding · plans · finance · storage</Text>
+        {(profile?.capabilities?.some((c: string) => ['supplier', 'forwarder', 'warehouse', 'carrier', 'transporter'].includes(c)) ?? true) && (
+          <Pressable style={[styles.row, { backgroundColor: theme.background, borderColor: theme.border }]} onPress={onOpenEnablement}>
+            <View style={styles.rowLeft}>
+              <Text style={[styles.rowIcon, { color: theme.primary }]}>🧩</Text>
+              <View>
+                <Text style={[styles.rowLabel, { color: theme.foreground }]}>Enablement</Text>
+                <Text style={[styles.rowStatus, { color: theme.mutedForeground }]}>Shipments · forwarding · plans · finance · storage</Text>
+              </View>
             </View>
-          </View>
-          <Text style={{ color: theme.mutedForeground }}>›</Text>
-        </Pressable>
+            <Text style={{ color: theme.mutedForeground }}>›</Text>
+          </Pressable>
+        )}
 
         <Pressable style={[styles.row, { backgroundColor: theme.background, borderColor: theme.border }]} onPress={onOpenNotifPrefs}>
           <View style={styles.rowLeft}>
