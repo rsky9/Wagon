@@ -44,6 +44,7 @@ import { PlanningModule } from './planning/planning.module'
 import { IntegrationsModule } from './integrations/integrations.module'
 import { FinanceModule } from './finance/finance.module'
 import { AiModule } from './ai/ai.module'
+import { GlobalModule } from './global/global.module'
 
 @Module({
   imports: [
@@ -97,6 +98,7 @@ import { AiModule } from './ai/ai.module'
     IntegrationsModule,
     FinanceModule,
     AiModule,
+    GlobalModule,
   ],
   controllers: [AppController],
   providers: [

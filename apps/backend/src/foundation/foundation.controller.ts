@@ -11,8 +11,8 @@ export class FoundationController {
 
   // Organizations
   @Post('organizations')
-  createOrg(@Body() body: { name: string; kind: string }, @CurrentUser() user: User) {
-    return this.foundation.createOrganization(body.name, body.kind, user)
+  createOrg(@Body() body: { name: string; kind: string; countryCode?: string }, @CurrentUser() user: User) {
+    return this.foundation.createOrganization(body.name, body.kind, user, body.countryCode)
   }
 
   @Get('organizations')

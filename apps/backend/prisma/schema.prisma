@@ -750,6 +750,7 @@ model Organization {
   name      String
   kind      String   // shipper | transporter | forwarder | warehouse | carrier | broker | other
   gst       String?
+  countryCode String @default("IN")
   verified  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1191,4 +1192,26 @@ model AiRecommendation {
   createdBy  String?
   createdAt  DateTime @default(now())
   @@index([entityType, entityId])
+}
+
+// ============================================================
+// Phase 8 — Global: country packs
+// ============================================================
+
+/// Per-country operating configuration (currency, units, customs regime,
+/// document requirements, lane defaults). Enables the network globally.
+model CountryPack {
+  id                 String   @id @default(cuid())
+  code               String   @unique // ISO 3166-1 alpha-2
+  name               String
+  currency           String   @default("INR")
+  language           String   @default("en")
+  unitSystem         String   @default("metric") // metric | imperial
+  customsRegime      String   @default("general")
+  documentRequirements Json?  // e.g. ["commercial_invoice","packing_list","customs_declaration"]
+  laneDefaults       Json?    // preferred modes per lane
+  incotermsSupported Json?    // ["FOB","CIF","EXW",...]
+  enabled            Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }

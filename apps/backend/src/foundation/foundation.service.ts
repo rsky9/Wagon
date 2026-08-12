@@ -17,13 +17,13 @@ export class FoundationService {
 
   // ---------- Organizations ----------
 
-  async createOrganization(name: string, kind: string, user: User) {
+  async createOrganization(name: string, kind: string, user: User, countryCode?: string) {
     if (!name?.trim()) throw new BadRequestException('Organization name required')
     if (!['shipper', 'transporter', 'forwarder', 'warehouse', 'carrier', 'broker', 'other'].includes(kind)) {
       throw new BadRequestException('Invalid organization kind')
     }
     const org = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.organization.create({ data: { name: name.trim(), kind } })
+      const created = await tx.organization.create({ data: { name: name.trim(), kind, countryCode: countryCode ?? 'IN' } })
       await tx.organizationMember.create({
         data: { organizationId: created.id, userId: user.id, role: 'owner' },
       })
@@ -76,6 +76,8 @@ export class FoundationService {
     deliveryWindow?: string
     value?: number
     mode?: string
+    originId?: string
+    destinationId?: string
   }, user: User) {
     const shipment = await this.prisma.shipment.create({
       data: {
@@ -89,6 +91,8 @@ export class FoundationService {
         deliveryWindow: input.deliveryWindow ? new Date(input.deliveryWindow) : null,
         value: input.value,
         mode: input.mode ?? 'road',
+        originId: input.originId,
+        destinationId: input.destinationId,
         status: 'draft',
       },
     })

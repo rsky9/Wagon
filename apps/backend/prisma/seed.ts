@@ -134,6 +134,22 @@ async function main() {
     })
   }
 
+  const COUNTRY_PACKS = [
+    { code: 'IN', name: 'India', currency: 'INR', language: 'en', unitSystem: 'metric', customsRegime: 'icdt', documentRequirements: ['commercial_invoice', 'packing_list', 'eway_bill', 'customs_declaration'], incotermsSupported: ['EXW', 'FOB', 'CIF', 'DAP'] },
+    { code: 'AE', name: 'UAE', currency: 'AED', language: 'en', unitSystem: 'metric', customsRegime: 'gcc', documentRequirements: ['commercial_invoice', 'packing_list', 'customs_declaration'], incotermsSupported: ['FOB', 'CIF', 'DAP', 'DDP'] },
+    { code: 'SG', name: 'Singapore', currency: 'SGD', language: 'en', unitSystem: 'metric', customsRegime: 'asean', documentRequirements: ['commercial_invoice', 'packing_list', 'customs_declaration'], incotermsSupported: ['EXW', 'FOB', 'CIF', 'DAP'] },
+    { code: 'US', name: 'United States', currency: 'USD', language: 'en', unitSystem: 'imperial', customsRegime: 'acp', documentRequirements: ['commercial_invoice', 'packing_list', 'bill_of_lading', 'customs_declaration'], incotermsSupported: ['EXW', 'FOB', 'CIF', 'DDP'] },
+    { code: 'NL', name: 'Netherlands', currency: 'EUR', language: 'nl', unitSystem: 'metric', customsRegime: 'eu', documentRequirements: ['commercial_invoice', 'packing_list', 'customs_declaration', 'certificate'], incotermsSupported: ['EXW', 'FOB', 'CIF', 'DDP'] },
+    { code: 'CN', name: 'China', currency: 'CNY', language: 'zh', unitSystem: 'metric', customsRegime: 'cct', documentRequirements: ['commercial_invoice', 'packing_list', 'customs_declaration'], incotermsSupported: ['FOB', 'CIF', 'DAP'] },
+  ]
+  for (const c of COUNTRY_PACKS) {
+    await prisma.countryPack.upsert({
+      where: { code: c.code },
+      update: {},
+      create: c,
+    })
+  }
+
   console.log('Seeding complete.')
   console.log(`  admin:        ${admin.mobile}`)
   console.log(`  supplier:     ${supplier.mobile}`)
