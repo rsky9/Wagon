@@ -231,6 +231,7 @@ function AccountTab({ navigation }: any) {
       onOpenSaved={() => root?.navigate('Favorites')}
       onOpenBids={() => root?.navigate('MyBids')}
       onOpenDisputes={() => root?.navigate('Disputes')}
+      onOpenEnablement={() => root?.navigate('EnablementHub')}
     />
   )
 }

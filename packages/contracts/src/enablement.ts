@@ -41,6 +41,7 @@ export interface Shipment {
   activePlanId?: string | null
   createdAt: string
   updatedAt: string
+  legs?: ShipmentLeg[]
 }
 
 export interface ShipmentLeg {

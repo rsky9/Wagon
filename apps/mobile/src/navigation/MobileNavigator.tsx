@@ -57,6 +57,13 @@ import { InvoicesScreen } from '../screens/InvoicesScreen'
 import { LoadHistoryScreen } from '../screens/LoadHistoryScreen'
 import { ResponsesScreen } from '../screens/ResponsesScreen'
 import { BookingsScreen } from '../screens/BookingsScreen'
+import { EnablementHub } from '../screens/EnablementHub'
+import { ShipmentsScreen } from '../screens/ShipmentsScreen'
+import { ForwardingScreen } from '../screens/ForwardingScreen'
+import { PlanningScreen } from '../screens/PlanningScreen'
+import { EnablementFinanceScreen } from '../screens/EnablementFinanceScreen'
+import { StorageScreen } from '../screens/StorageScreen'
+import { GlobalScreen } from '../screens/GlobalScreen'
 import { SplashScreen, LanguageSelection, RoleSelection, CapabilitySelection } from '@wagon/components'
 import { AppLogo } from '../components/AppLogo'
 import { UnifiedTabs } from './UnifiedTabs'
@@ -109,6 +116,13 @@ export type RootStackParamList = {
   BidForm: { load: Load }
   Negotiation: { loadId: string }
   TripExceptions: { tripId: string }
+  EnablementHub: undefined
+  Shipments: undefined
+  Forwarding: undefined
+  Planning: undefined
+  EnablementFinance: undefined
+  Storage: undefined
+  Global: undefined
 }
 
 const Stack = createNativeStackNavigator<RootStackParamList>()
@@ -285,6 +299,50 @@ function NegotiationRoute({ navigation, route }: any) {
 
 function TripExceptionsRoute({ navigation, route }: any) {
   return <TripExceptionsScreen tripId={route.params?.tripId} onBack={() => navigation.goBack()} />
+}
+
+function EnablementHubRoute({ navigation }: any) {
+  return (
+    <EnablementHub
+      onOpen={(screen) => {
+        if (screen === 'shipments') navigation.navigate('Shipments')
+        else if (screen === 'forwarding') navigation.navigate('Forwarding')
+        else if (screen === 'planning') navigation.navigate('Planning')
+        else if (screen === 'finance') navigation.navigate('EnablementFinance')
+        else if (screen === 'storage') navigation.navigate('Storage')
+        else if (screen === 'global') navigation.navigate('Global')
+      }}
+    />
+  )
+}
+
+function ShipmentsRoute({ navigation }: any) {
+  return <ShipmentsScreen onBack={() => navigation.goBack()} />
+}
+
+function ForwardingRoute({ navigation }: any) {
+  return (
+    <ForwardingScreen
+      onBack={() => navigation.goBack()}
+      onOpenOrders={() => navigation.navigate('Shipments')}
+    />
+  )
+}
+
+function PlanningRoute({ navigation }: any) {
+  return <PlanningScreen onBack={() => navigation.goBack()} />
+}
+
+function EnablementFinanceRoute({ navigation }: any) {
+  return <EnablementFinanceScreen onBack={() => navigation.goBack()} />
+}
+
+function StorageRoute({ navigation }: any) {
+  return <StorageScreen onBack={() => navigation.goBack()} />
+}
+
+function GlobalRoute({ navigation }: any) {
+  return <GlobalScreen onBack={() => navigation.goBack()} />
 }
 
 function RoleChangeRoute({ navigation }: any) {
@@ -585,6 +643,13 @@ export function MobileNavigator() {
                 <Stack.Screen name="LoadHistory" component={LoadHistoryRoute} />
                 <Stack.Screen name="Quests" component={QuestsRoute} />
                 <Stack.Screen name="RoleChange" component={RoleChangeRoute} />
+                <Stack.Screen name="EnablementHub" component={EnablementHubRoute} />
+                <Stack.Screen name="Shipments" component={ShipmentsRoute} />
+                <Stack.Screen name="Forwarding" component={ForwardingRoute} />
+                <Stack.Screen name="Planning" component={PlanningRoute} />
+                <Stack.Screen name="EnablementFinance" component={EnablementFinanceRoute} />
+                <Stack.Screen name="Storage" component={StorageRoute} />
+                <Stack.Screen name="Global" component={GlobalRoute} />
               </Stack.Navigator>
             </NavigationContainer>
           </ThemeContext.Provider>

@@ -37,9 +37,10 @@ interface Props {
   onOpenSaved: () => void
   onOpenBids: () => void
   onOpenDisputes: () => void
+  onOpenEnablement: () => void
 }
 
-export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers, onOpenRateCard, onOpenNotifications, onOpenSettings, onOpenSearch, onOpenFinance, onOpenReviews, onOpenTickets, onOpenEmergency, onOpenChat, onOpenFleet, onOpenNotifPrefs, onOpenInvoices, onOpenLoadHistory, onOpenQuests, onOpenSaved, onOpenBids, onOpenDisputes }: Props) {
+export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers, onOpenRateCard, onOpenNotifications, onOpenSettings, onOpenSearch, onOpenFinance, onOpenReviews, onOpenTickets, onOpenEmergency, onOpenChat, onOpenFleet, onOpenNotifPrefs, onOpenInvoices, onOpenLoadHistory, onOpenQuests, onOpenSaved, onOpenBids, onOpenDisputes, onOpenEnablement }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
   const { isDark, cycle } = useThemeMode()
@@ -142,6 +143,17 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
             <View>
               <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.fleet')}</Text>
               <Text style={[styles.rowStatus, { color: theme.mutedForeground }]}>Trucks · documents · maintenance</Text>
+            </View>
+          </View>
+          <Text style={{ color: theme.mutedForeground }}>›</Text>
+        </Pressable>
+
+        <Pressable style={[styles.row, { backgroundColor: theme.background, borderColor: theme.border }]} onPress={onOpenEnablement}>
+          <View style={styles.rowLeft}>
+            <Text style={[styles.rowIcon, { color: theme.primary }]}>🧩</Text>
+            <View>
+              <Text style={[styles.rowLabel, { color: theme.foreground }]}>Enablement</Text>
+              <Text style={[styles.rowStatus, { color: theme.mutedForeground }]}>Shipments · forwarding · plans · finance · storage</Text>
             </View>
           </View>
           <Text style={{ color: theme.mutedForeground }}>›</Text>
