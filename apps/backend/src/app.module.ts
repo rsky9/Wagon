@@ -46,6 +46,7 @@ import { FinanceModule } from './finance/finance.module'
 import { AiModule } from './ai/ai.module'
 import { GlobalModule } from './global/global.module'
 import { OrgAccessModule } from './org-access/org-access.module'
+import { MarketModule } from './market/market.module'
 
 @Module({
   imports: [
@@ -101,6 +102,7 @@ import { OrgAccessModule } from './org-access/org-access.module'
     AiModule,
     GlobalModule,
     OrgAccessModule,
+    MarketModule,
   ],
   controllers: [AppController],
   providers: [

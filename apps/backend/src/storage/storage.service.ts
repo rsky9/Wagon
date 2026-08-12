@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service'
 import { OutboxRelay } from '../outbox/outbox-relay.service'
 import { OrgAccessService } from '../org-access/org-access.service'
+import { MarketService } from '../market/market.service'
 import type { User } from '@prisma/client'
 
 const VALID_KINDS = ['warehouse', 'cold', 'bonded', 'cfs', 'icd', 'yard', 'cross_dock', 'transload']
@@ -29,6 +30,7 @@ export class StorageService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orgAccess: OrgAccessService,
+    private readonly market: MarketService,
     @Inject(OutboxRelay) private readonly outbox: OutboxRelay,
   ) {}
 
@@ -75,6 +77,8 @@ export class StorageService {
       })
       return created
     })
+    // Auto-publish this facility's capacity to the marketplace (warehouse_space).
+    await this.market.publishFromFacility(facility.id, user).catch(() => {})
     return { facility }
   }
 

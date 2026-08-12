@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service'
 import { OutboxRelay } from '../outbox/outbox-relay.service'
 import { OrgAccessService } from '../org-access/org-access.service'
+import { MarketService } from '../market/market.service'
 import type { User } from '@prisma/client'
 
 const DOC_KINDS = ['commercial_invoice', 'packing_list', 'waybill', 'bill_of_lading', 'air_waybill', 'customs_declaration', 'certificate']
@@ -41,6 +42,7 @@ export class ForwardingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orgAccess: OrgAccessService,
+    private readonly market: MarketService,
     @Inject(OutboxRelay) private readonly outbox: OutboxRelay,
   ) {}
 
@@ -477,6 +479,8 @@ export class ForwardingService {
       })
       return changed
     })
+    // Auto-publish the ready LCL consolidation as forwarder_service supply.
+    await this.market.publishFromConsolidation(consolidationId, user).catch(() => {})
     return { consolidation: updated }
   }
 

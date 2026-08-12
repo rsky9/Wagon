@@ -310,3 +310,86 @@ export interface CountryPack {
   enabled: boolean
   createdAt: string
 }
+
+// ---------- Marketplace (cross-type capability exchange) ----------
+
+export interface MarketLane {
+  id: string
+  originRef: string
+  destinationRef: string
+  distanceKm?: number | null
+  mode: string
+}
+
+export interface MarketListing {
+  id: string
+  providerOrgId: string
+  kind: 'truck_capacity' | 'warehouse_space' | 'carrier_service' | 'forwarder_service'
+  laneId?: string | null
+  originRef?: string | null
+  destinationRef?: string | null
+  city?: string | null
+  equipment?: string | null
+  capacityAvailable?: number | null
+  capacityUnit: string
+  price?: number | null
+  currency: string
+  status: string
+  description?: string | null
+  sourceType?: string | null
+  orgRating?: { avg: number | null; count: number } | null
+  providerOrg?: { id: string; name: string; verified: boolean } | null
+  createdAt: string
+}
+
+export interface MarketRequest {
+  id: string
+  requesterOrgId: string
+  kind: 'transport' | 'warehouse' | 'forwarding' | 'carrier' | 'insurance'
+  laneId?: string | null
+  originRef?: string | null
+  destinationRef?: string | null
+  city?: string | null
+  capacityNeeded?: number | null
+  capacityUnit: string
+  date?: string | null
+  budget?: number | null
+  currency: string
+  description?: string | null
+  status: string
+  requesterOrg?: { id: string; name: string; verified: boolean } | null
+  quotes?: MarketQuote[]
+  createdAt: string
+}
+
+export interface MarketQuote {
+  id: string
+  requestId: string
+  providerOrgId: string
+  amount?: number | null
+  currency: string
+  etaHours?: number | null
+  message?: string | null
+  status: string
+  providerOrg?: { id: string; name: string; verified: boolean } | null
+  createdAt: string
+}
+
+export interface CarrierService {
+  id: string
+  carrierOrgId: string
+  originRef?: string | null
+  destinationRef?: string | null
+  mode: string
+  vessel?: string | null
+  voyage?: string | null
+  flight?: string | null
+  departureAt?: string | null
+  arrivalAt?: string | null
+  equipment?: string | null
+  totalSlots: number
+  availableSlots: number
+  rate?: number | null
+  currency: string
+  status: string
+}

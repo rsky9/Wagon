@@ -65,6 +65,7 @@ import { PlanningScreen } from '../screens/PlanningScreen'
 import { EnablementFinanceScreen } from '../screens/EnablementFinanceScreen'
 import { StorageScreen } from '../screens/StorageScreen'
 import { GlobalScreen } from '../screens/GlobalScreen'
+import { MarketScreen } from '../screens/MarketScreen'
 import { SplashScreen, LanguageSelection, RoleSelection, CapabilitySelection } from '@wagon/components'
 import { AppLogo } from '../components/AppLogo'
 import { UnifiedTabs } from './UnifiedTabs'
@@ -120,6 +121,7 @@ export type RootStackParamList = {
   EnablementHub: undefined
   Shipments: undefined
   ShipmentDetail: { shipmentId: string }
+  Market: undefined
   Forwarding: undefined
   Planning: undefined
   EnablementFinance: undefined
@@ -322,6 +324,7 @@ function EnablementHubRoute({ navigation }: any) {
         else if (screen === 'finance') navigation.navigate('EnablementFinance')
         else if (screen === 'storage') navigation.navigate('Storage')
         else if (screen === 'global') navigation.navigate('Global')
+        else if (screen === 'market') navigation.navigate('Market')
       }}
     />
   )
@@ -364,6 +367,11 @@ function StorageRoute({ navigation }: any) {
 
 function GlobalRoute({ navigation }: any) {
   return <GlobalScreen onBack={() => navigation.goBack()} />
+}
+
+function MarketRoute({ navigation }: any) {
+  const { session } = useAuth()
+  return <MarketScreen onBack={() => navigation.goBack()} capabilities={session?.profile?.capabilities ?? []} />
 }
 
 function RoleChangeRoute({ navigation }: any) {
@@ -674,6 +682,7 @@ export function MobileNavigator() {
                 <Stack.Screen name="EnablementFinance" component={EnablementFinanceRoute} />
                 <Stack.Screen name="Storage" component={StorageRoute} />
                 <Stack.Screen name="Global" component={GlobalRoute} />
+                <Stack.Screen name="Market" component={MarketRoute} />
               </Stack.Navigator>
             </NavigationContainer>
           </ThemeContext.Provider>

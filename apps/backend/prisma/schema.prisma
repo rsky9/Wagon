@@ -786,6 +786,13 @@ model Organization {
   policiesUnderwritten InsurancePolicy[]
   settlementsPayer Settlement[] @relation("SettPayer")
   settlementsPayee Settlement[] @relation("SettPayee")
+  listings MarketListing[]
+  requests MarketRequest[]
+  quotes MarketQuote[]
+  lanesCreated Lane[]
+  carrierServices CarrierService[]
+  orgRatingsGiven OrgRating[] @relation("RatingGiver")
+  orgRatingsReceived OrgRating[] @relation("RatingSubject")
   @@index([kind])
 }
 
@@ -1279,4 +1286,153 @@ model CountryPack {
   enabled            Boolean  @default(true)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+}
+
+// ============================================================
+// Marketplace — cross-type capability exchange (all user types)
+// ============================================================
+
+/// A first-class origin↔destination pair (lane) that everything references.
+model Lane {
+  id            String @id @default(cuid())
+  originRef     String // normalized place e.g. "Mumbai, MH"
+  destinationRef String
+  originLat     Float?
+  originLng     Float?
+  destLat       Float?
+  destLng       Float?
+  distanceKm    Float?
+  mode          String  @default("road") // road | ocean | air | rail | multimodal
+  createdByOrgId String?
+  createdByOrg  Organization? @relation(fields: [createdByOrgId], references: [id])
+  listings      MarketListing[]
+  requests      MarketRequest[]
+  carrierServices CarrierService[]
+  createdAt     DateTime @default(now())
+  @@unique([originRef, destinationRef, mode])
+  @@index([originRef])
+  @@index([destinationRef])
+}
+
+/// Supply-side listing: "I provide X on lane Y at price Z".
+model MarketListing {
+  id              String   @id @default(cuid())
+  providerOrgId   String
+  providerOrg     Organization @relation(fields: [providerOrgId], references: [id])
+  kind            String   // truck_capacity | warehouse_space | carrier_service | forwarder_service
+  laneId          String?
+  lane            Lane?    @relation(fields: [laneId], references: [id])
+  originRef       String?
+  destinationRef  String?
+  city            String?
+  equipment       String?
+  capacityAvailable Float?
+  capacityUnit    String   @default("kg") // kg | m3 | slots | teu
+  price           Float?
+  currency        String   @default("INR")
+  availableFrom   DateTime?
+  availableTo     DateTime?
+  status          String   @default("live") // draft | live | paused | expired
+  description     String?
+  sourceType      String?  // facility | truck | consolidation | carrier_service | manual
+  sourceId        String?  // reference to the originating facility/truck/consolidation
+  carrierServiceId String?
+  carrierService  CarrierService? @relation(fields: [carrierServiceId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  quotes          MarketQuote[]
+  @@index([kind, status])
+  @@index([providerOrgId])
+  @@index([city])
+}
+
+/// Demand-side request: "I need X on lane Y" — the universal RFQ (any capability).
+model MarketRequest {
+  id              String   @id @default(cuid())
+  requesterOrgId  String
+  requesterOrg    Organization @relation(fields: [requesterOrgId], references: [id])
+  kind            String   // transport | warehouse | forwarding | carrier | insurance
+  laneId          String?
+  lane            Lane?    @relation(fields: [laneId], references: [id])
+  originRef       String?
+  destinationRef  String?
+  city            String?
+  capacityNeeded  Float?
+  capacityUnit    String   @default("kg")
+  date            DateTime?
+  budget          Float?
+  currency        String   @default("INR")
+  description     String?
+  status          String   @default("open") // open | quoted | booked | closed
+  sourceType      String?  // load | shipment | manual
+  sourceId        String?
+  quotes          MarketQuote[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([kind, status])
+  @@index([requesterOrgId])
+}
+
+/// A provider's quote responding to a MarketRequest (the Bid/DecisionRoom pattern).
+model MarketQuote {
+  id          String   @id @default(cuid())
+  requestId   String
+  request     MarketRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  providerOrgId String
+  providerOrg Organization @relation(fields: [providerOrgId], references: [id])
+  listingId   String?
+  listing     MarketListing? @relation(fields: [listingId], references: [id])
+  amount      Float?
+  currency    String   @default("INR")
+  etaHours    Float?
+  message     String?
+  status      String   @default("submitted") // submitted | accepted | rejected | withdrawn
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([requestId])
+  @@index([providerOrgId])
+}
+
+/// Org-level reputation: one party rates another org on an axis.
+model OrgRating {
+  id            String   @id @default(cuid())
+  subjectOrgId  String
+  subjectOrg    Organization @relation("RatingSubject", fields: [subjectOrgId], references: [id])
+  giverOrgId    String?
+  giverOrg      Organization? @relation("RatingGiver", fields: [giverOrgId], references: [id])
+  axis          String   // transporter | supplier | forwarder | warehouse | carrier
+  score         Int      // 1..5
+  review        String?
+  referenceType String?  // trip | shipment | warehouse_op | booking | quote
+  referenceId   String?
+  createdAt     DateTime @default(now())
+  @@index([subjectOrgId, axis])
+}
+
+/// A carrier's scheduled service (vessel/flight) with bookable slots.
+model CarrierService {
+  id            String   @id @default(cuid())
+  carrierOrgId  String
+  carrierOrg    Organization @relation(fields: [carrierOrgId], references: [id])
+  laneId        String?
+  lane          Lane?    @relation(fields: [laneId], references: [id])
+  originRef     String?
+  destinationRef String?
+  mode          String   @default("ocean") // ocean | air | rail
+  vessel        String?
+  voyage        String?
+  flight        String?
+  departureAt   DateTime?
+  arrivalAt     DateTime?
+  equipment     String?
+  totalSlots    Int      @default(1)
+  availableSlots Int     @default(1)
+  rate          Float?
+  currency      String   @default("INR")
+  status        String   @default("active") // active | sold_out | cancelled
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  listings      MarketListing[]
+  @@index([carrierOrgId])
+  @@index([status])
 }
