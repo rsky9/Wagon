@@ -762,6 +762,10 @@ model Organization {
   legProviders ShipmentLeg[] @relation("LegProvider")
   facilities Facility[]
   warehouseOps WarehouseOperation[]
+  bookings  CarrierBooking[]
+  forwarderOrders ForwardOrder[] @relation("ForwarderOrders")
+  customerOrders ForwardOrder[] @relation("CustomerOrders")
+  documents ForwardDocument[]
   @@index([kind])
 }
 
@@ -803,6 +807,9 @@ model Shipment {
   legs      ShipmentLeg[]
   events    LogisticsEvent[]
   warehouseOps WarehouseOperation[]
+  bookings  CarrierBooking[]
+  documents ForwardDocument[]
+  forwardOrder ForwardOrder?
   @@index([status])
 }
 
@@ -831,6 +838,7 @@ model ShipmentLeg {
   updatedAt  DateTime @updatedAt
 
   events LogisticsEvent[]
+  bookings CarrierBooking[]
   @@index([shipmentId])
 }
 
@@ -935,5 +943,68 @@ model WarehouseOperation {
   updatedAt   DateTime @updatedAt
 
   @@index([facilityId])
+  @@index([shipmentId])
+}
+
+// ============================================================
+// Phase 3 — Freight forwarding
+// ============================================================
+
+/// A forwarder's customer order: intake, consolidation intent, buy/sell margin.
+model ForwardOrder {
+  id          String   @id @default(cuid())
+  forwarderId String
+  forwarder   Organization @relation("ForwarderOrders", fields: [forwarderId], references: [id])
+  customerId  String?
+  customer    Organization? @relation("CustomerOrders", fields: [customerId], references: [id])
+  shipmentId  String   @unique
+  shipment    Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  ref         String
+  status      String   @default("intake") // intake | consolidated | booked | in_transit | delivered | closed
+  // Buy/sell margin: what the forwarder charges the customer vs pays the carrier.
+  buyAmount   Float?
+  sellAmount  Float?
+  currency    String   @default("INR")
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([forwarderId])
+}
+
+/// A forwarder's booked capacity on a carrier for a leg.
+model CarrierBooking {
+  id          String   @id @default(cuid())
+  shipmentId  String
+  shipment    Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  legId       String?
+  leg         ShipmentLeg? @relation(fields: [legId], references: [id])
+  carrierId   String?
+  carrier     Organization? @relation(fields: [carrierId], references: [id])
+  bookingRef  String?
+  vessel      String?
+  voyage      String?
+  flight      String?
+  equipment   String?
+  rate        Float?
+  currency    String   @default("INR")
+  status      String   @default("requested") // requested | confirmed | cancelled
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([shipmentId])
+}
+
+/// A trade/transport/customs document on a shipment.
+model ForwardDocument {
+  id         String   @id @default(cuid())
+  shipmentId String
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  kind       String   // commercial_invoice | packing_list | waybill | bill_of_lading | air_waybill | customs_declaration | certificate
+  number     String?
+  issuerId   String?
+  issuer     Organization? @relation(fields: [issuerId], references: [id])
+  storageKey String?
+  status     String   @default("draft") // draft | issued | cleared
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
   @@index([shipmentId])
 }

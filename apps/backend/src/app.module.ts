@@ -39,6 +39,7 @@ import { GamificationModule } from './gamification/gamification.module'
 import { FoundationModule } from './foundation/foundation.module'
 import { OutboxModule } from './outbox/outbox.module'
 import { StorageModule } from './storage/storage.module'
+import { ForwardingModule } from './forwarding/forwarding.module'
 
 @Module({
   imports: [
@@ -87,6 +88,7 @@ import { StorageModule } from './storage/storage.module'
     FoundationModule,
     OutboxModule,
     StorageModule,
+    ForwardingModule,
   ],
   controllers: [AppController],
   providers: [
