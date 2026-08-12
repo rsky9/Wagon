@@ -11,7 +11,18 @@ interface Props {
   capabilities?: string[]
 }
 
-type Tab = 'listings' | 'requests' | 'carriers' | 'mine' | 'partners'
+type Tab = 'listings' | 'requests' | 'carriers' | 'mine' | 'partners' | 'ai'
+
+interface AiRec {
+  id: string
+  agent: string
+  entityType: string
+  summary: string
+  score?: number | null
+  status: string
+  createdAt: string
+  output?: unknown
+}
 
 const KIND_LABEL: Record<string, string> = {
   truck_capacity: 'Truck capacity',
@@ -39,6 +50,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
   const [searchDest, setSearchDest] = useState('')
   const [carrierServices, setCarrierServices] = useState<Array<{ id: string; carrierOrg?: { name: string; verified: boolean } | null; vessel?: string | null; flight?: string | null; originRef?: string | null; destinationRef?: string | null; rate?: number | null; currency: string; availableSlots: number; totalSlots: number; status: string }>>([])
   const [partners, setPartners] = useState<Array<{ id: string; name: string; kind: string; baseUrl?: string | null; org?: { name: string; verified: boolean } | null }>>([])
+  const [aiRecs, setAiRecs] = useState<AiRec[]>([])
 
   const canPublishCarrier = capabilities.includes('carrier')
 
@@ -88,6 +100,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
       api.get<{ services: typeof carrierServices }>('/market/carrier-services').then((r) => setCarrierServices(r.services)).catch(() => {}),
       api.get<{ listings: MarketListing[] }>('/market/listings/mine').then((r) => setMyListings(r.listings)).catch(() => {}),
       api.get<{ partners: typeof partners }>('/market/partners').then((r) => setPartners(r.partners)).catch(() => {}),
+      api.get<{ recommendations: AiRec[] }>('/ai/recommendations/mine').then((r) => setAiRecs(r.recommendations)).catch(() => {}),
     ]).then(([l, r]) => { setListings(l.listings); setRequests(r.requests) })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -200,6 +213,14 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
       .finally(() => setBusy(false))
   }
 
+  const aiAction = (rec: AiRec, status: 'accepted' | 'dismissed') => {
+    setBusy(true)
+    api.patch(`/ai/recommendations/${rec.id}/status`, { status })
+      .then(() => fetch())
+      .catch((e) => Alert.alert('Error', e.message))
+      .finally(() => setBusy(false))
+  }
+
   const renderListing = (l: MarketListing) => (
     <View key={l.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
       <View style={styles.cardTop}>
@@ -285,7 +306,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
       </View>
 
       <View style={styles.tabs}>
-        {([['listings', 'Supply'], ['requests', 'Demand'], ['carriers', 'Carriers'], ['partners', 'Partners'], ['mine', 'My market']] as [Tab, string][]).map(([k, label]) => (
+        {([['listings', 'Supply'], ['requests', 'Demand'], ['carriers', 'Carriers'], ['ai', 'AI picks'], ['partners', 'Partners'], ['mine', 'My market']] as [Tab, string][]).map(([k, label]) => (
           <Pressable key={k} style={[styles.tabBtn, tab === k && { backgroundColor: '#F97316' }]} onPress={() => setTab(k)}>
             <Text style={{ color: tab === k ? '#fff' : theme.mutedForeground, fontWeight: '800', fontSize: 13 }}>{label}</Text>
           </Pressable>
@@ -349,6 +370,35 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
                 {item.org?.verified && <Text style={[styles.verified, { color: theme.success }]}>✓ verified</Text>}
               </View>
               <Text style={[styles.meta, { color: theme.mutedForeground }]}>{item.kind} · {item.org?.name ?? '—'} · {item.baseUrl ?? '—'}</Text>
+            </View>
+          )}
+        />
+      )}
+
+      {tab === 'ai' && (
+        <FlatList
+          contentContainerStyle={styles.list}
+          data={aiRecs}
+          keyExtractor={(r) => r.id}
+          ListEmptyComponent={loading ? undefined : <EmptyState title="No AI picks yet" message="Run match/carrier agents to get recommendations" icon="🤖" />}
+          renderItem={({ item }) => (
+            <View key={item.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <View style={styles.cardTop}>
+                <Text style={[styles.cardTitle, { color: theme.foreground }]}>{item.agent} agent</Text>
+                <Text style={[styles.chip, { color: item.status === 'proposed' ? theme.warning : theme.success, borderColor: item.status === 'proposed' ? theme.warning : theme.success }]}>{item.status}</Text>
+              </View>
+              <Text style={[styles.meta, { color: theme.mutedForeground }]}>{item.summary}</Text>
+              {item.score != null && <Text style={{ color: theme.foreground, fontWeight: '700' }}>Score: {item.score.toFixed(2)}</Text>}
+              {item.status === 'proposed' && (
+                <View style={styles.actions}>
+                  <Pressable style={[styles.actionBtn, { backgroundColor: theme.success }]} onPress={() => aiAction(item, 'accepted')}>
+                    <Text style={styles.actionText}>Accept</Text>
+                  </Pressable>
+                  <Pressable style={[styles.actionBtn, { backgroundColor: theme.danger }]} onPress={() => aiAction(item, 'dismissed')}>
+                    <Text style={styles.actionText}>Dismiss</Text>
+                  </Pressable>
+                </View>
+              )}
             </View>
           )}
         />

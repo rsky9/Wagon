@@ -43,6 +43,7 @@ const TYPE_ICON: Record<string, string> = {
 
 export function NotificationsScreen({ onBack, onNavigate }: Props) {
   const theme = useTheme()
+  const [filter, setFilter] = useState<'all' | 'market'>('all')
   const { t } = useI18n()
   const [items, setItems] = useState<NotificationItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,6 +62,8 @@ export function NotificationsScreen({ onBack, onNavigate }: Props) {
     await api.patch(`/notifications/${id}/read`).catch(() => {})
     fetch()
   }
+
+  const filtered = filter === 'all' ? items : items.filter((i) => (i.type ?? '').startsWith('market'))
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
@@ -83,9 +86,18 @@ export function NotificationsScreen({ onBack, onNavigate }: Props) {
         <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
       ) : (
         <FlatList
-          data={items}
+          data={filtered}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
+          ListHeaderComponent={
+            <View style={{ flexDirection: 'row', gap: spacing.sm, paddingBottom: spacing.sm }}>
+              {([['all', 'All'], ['market', '🏪 Market']] as [typeof filter, string][]).map(([k, label]) => (
+                <Pressable key={k} style={[styles.filterChip, filter === k && styles.filterActive]} onPress={() => setFilter(k)}>
+                  <Text style={{ color: filter === k ? '#fff' : theme.foreground, fontSize: 12, fontWeight: '700' }}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          }
           ListEmptyComponent={
             <EmptyState title={t('notifications.empty')} message={t('notifications.emptyHint')} icon="🔔" />
           }
@@ -120,6 +132,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1 },
   title: { fontSize: 20, fontWeight: '800' },
   badge: { borderRadius: radius.full, paddingHorizontal: 8, paddingVertical: 2 },
+  filterChip: { borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderWidth: 1, borderColor: 'rgba(128,128,128,0.4)' },
+  filterActive: { backgroundColor: '#F97316', borderColor: '#F97316' },
   list: { padding: spacing.lg, gap: spacing.sm },
   row: { flexDirection: 'row', alignItems: 'center', borderRadius: radius.lg, borderWidth: 1, padding: spacing.md, gap: spacing.md },
   iconBox: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },

@@ -1342,6 +1342,7 @@ model MarketListing {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   quotes          MarketQuote[]
+  inboundRequests MarketRequest[]
   @@index([kind, status])
   @@index([providerOrgId])
   @@index([city])
@@ -1365,12 +1366,15 @@ model MarketRequest {
   currency        String   @default("INR")
   description     String?
   status          String   @default("open") // open | quoted | booked | closed
-  sourceType      String?  // load | shipment | manual
+  sourceType      String?  // load | shipment | manual | listing
   sourceId        String?
+  listingId       String?
+  listing         MarketListing? @relation(fields: [listingId], references: [id])
   quotes          MarketQuote[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   @@index([kind, status])
+  @@index([listingId])
   @@index([requesterOrgId])
 }
 

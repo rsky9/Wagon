@@ -81,6 +81,16 @@ export class MarketController {
     return this.market.myRequests(user)
   }
 
+  @Get('quotes/mine')
+  myQuotes(@CurrentUser() user: User) {
+    return this.market.myQuotes(user)
+  }
+
+  @Get('requests/inbound')
+  listingRequests(@CurrentUser() user: User) {
+    return this.market.listingRequests(user)
+  }
+
   @Post('requests/:id/quotes')
   submitQuote(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentUser() user: User) {
     return this.market.submitQuote(id, body as never, user)

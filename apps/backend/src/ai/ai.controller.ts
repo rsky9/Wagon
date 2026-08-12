@@ -52,4 +52,9 @@ export class AiController {
   ) {
     return this.ai.list(entityType, entityId, user, agent, status)
   }
+
+  @Get('recommendations/mine')
+  myRecommendations(@Query('agent') agent: string | undefined, @Query('status') status: string | undefined, @CurrentUser() user: User) {
+    return this.ai.myRecommendations(user, agent, status)
+  }
 }

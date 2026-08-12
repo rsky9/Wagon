@@ -325,4 +325,18 @@ export class AiService {
     })
     return { recommendations }
   }
+
+  /** Recommendations created by the caller (any agent) — for a personal AI feed. */
+  async myRecommendations(user: User, agent?: string, status?: string) {
+    const recommendations = await this.prisma.aiRecommendation.findMany({
+      where: {
+        createdBy: user.id,
+        ...(agent ? { agent } : {}),
+        ...(status ? { status } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    })
+    return { recommendations }
+  }
 }

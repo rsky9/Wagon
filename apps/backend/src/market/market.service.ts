@@ -467,6 +467,9 @@ export class MarketService {
         capacityUnit: listing.capacityUnit,
         budget: input.budget,
         description: input.description ?? `Requested from ${listing.description ?? 'listing'} ${listing.id.slice(-6)}`,
+        listingId: listing.id,
+        sourceType: 'listing',
+        sourceId: listing.id,
         status: 'open',
       },
     })
@@ -509,6 +512,35 @@ export class MarketService {
       take: 50,
     })
     return { requests }
+  }
+
+  /** Quotes I submitted (provider view) with their requests. */
+  async myQuotes(user: User) {
+    const orgIds = await this.orgAccess.memberOrgIds(user)
+    const quotes = await this.prisma.marketQuote.findMany({
+      where: { providerOrgId: { in: orgIds } },
+      include: { request: { include: { requesterOrg: { select: { id: true, name: true, kind: true } } } } },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    })
+    return { quotes }
+  }
+
+  /** Inbound requests on my listings (provider view). */
+  async listingRequests(user: User) {
+    const orgIds = await this.orgAccess.memberOrgIds(user)
+    const listings = await this.prisma.marketListing.findMany({
+      where: { providerOrgId: { in: orgIds } },
+      select: { id: true, kind: true, originRef: true, destinationRef: true, sourceType: true, sourceId: true },
+    })
+    const listingIds = listings.map((l) => l.id)
+    const requests = await this.prisma.marketRequest.findMany({
+      where: { listingId: { in: listingIds } },
+      include: { requesterOrg: { select: { id: true, name: true, kind: true } }, quotes: true, listing: { select: { kind: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    })
+    return { listings, requests }
   }
 
   /** A provider submits a quote on an open request. */
