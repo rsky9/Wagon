@@ -130,6 +130,31 @@ export const authActions = {
     persist(next)
   },
 
+  /**
+   * Ensure the user belongs to an organization of the kind matching their first
+   * capability. Without one, every enablement endpoint returns 403. Creates the
+   * org on first call; idempotent afterwards.
+   */
+  ensureOrganization: async () => {
+    if (!state.session) return
+    try {
+      const orgs = await api.get<{ organizations: { id: string; kind: string }[] }>('/foundation/organizations')
+      if (orgs.organizations.length > 0) return
+      const caps = state.session.profile.capabilities ?? [state.session.profile.role]
+      const KIND: Record<string, string> = {
+        supplier: 'shipper',
+        transporter: 'transporter',
+        forwarder: 'forwarder',
+        warehouse: 'warehouse',
+        carrier: 'carrier',
+        driver: 'transporter',
+      }
+      const kind = KIND[caps[0] ?? ''] ?? 'shipper'
+      const name = `${(state.session.profile.name ?? caps[0] ?? 'My').toUpperCase()} ${kind}`
+      await api.post('/foundation/organizations', { name, kind })
+    } catch {}
+  },
+
   resetOtp: () => setState({ otpRequested: false, devCode: null, error: null }),
 
   clearError: () => setState({ error: null }),
@@ -145,5 +170,6 @@ export function useAuth() {
     logout: authActions.logout,
     updateRole: authActions.updateRole,
     setCapabilities: authActions.setCapabilities,
+    ensureOrganization: authActions.ensureOrganization,
   }
 }

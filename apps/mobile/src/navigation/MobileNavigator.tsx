@@ -59,6 +59,7 @@ import { ResponsesScreen } from '../screens/ResponsesScreen'
 import { BookingsScreen } from '../screens/BookingsScreen'
 import { EnablementHub } from '../screens/EnablementHub'
 import { ShipmentsScreen } from '../screens/ShipmentsScreen'
+import { ShipmentDetailScreen } from '../screens/ShipmentDetailScreen'
 import { ForwardingScreen } from '../screens/ForwardingScreen'
 import { PlanningScreen } from '../screens/PlanningScreen'
 import { EnablementFinanceScreen } from '../screens/EnablementFinanceScreen'
@@ -118,6 +119,7 @@ export type RootStackParamList = {
   TripExceptions: { tripId: string }
   EnablementHub: undefined
   Shipments: undefined
+  ShipmentDetail: { shipmentId: string }
   Forwarding: undefined
   Planning: undefined
   EnablementFinance: undefined
@@ -317,7 +319,11 @@ function EnablementHubRoute({ navigation }: any) {
 }
 
 function ShipmentsRoute({ navigation }: any) {
-  return <ShipmentsScreen onBack={() => navigation.goBack()} />
+  return <ShipmentsScreen onBack={() => navigation.goBack()} onOpen={(shipmentId) => navigation.navigate('ShipmentDetail', { shipmentId })} />
+}
+
+function ShipmentDetailRoute({ navigation, route }: any) {
+  return <ShipmentDetailScreen shipmentId={route.params?.shipmentId} onBack={() => navigation.goBack()} />
 }
 
 function ForwardingRoute({ navigation }: any) {
@@ -542,6 +548,8 @@ export function MobileNavigator() {
     setNeedRole(false)
     AsyncStorage.setItem('wagon_capabilities', JSON.stringify(caps)).catch(() => {})
     await auth.setCapabilities(caps)
+    // Create the matching organization so enablement endpoints stop 403-ing.
+    await auth.ensureOrganization()
   }
 
   const finishOnboarding = () => {
@@ -645,6 +653,7 @@ export function MobileNavigator() {
                 <Stack.Screen name="RoleChange" component={RoleChangeRoute} />
                 <Stack.Screen name="EnablementHub" component={EnablementHubRoute} />
                 <Stack.Screen name="Shipments" component={ShipmentsRoute} />
+                <Stack.Screen name="ShipmentDetail" component={ShipmentDetailRoute} />
                 <Stack.Screen name="Forwarding" component={ForwardingRoute} />
                 <Stack.Screen name="Planning" component={PlanningRoute} />
                 <Stack.Screen name="EnablementFinance" component={EnablementFinanceRoute} />

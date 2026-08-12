@@ -8,9 +8,10 @@ import type { Shipment } from '@wagon/contracts'
 
 interface Props {
   onBack: () => void
+  onOpen: (shipmentId: string) => void
 }
 
-export function ShipmentsScreen({ onBack }: Props) {
+export function ShipmentsScreen({ onBack, onOpen }: Props) {
   const theme = useTheme()
   const [shipments, setShipments] = useState<Shipment[]>([])
   const [loading, setLoading] = useState(true)
@@ -80,7 +81,7 @@ export function ShipmentsScreen({ onBack }: Props) {
           contentContainerStyle={styles.list}
           ListEmptyComponent={<EmptyState title="No shipments yet" message="Create one above to get started" icon="📦" />}
           renderItem={({ item }) => (
-            <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Pressable style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => onOpen(item.id)}>
               <View style={styles.cardTop}>
                 <Text style={[styles.cardTitle, { color: theme.foreground }]}>{item.commodity ?? 'Untitled'}</Text>
                 <Text style={[styles.chip, { color: theme.warning, borderColor: theme.warning }]}>{item.status}</Text>
@@ -89,7 +90,7 @@ export function ShipmentsScreen({ onBack }: Props) {
                 {item.ref} · {item.weightKg ? `${item.weightKg} kg` : '—'} · {item.value ? `₹${item.value.toLocaleString('en-IN')}` : '—'}
               </Text>
               <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>{item.legs?.length ?? 0} legs · {item.mode}</Text>
-            </View>
+            </Pressable>
           )}
         />
       )}
