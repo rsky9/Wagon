@@ -138,4 +138,51 @@ export class AdminController {
   actionReport(@Param('id') id: string, @Body() body: { action: 'dismiss' | 'block' }, @CurrentUser() actor: User) {
     return this.admin.actionReport(id, body.action, actor)
   }
+
+  // ---------- Enablement platform ----------
+
+  @Get('organizations')
+  organizations() {
+    return this.admin.organizations()
+  }
+
+  @Get('shipments')
+  allShipments(@Query('status') status?: string, @Query('ownerOrgId') ownerOrgId?: string) {
+    return this.admin.allShipments(status || ownerOrgId ? { status, ownerOrgId } : undefined)
+  }
+
+  @Get('plans')
+  plans(@Query('shipmentId') shipmentId?: string) {
+    return this.admin.plans(shipmentId)
+  }
+
+  @Get('claims')
+  claims(@Query('status') status?: string) {
+    return this.admin.claims(status)
+  }
+
+  @Get('webhooks')
+  webhooks() {
+    return this.admin.webhooks()
+  }
+
+  @Get('webhook-deliveries')
+  webhookDeliveries(@Query('status') status?: string) {
+    return this.admin.webhookDeliveries(status)
+  }
+
+  @Get('facilities')
+  facilities() {
+    return this.admin.facilities()
+  }
+
+  @Get('consolidations')
+  consolidations() {
+    return this.admin.consolidations()
+  }
+
+  @Get('settlements')
+  settlements() {
+    return this.admin.settlements()
+  }
 }

@@ -574,4 +574,101 @@ export class AdminService {
     })
     return Math.round((matched / total) * 100)
   }
+
+  // ---------- Enablement platform (orgs, shipments, plans, claims, webhooks, facilities) ----------
+
+  async organizations() {
+    const organizations = await this.prisma.organization.findMany({
+      include: { members: { include: { user: { select: { id: true, name: true, mobile: true } } } } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    })
+    const shipmentCounts = await this.prisma.shipment.groupBy({ by: ['ownerOrgId'], _count: { _all: true } })
+    const countByOrg = Object.fromEntries(shipmentCounts.map((s) => [s.ownerOrgId, s._count._all]))
+    return {
+      organizations: organizations.map((o) => ({ ...o, shipmentCount: countByOrg[o.id] ?? 0 })),
+    }
+  }
+
+  async allShipments(query?: { status?: string; ownerOrgId?: string }) {
+    const where: Record<string, unknown> = {}
+    if (query?.status) where.status = query.status
+    if (query?.ownerOrgId) where.ownerOrgId = query.ownerOrgId
+    const [shipments, total] = await Promise.all([
+      this.prisma.shipment.findMany({
+        where,
+        include: { legs: { orderBy: { sequence: 'asc' } }, ownerOrg: true, activePlan: true },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
+      this.prisma.shipment.count({ where }),
+    ])
+    return { shipments, total }
+  }
+
+  async plans(shipmentId?: string) {
+    const plans = await this.prisma.plan.findMany({
+      where: shipmentId ? { shipmentId } : {},
+      include: { shipment: { select: { id: true, ref: true, commodity: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    })
+    return { plans }
+  }
+
+  async claims(status?: string) {
+    const claims = await this.prisma.claim.findMany({
+      where: status ? { status } : {},
+      include: { shipment: { select: { id: true, ref: true, commodity: true } }, claimant: true, handler: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    })
+    return { claims }
+  }
+
+  async webhooks() {
+    const webhooks = await this.prisma.webhookSubscription.findMany({
+      include: { org: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    })
+    return { webhooks: webhooks.map(({ secret: _s, ...w }) => w) }
+  }
+
+  async webhookDeliveries(status?: string) {
+    const deliveries = await this.prisma.webhookDelivery.findMany({
+      where: status ? { status } : {},
+      include: { subscription: { include: { org: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    })
+    return { deliveries }
+  }
+
+  async facilities() {
+    const facilities = await this.prisma.facility.findMany({
+      include: { operator: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    })
+    return { facilities }
+  }
+
+  async consolidations() {
+    const consolidations = await this.prisma.consolidation.findMany({
+      include: { forwarder: true, orders: { include: { shipment: true } }, bookedCarrier: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    })
+    return { consolidations }
+  }
+
+  async settlements() {
+    const settlements = await this.prisma.settlement.findMany({
+      include: { shipment: { select: { id: true, ref: true } }, payer: true, payee: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    })
+    return { settlements }
+  }
 }

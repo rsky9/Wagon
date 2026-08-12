@@ -135,17 +135,26 @@ async function main() {
   }
 
   const COUNTRY_PACKS = [
-    { code: 'IN', name: 'India', currency: 'INR', language: 'en', unitSystem: 'metric', customsRegime: 'icdt', documentRequirements: ['commercial_invoice', 'packing_list', 'eway_bill', 'customs_declaration'], incotermsSupported: ['EXW', 'FOB', 'CIF', 'DAP'] },
-    { code: 'AE', name: 'UAE', currency: 'AED', language: 'en', unitSystem: 'metric', customsRegime: 'gcc', documentRequirements: ['commercial_invoice', 'packing_list', 'customs_declaration'], incotermsSupported: ['FOB', 'CIF', 'DAP', 'DDP'] },
-    { code: 'SG', name: 'Singapore', currency: 'SGD', language: 'en', unitSystem: 'metric', customsRegime: 'asean', documentRequirements: ['commercial_invoice', 'packing_list', 'customs_declaration'], incotermsSupported: ['EXW', 'FOB', 'CIF', 'DAP'] },
-    { code: 'US', name: 'United States', currency: 'USD', language: 'en', unitSystem: 'imperial', customsRegime: 'acp', documentRequirements: ['commercial_invoice', 'packing_list', 'bill_of_lading', 'customs_declaration'], incotermsSupported: ['EXW', 'FOB', 'CIF', 'DDP'] },
-    { code: 'NL', name: 'Netherlands', currency: 'EUR', language: 'nl', unitSystem: 'metric', customsRegime: 'eu', documentRequirements: ['commercial_invoice', 'packing_list', 'customs_declaration', 'certificate'], incotermsSupported: ['EXW', 'FOB', 'CIF', 'DDP'] },
-    { code: 'CN', name: 'China', currency: 'CNY', language: 'zh', unitSystem: 'metric', customsRegime: 'cct', documentRequirements: ['commercial_invoice', 'packing_list', 'customs_declaration'], incotermsSupported: ['FOB', 'CIF', 'DAP'] },
+    { code: 'IN', name: 'India', currency: 'INR', baseCurrency: 'INR', exchangeRateToBase: 1, language: 'en', unitSystem: 'metric', customsRegime: 'icdt', documentRequirements: ['commercial_invoice', 'packing_list', 'eway_bill', 'customs_declaration'], incotermsSupported: ['EXW', 'FOB', 'CIF', 'DAP'] },
+    { code: 'AE', name: 'UAE', currency: 'AED', baseCurrency: 'INR', exchangeRateToBase: 22.7, language: 'en', unitSystem: 'metric', customsRegime: 'gcc', documentRequirements: ['commercial_invoice', 'packing_list', 'customs_declaration'], incotermsSupported: ['FOB', 'CIF', 'DAP', 'DDP'] },
+    { code: 'SG', name: 'Singapore', currency: 'SGD', baseCurrency: 'INR', exchangeRateToBase: 61.5, language: 'en', unitSystem: 'metric', customsRegime: 'asean', documentRequirements: ['commercial_invoice', 'packing_list', 'customs_declaration'], incotermsSupported: ['EXW', 'FOB', 'CIF', 'DAP'] },
+    { code: 'US', name: 'United States', currency: 'USD', baseCurrency: 'INR', exchangeRateToBase: 83.2, language: 'en', unitSystem: 'imperial', customsRegime: 'acp', documentRequirements: ['commercial_invoice', 'packing_list', 'bill_of_lading', 'customs_declaration'], incotermsSupported: ['EXW', 'FOB', 'CIF', 'DDP'] },
+    { code: 'NL', name: 'Netherlands', currency: 'EUR', baseCurrency: 'INR', exchangeRateToBase: 90.5, language: 'nl', unitSystem: 'metric', customsRegime: 'eu', documentRequirements: ['commercial_invoice', 'packing_list', 'customs_declaration', 'certificate'], incotermsSupported: ['EXW', 'FOB', 'CIF', 'DDP'] },
+    { code: 'CN', name: 'China', currency: 'CNY', baseCurrency: 'INR', exchangeRateToBase: 11.5, language: 'zh', unitSystem: 'metric', customsRegime: 'cct', documentRequirements: ['commercial_invoice', 'packing_list', 'customs_declaration'], incotermsSupported: ['FOB', 'CIF', 'DAP'] },
   ]
   for (const c of COUNTRY_PACKS) {
     await prisma.countryPack.upsert({
       where: { code: c.code },
-      update: {},
+      update: {
+        currency: c.currency,
+        baseCurrency: c.baseCurrency,
+        exchangeRateToBase: c.exchangeRateToBase,
+        language: c.language,
+        unitSystem: c.unitSystem,
+        customsRegime: c.customsRegime,
+        documentRequirements: c.documentRequirements,
+        incotermsSupported: c.incotermsSupported,
+      },
       create: c,
     })
   }

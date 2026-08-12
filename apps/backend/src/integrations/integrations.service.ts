@@ -1,12 +1,13 @@
 import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common'
 import { randomBytes } from 'node:crypto'
+import { ConfigService } from '@nestjs/config'
 import { PrismaService } from '../prisma/prisma.service'
 import { OrgAccessService } from '../org-access/org-access.service'
 import { WebhookDispatcher } from './webhook-dispatcher.service'
 import type { User } from '@prisma/client'
 
 const CONNECTOR_KINDS = ['tms', 'erp', 'carrier_api', 'tracking', 'customs']
-const SSRF_BLOCKED = ['localhost', '127.0.0.1', '::1', '0.0.0.0', '169.254.169.254', 'metadata.google.internal', '[::1]']
+const SSRF_BLOCKED = ['127.0.0.1', '::1', '0.0.0.0', '169.254.169.254', 'metadata.google.internal', '[::1]']
 
 @Injectable()
 export class IntegrationsService {
@@ -14,6 +15,7 @@ export class IntegrationsService {
     private readonly prisma: PrismaService,
     private readonly orgAccess: OrgAccessService,
     private readonly dispatcher: WebhookDispatcher,
+    private readonly config: ConfigService,
   ) {}
 
   private stripSecret<T extends { secret: string }>(obj: T) {
@@ -30,7 +32,10 @@ export class IntegrationsService {
         throw new BadRequestException('Invalid webhook URL')
       }
     })()
-    if (SSRF_BLOCKED.includes(host) || host.endsWith('.local') || host.endsWith('.internal')) {
+    const isProd = this.config.get('NODE_ENV') === 'production'
+    // In dev, localhost is allowed so integrations can be tested against local receivers.
+    const blocked = isProd ? [...SSRF_BLOCKED, 'localhost'] : SSRF_BLOCKED
+    if (blocked.includes(host) || (!isProd && (host.endsWith('.local') || host.endsWith('.internal')))) {
       throw new BadRequestException('Webhook URL host not allowed')
     }
   }
