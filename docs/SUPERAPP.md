@@ -1,4 +1,4 @@
-# Wagon → Universal Logistics Operating System — Execution Blueprint
+# Wagon — Logistics Enablement Network (not an operating system that executes)
 
 *Researched and grounded against the 28-page ULOS thesis (12 Aug 2026), the current Wagon codebase, live logistics data-model standards, and the real execution histories of Flexport, Project44, FourKites, Freightos, uShip, Raft, Loadsmart, Manbang, Convoy, Cargonexx, and Trunkrs.*
 
@@ -6,13 +6,31 @@
 
 ---
 
-## 1. The thesis in one paragraph
+## 0. What we are (and are not)
 
-Build a **Universal Logistics Operating System (ULOS)**: one canonical logistics graph (`Party ↔ Cargo ↔ Handling Unit ↔ Equipment ↔ Location ↔ Shipment ↔ Leg ↔ Event ↔ Document ↔ Contract ↔ Money ↔ Outcome`) that coordinates road, rail, ocean, air, inland water, warehousing, forwarding, customs, financing, claims and settlement — while letting every participant keep their own ERP/TMS/WMS/forwarding software. The platform owns the **canonical operational state and orchestration**; external systems become **adapters**.
+**We are not a logistics company.** We do not own trucks, warehouses, containers, or execute physical work. **Executing a task remains the user's problem — we enable them to do it.**
 
-**Core abstraction:** `Cargo → Handling Unit → Equipment → Location → Leg → Shipment → Network → Event → Decision → Money`
+We are an **enablement platform + network**:
 
-**North star:** a user describes the outcome they need; the system turns intent into a feasible plan, procures capabilities, coordinates execution, handles exceptions and closes the commercial transaction.
+- **Enable** — we give every participant (shipper, transporter, forwarder, driver, warehouse, carrier) the **onboarding, planning, and execution tools** to do their job better.
+- **Connect** — everyone connects through us: one trusted identity, one shared operational graph, matching, visibility, documents, and settlement. **Freedom of choice** for every participant at every step (which load to take, which transporter to use, which carrier to book, which tool to use).
+- **Integrate** — their existing ERP/TMS/WMS/forwarding software stays; we're the interop layer between all of them.
+
+**What we own:**
+- Canonical identities, the shared logistics graph, event/visibility data, matching/marketplace, planning & decision tools, documents, commercial ledger, integrations, permissions and audit.
+
+**What we do NOT own:**
+- Physical execution. Loading, driving, warehousing, handling, clearing — that's the user's job. We give them the tools and data to do it, and we make every handover an evidence-backed, coordinated event. If a task isn't done, that's a user action gap we surface — not something we silently do for them.
+
+**Why this model wins (vs the thesis's "orchestrate everything"):**
+- **Zero balance-sheet/working-capital risk** — we never sit between payment and physical delivery. The user owns execution; we own the platform. (The thesis itself flags working-capital risk as a failure mode; this model removes it.)
+- **Trust by design** — we're the neutral layer, not a competitor to the shipper/transporter/forwarder we serve.
+- **Faster to scale** — no asset build-out, no operator hiring, no physical network to run.
+- **Match with the research:** the SaaS-first companies (Freightos via WebCargo, Raft, Transmetrics, Loadsmart's software portfolio) survived; the ones that became operators/brokers on balance sheet (Convoy, Cargonexx) died. We take the SaaS-first path to its logical end.
+
+**Core abstraction:** `Party → Capability → Demand → Plan (multi-option) → Choose → Book → Execute (user-owned, enabled by tools) → Event/Evidence → Settle → Learn`
+
+**North star:** a participant describes the outcome they need; we give them feasible, comparable plans, the freedom to choose, the tools and data to execute it themselves, and close the commercial loop — without ever doing the physical work for them.
 
 ---
 
@@ -133,42 +151,44 @@ Target stack stays **NestJS + Prisma + PostgreSQL + React Native + Next.js**.
 | Integration | API only | **Missing:** EDI/webhook/SFTP/connector marketplace |
 | AI | gamification, match-score | Deterministic only; no agent layer |
 
-**Verdict: Wagon is a credible Phase 0–1 (Foundation + Road wedge) implementation — exactly where the thesis says to start.**
+**Verdict: Wagon is a credible Phase 0–1 (Foundation + Road wedge) **enablement** platform — exactly where the research says to start. We are already a SaaS + network, not an operator.**
 
 ---
 
 ## 6. The execution roadmap (opinionated, grounded in research)
 
+Every phase is framed as **tooling + connection for the user** — never as us doing the physical work.
+
 ### Phase 0 — Foundation (do first; 2–3 weeks)
 1. **Generalize `Load` → `Shipment` + `Leg[]`** (the keystone). Keep `Load`/`Trip`/`Bid` as the road specialization — nothing breaks.
 2. **Add the canonical `Event` model + outbox** (`event_type`, `entity_id`, `shipment_id`, `occurred_at`, `source`, `actor`, `evidence`, `correlation_id`, `schema_version`) written in the same transaction as domain writes.
-3. **Add `Organization`/`Party` + org membership** so forwarders/warehouses become first-class actors.
+3. **Add `Organization`/`Party` + org membership** so forwarders/warehouses/carriers become first-class actors that onboard through us.
 4. **Event taxonomy** aligned to DCSA/ONE Record codes.
-5. Exit: core logistics state can be represented, authorized, changed and audited.
+5. Exit: core logistics state can be represented, authorized, changed and audited — and every actor has an identity + capability profile through us.
 
 ### Phase 1 — Road wedge (your current product, hardened)
-Your existing `Load → Bid → Trip` flow + driver app + GPS/ETA + POD + control tower **is** Phase 1. The research says: **keep it narrow, make it denser, prove corridor liquidity.** Don't expand modes until road density is real.
+Your existing `Load → Bid → Trip` flow + driver app + GPS/ETA + POD + control tower **is** Phase 1 — a SaaS tool that enables the transporter to execute. The research says: **keep it narrow, make it denser, prove corridor liquidity.** Don't expand modes until road density is real.
 
 ### Phase 2 — Storage/domestic (the execution-gap moat)
-- `Facility` + warehouse ops (appointment → gate-in → receive → put-away → pick → stage → load → gate-out).
-- Yard/dock/appointment — **this is where Project44/FourKites are heading and India is unbuilt.**
-- Domestic multimodal (road + rail intermodal).
+- `Facility` master + warehouse **tooling** (appointment → gate-in → receive → put-away → pick → stage → load → gate-out) — the warehouse operator executes; we give them the tool + connection to the same graph.
+- Yard/dock/appointment scheduling — **where Project44/FourKites are heading and India is unbuilt.**
+- Domestic multimodal (road + rail intermodal) as planning options for the user.
 
 ### Phase 3 — Forwarding/international
-- Forwarder workspace (orders, consolidation, carrier procurement, bookings, container mgmt, customs, margins).
+- Forwarder **workspace** (orders, consolidation, carrier procurement, bookings, container mgmt, customs, margins) — the forwarder does the forwarding; we enable + connect.
 - Ocean/air booking + container lifecycle + customs/broker workflows + trade documents + port/terminal integration.
 
 ### Phase 4 — Multimodal
-- Rail, ocean, air, inland/coastal water, transload, intermodal optimization, network planning, **re-planning when a leg fails**.
+- Rail, ocean, air, inland/coastal water, transload, intermodal optimization, **multi-option planning with re-planning when a leg fails** — the user chooses the plan; we present the options and the trade-offs.
 
 ### Phase 5 — Integration ecosystem
-- Connector marketplace, API/EDI gateway, partner SDK, webhooks, ERP/TMS/WMS ecosystem, IoT/telematics.
+- Connector marketplace, API/EDI gateway, partner SDK, webhooks, ERP/TMS/WMS ecosystem, IoT/telematics — **their software connects through us**; freedom to keep their stack.
 
 ### Phase 6 — Finance/risk
-- Insurance partners, claims automation, settlement, reconciliation, financing integrations, risk scoring.
+- Insurance partners, claims tooling, settlement, reconciliation, financing integrations, risk scoring — neutral settlement between parties; we never take working-capital exposure.
 
 ### Phase 7 — AI
-- Planning recommendations, procurement agent, exception agent, ETA intelligence, document agent, network optimization, bounded autonomy (with the guardrails in §4.6).
+- Plan/recommend agents (options + trade-offs), procurement suggestions, exception detection + suggested recovery, ETA intelligence, document drafting, network optimization — **AI recommends; the user decides and executes** (guardrails in §4.6).
 
 ### Phase 8 — Global
 - Country packs (India-first: tax/transport/customs/port/payment/language adapters), data residency, regional provider networks.
@@ -187,6 +207,7 @@ Your existing `Load → Bid → Trip` flow + driver app + GPS/ETA + POD + contro
 8. AI recommends; policy governs; deterministic systems verify.
 9. Commercial truth reconciles to operational evidence.
 10. Build universal architecture but commercialize through dense corridors.
+11. **The user executes; we enable.** We never substitute ourselves for the participant's execution — we give them tools, data, connection and choice.
 
 ---
 
@@ -194,13 +215,14 @@ Your existing `Load → Bid → Trip` flow + driver app + GPS/ETA + POD + contro
 
 - **Marketplace cold start** → launch corridor-first with anchor demand + quality supply.
 - **Integration overload** → canonical model + connector SDK + standards; long-tail via file/manual adapters.
-- **Becoming a generic TMS** → keep network orchestration as the product center.
-- **AI overreach** → deterministic validation, permissions, approval thresholds, evidence, audit.
+- **Becoming a generic TMS** → keep **network connection + enablement** as the product center; we are the interop layer, not one more system.
+- **Becoming an operator by accident** → never take balance-sheet/execution exposure; execution stays with the user (this is our model's core safety).
+- **AI overreach** → deterministic validation, permissions, approval thresholds, evidence, audit — and the user stays the decider.
 - **Data fragmentation** → canonical IDs, domain ownership, event contracts, master-data governance.
 - **Operational complexity** → universal primitives first; mode-specific extensions second.
-- **Regulatory exposure** → country modules + licensed partners; never pretend the platform is the regulator.
+- **Regulatory exposure** → country modules + licensed partners; never pretend the platform is the regulator or the carrier.
 - **Fraud** → KYB/KYC, device signals, payment controls, anomaly detection, evidence, dispute workflows.
-- **Working-capital risk** → separate marketplace orchestration from balance-sheet exposure (your escrow model already does this well).
+- **Working-capital risk** → neutral settlement only; never sit on the balance sheet between parties (your escrow model already does this well).
 
 ---
 
