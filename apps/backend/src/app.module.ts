@@ -36,6 +36,8 @@ import { NotifPrefsModule } from './notif-prefs/notif-prefs.module'
 import { TrustModule } from './trust/trust.module'
 import { DriverModule } from './driver/driver.module'
 import { GamificationModule } from './gamification/gamification.module'
+import { FoundationModule } from './foundation/foundation.module'
+import { OutboxModule } from './outbox/outbox.module'
 
 @Module({
   imports: [
@@ -81,6 +83,8 @@ import { GamificationModule } from './gamification/gamification.module'
     TrustModule,
     DriverModule,
     GamificationModule,
+    FoundationModule,
+    OutboxModule,
   ],
   controllers: [AppController],
   providers: [
