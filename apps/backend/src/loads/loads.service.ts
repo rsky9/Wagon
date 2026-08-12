@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service'
 import { AlertsService } from '../alerts/alerts.service'
 import { NotificationsService } from '../notifications/notifications.service'
+import { ShipmentProjector } from '../shipments/shipment-projector.service'
 import type { User } from '@prisma/client'
 import type { Load } from '@wagon/contracts'
 
@@ -64,6 +65,7 @@ export class LoadsService {
     private readonly prisma: PrismaService,
     private readonly alerts: AlertsService,
     private readonly notifications: NotificationsService,
+    private readonly shipments: ShipmentProjector,
   ) {}
 
   async create(input: CreateLoadInput, user: User) {
@@ -140,6 +142,20 @@ export class LoadsService {
 
     // Notify transporters with saved lane alerts matching this load.
     await this.alerts.notifyForLoad(load)
+
+    // Phase 1 — canonical projection: Load -> Shipment + road leg, emit event.
+    const shipment = await this.shipments.fromLoad(load as never)
+    await this.shipments.emit({
+      eventType: 'SHIPMENT',
+      eventCode: 'LOAD_CREATED',
+      entityType: 'load',
+      entityId: load.id,
+      shipmentId: shipment?.id,
+      legId: shipment ? (await this.prisma.shipmentLeg.findFirst({ where: { shipmentId: shipment.id }, orderBy: { sequence: 'asc' } }))?.id : null,
+      actorId: user.id,
+      location: input.pickupAddr,
+      payload: { ref: load.id, route: `${input.pickupAddr} → ${input.dropAddr}` },
+    })
 
     return { load }
   }

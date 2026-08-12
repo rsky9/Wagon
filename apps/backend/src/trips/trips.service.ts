@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { ConfigService } from '@nestjs/config'
 import { PrismaService } from '../prisma/prisma.service'
 import { NotificationsService } from '../notifications/notifications.service'
+import { ShipmentProjector } from '../shipments/shipment-projector.service'
 import type { User, TripStage } from '@prisma/client'
 
 @Injectable()
@@ -10,6 +11,7 @@ export class TripsService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly config: ConfigService,
+    private readonly shipments: ShipmentProjector,
   ) {}
 
   async quote(loadId: string, amount: number, user: User) {
@@ -96,6 +98,18 @@ export class TripsService {
       })
     }
 
+    // Phase 1 — canonical event: trip booked/started on the road leg.
+    const shipmentId = await this.shipments.shipmentIdFor(loadId)
+    await this.shipments.emit({
+      eventType: 'TRANSPORT',
+      eventCode: 'TRIP_STARTED',
+      entityType: 'trip',
+      entityId: trip.id,
+      shipmentId,
+      actorId: user.id,
+      payload: { loadId, tripId: trip.id },
+    })
+
     return { trip }
   }
 
@@ -151,6 +165,20 @@ export class TripsService {
         category: 'trips',
       })
     }
+
+    // Phase 1 — canonical events for road lifecycle.
+    const shipmentId = await this.shipments.shipmentIdFor(trip.loadId)
+    const eventCode = status === 'in_transit' ? 'TRIP_IN_TRANSIT' : 'DELIVERED'
+    await this.shipments.emit({
+      eventType: 'TRANSPORT',
+      eventCode,
+      entityType: 'trip',
+      entityId: trip.id,
+      shipmentId,
+      actorId: user.id,
+      location: status === 'delivered' && load ? load.dropAddr : undefined,
+      payload: { tripId: trip.id, loadId: trip.loadId, status },
+    })
 
     return { trip: updated }
   }
