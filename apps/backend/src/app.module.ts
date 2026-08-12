@@ -38,6 +38,7 @@ import { DriverModule } from './driver/driver.module'
 import { GamificationModule } from './gamification/gamification.module'
 import { FoundationModule } from './foundation/foundation.module'
 import { OutboxModule } from './outbox/outbox.module'
+import { StorageModule } from './storage/storage.module'
 
 @Module({
   imports: [
@@ -85,6 +86,7 @@ import { OutboxModule } from './outbox/outbox.module'
     GamificationModule,
     FoundationModule,
     OutboxModule,
+    StorageModule,
   ],
   controllers: [AppController],
   providers: [

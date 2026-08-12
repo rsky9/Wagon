@@ -760,6 +760,8 @@ model Organization {
   legOrigins ShipmentLeg[] @relation("LegOrigin")
   legDestinations ShipmentLeg[] @relation("LegDestination")
   legProviders ShipmentLeg[] @relation("LegProvider")
+  facilities Facility[]
+  warehouseOps WarehouseOperation[]
   @@index([kind])
 }
 
@@ -800,6 +802,7 @@ model Shipment {
 
   legs      ShipmentLeg[]
   events    LogisticsEvent[]
+  warehouseOps WarehouseOperation[]
   @@index([status])
 }
 
@@ -884,4 +887,53 @@ model OutboxMessage {
   publishedAt   DateTime?
 
   @@index([status, createdAt])
+}
+
+// ============================================================
+// Phase 2 — Storage / domestic warehouse operations
+// ============================================================
+
+/// A physical node in the network: warehouse, CFS, ICD, yard, cross-dock, transload.
+model Facility {
+  id        String   @id @default(cuid())
+  name      String
+  kind      String   // warehouse | cold | bonded | cfs | icd | yard | cross_dock | transload
+  operatorId String?
+  operator  Organization? @relation(fields: [operatorId], references: [id])
+  address   String?
+  city      String?
+  latitude  Float?
+  longitude Float?
+  capacitySlots Int    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointments WarehouseOperation[]
+  @@index([kind])
+}
+
+/// One warehouse lifecycle: appointment -> gate-in -> receive -> put-away -> stored -> pick -> stage -> load -> gate-out.
+model WarehouseOperation {
+  id         String   @id @default(cuid())
+  facilityId String
+  facility   Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  shipmentId String?
+  shipment   Shipment? @relation(fields: [shipmentId], references: [id])
+  ref        String
+  status     String   @default("appointment") // appointment | gate_in | receive | put_away | stored | pick | stage | load | gate_out | done
+  appointmentAt DateTime?
+  gateInAt    DateTime?
+  receivedAt  DateTime?
+  storedAt    DateTime?
+  pickedAt    DateTime?
+  stagedAt    DateTime?
+  loadedAt    DateTime?
+  gateOutAt   DateTime?
+  operatorId  String?
+  operator    Organization? @relation(fields: [operatorId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([facilityId])
+  @@index([shipmentId])
 }
