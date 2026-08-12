@@ -499,7 +499,15 @@ export class MarketService {
       orderBy: { createdAt: 'desc' },
       take: 100,
     })
-    return { requests }
+    // Attach requester trust so providers can decide whether to quote.
+    const withTrust = await Promise.all(
+      requests.map(async (r) => {
+        const rating = await this.orgAverageRating(r.requesterOrgId)
+        const trust = await this.orgTrust(r.requesterOrgId)
+        return { ...r, requesterRating: rating.avg, requesterCompletion: trust.completionRate }
+      }),
+    )
+    return { requests: withTrust }
   }
 
   /** My posted requests. */
@@ -640,6 +648,18 @@ export class MarketService {
       }
       return accepted
     })
+    // Notify the provider's org members that their quote was accepted.
+    const providerMembers = await this.prisma.organizationMember.findMany({ where: { organizationId: quote.providerOrgId } })
+    for (const m of providerMembers) {
+      await this.notifications.create({
+        userId: m.userId,
+        type: 'market_accepted',
+        title: 'Your quote was accepted',
+        body: `Your quote of ${quote.amount != null ? `${quote.currency} ${quote.amount}` : '—'} for ${quote.request.kind} demand was accepted`,
+        data: { requestId: quote.requestId, quoteId },
+        category: 'market',
+      }).catch(() => {})
+    }
     return { quote: updated }
   }
 

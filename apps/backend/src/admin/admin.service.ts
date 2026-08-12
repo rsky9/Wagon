@@ -895,4 +895,24 @@ export class AdminService {
     await this.audit.log({ actorId: actor.id, action: 'listing_pause', resource: listingId })
     return { listing: updated }
   }
+
+  /** Admin: all quotes + ratings for marketplace health. */
+  async marketQuotes(query?: { status?: string }) {
+    const quotes = await this.prisma.marketQuote.findMany({
+      where: query?.status ? { status: query.status } : {},
+      include: { providerOrg: { select: { id: true, name: true } }, request: { select: { id: true, kind: true, status: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    })
+    return { quotes }
+  }
+
+  async marketRatings() {
+    const ratings = await this.prisma.orgRating.findMany({
+      include: { subjectOrg: { select: { id: true, name: true, kind: true } }, giverOrg: { select: { id: true, name: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    })
+    return { ratings }
+  }
 }

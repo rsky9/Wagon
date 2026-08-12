@@ -247,4 +247,14 @@ export class AdminController {
   pauseListing(@Param('id') id: string, @CurrentUser() actor: User) {
     return this.admin.pauseListing(id, actor)
   }
+
+  @Get('market/quotes')
+  marketQuotes(@Query('status') status?: string) {
+    return this.admin.marketQuotes({ status })
+  }
+
+  @Get('market/ratings')
+  marketRatings() {
+    return this.admin.marketRatings()
+  }
 }

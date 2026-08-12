@@ -359,6 +359,8 @@ export interface MarketRequest {
   description?: string | null
   status: string
   requesterOrg?: { id: string; name: string; verified: boolean } | null
+  requesterRating?: number | null
+  requesterCompletion?: number | null
   quotes?: MarketQuote[]
   createdAt: string
 }

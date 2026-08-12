@@ -100,6 +100,20 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
       >
         {loading && <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 40 }}>{t('common.loading')}</Text>}
 
+        {/* Marketplace strip — visible to every user type */}
+        {onOpenMarket && marketCounts && (
+          <Pressable style={[styles.marketStrip, { backgroundColor: 'rgba(249,115,22,0.1)', borderColor: '#F97316' }]} onPress={onOpenMarket}>
+            <Text style={{ fontSize: 22 }}>🏪</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: theme.foreground, fontWeight: '800', fontSize: 15 }}>Capability marketplace</Text>
+              <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>
+                {marketCounts.listings ?? 0} supply · {marketCounts.requests ?? 0} demand
+              </Text>
+            </View>
+            <Text style={{ color: '#F97316', fontWeight: '800', fontSize: 14 }}>Open ›</Text>
+          </Pressable>
+        )}
+
         {/* Transporter cockpit */}
         {data?.transporter && showTransporter && (
           <View style={{ gap: spacing.lg }}>
@@ -240,6 +254,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   header: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.sm },
   modeWrap: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
+  marketStrip: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderRadius: radius.lg, borderWidth: 1, padding: spacing.md, marginBottom: spacing.lg },
   logo: { fontSize: 24, fontWeight: '800', letterSpacing: -0.02 },
   body: { padding: spacing.lg, gap: spacing.lg, paddingBottom: 120 },
   hero: { borderRadius: radius.xl, padding: spacing.xl, gap: spacing.xs },

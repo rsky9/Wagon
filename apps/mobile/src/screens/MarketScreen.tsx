@@ -180,6 +180,28 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
       .finally(() => setBusy(false))
   }
 
+  const recommendCarriers = () => {
+    Alert.prompt('AI carrier pick', 'Origin (port/city)', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Next', onPress: (origin?: string) => {
+        Alert.prompt('Destination (port/city)', 'Where to?', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Recommend', onPress: (dest?: string) => {
+            setBusy(true)
+            api.post<{ services: Array<{ id: string; vessel?: string | null; flight?: string | null; rate?: number | null; currency: string; availableSlots: number; score: number }> }>('/ai/carrier', { originRef: origin, destinationRef: dest })
+              .then((res) => {
+                if (res.services.length === 0) { Alert.alert('No services', 'No carrier services on this lane yet'); return }
+                Alert.alert('AI carrier picks', res.services.slice(0, 5).map((s, i) => `${i + 1}. ${s.vessel ?? s.flight ?? 'service'} · ${s.rate != null ? `${s.currency} ${s.rate}` : '—'} · ${s.availableSlots} slots · score ${s.score.toFixed(2)}`).join('\n'))
+                fetch()
+              })
+              .catch((e) => Alert.alert('Error', e.message))
+              .finally(() => setBusy(false))
+          } },
+        ])
+      } },
+    ])
+  }
+
   const askProvider = (l: MarketListing) => {
     Alert.alert('Ask this provider', `Request their ${KIND_LABEL[l.kind] ?? l.kind}?`, [
       { text: 'Cancel', style: 'cancel' },
@@ -257,6 +279,12 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
       <Text style={[styles.meta, { color: theme.mutedForeground }]}>
         {r.originRef ?? r.city ?? '—'} → {r.destinationRef ?? '—'} · {r.capacityNeeded ?? '—'} {r.capacityUnit} · {r.budget ? `${r.currency} ${r.budget.toLocaleString('en-IN')}` : '—'}
       </Text>
+      {!withQuotes && (
+        <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>
+          {r.requesterOrg?.name ?? '—'} · ★ {r.requesterRating ? r.requesterRating.toFixed(1) : 'new'}
+          {r.requesterCompletion != null ? ` · ${r.requesterCompletion}% done` : ''}
+        </Text>
+      )}
       <View style={styles.actions}>
         {withQuotes && r.status !== 'open' && (
           <Pressable style={[styles.actionBtn, { backgroundColor: '#F97316' }]} onPress={() => runMatch(r)}>
@@ -341,6 +369,11 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
           contentContainerStyle={styles.list}
           data={carrierServices}
           keyExtractor={(s) => s.id}
+          ListHeaderComponent={
+            <Pressable style={[styles.actionBtn, { backgroundColor: '#8B5CF6', marginBottom: spacing.sm }]} onPress={recommendCarriers}>
+              <Text style={styles.actionText}>🤖 AI carrier picks</Text>
+            </Pressable>
+          }
           ListEmptyComponent={loading ? undefined : <EmptyState title="No carrier schedules" message="Carriers publish vessel/flight space here" icon="🚢" />}
           renderItem={({ item }) => (
             <View key={item.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
