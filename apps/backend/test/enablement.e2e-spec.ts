@@ -171,13 +171,16 @@ describe('Enablement platform (e2e)', () => {
   })
 
   describe('Finance', () => {
-    it('files, assesses and decides a claim', async () => {
+    it('files a claim, blocks self-assessment, admin decides, settlement auto-created', async () => {
       const claim = await api(supToken).post('/finance/claims', { shipmentId, reason: 'damage', amount: 50000 }).expect(201)
       claimId = claim.body.claim.id
-      const assessed = await api(supToken).post(`/finance/claims/${claimId}/assess`, { recommendedAmount: 45000 }).expect(201)
-      expect(assessed.body.claim.status).toBe('assessed')
-      const decided = await api(supToken).post(`/finance/claims/${claimId}/decide`, { decision: 'approved' }).expect(201)
+      // Segregation of duties: the claimant cannot assess their own claim.
+      await api(supToken).post(`/finance/claims/${claimId}/assess`, { recommendedAmount: 45000 }).expect(403)
+      // Admin decides (approve) — this auto-creates a claim settlement.
+      const decided = await api(admToken).post(`/admin/claims/${claimId}/decide`, { decision: 'approved' }).expect(201)
       expect(decided.body.claim.status).toBe('approved')
+      const summary = await api(supToken).get(`/finance/shipments/${shipmentId}/summary`).expect(200)
+      expect(summary.body.totals.due).toBeGreaterThan(0)
       await api(supToken).post(`/finance/claims/${claimId}/decide`, { decision: 'rejected' }).expect(400)
     })
 
