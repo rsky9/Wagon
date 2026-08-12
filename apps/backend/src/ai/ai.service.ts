@@ -232,8 +232,8 @@ export class AiService {
     const services = await this.prisma.carrierService.findMany({
       where: {
         status: 'active',
-        originRef: { contains: input.originRef.toLowerCase() },
-        destinationRef: { contains: input.destinationRef.toLowerCase() },
+        originRef: { contains: input.originRef.toLowerCase(), mode: 'insensitive' },
+        destinationRef: { contains: input.destinationRef.toLowerCase(), mode: 'insensitive' },
         ...(input.mode ? { mode: input.mode } : {}),
       },
       include: { carrierOrg: { select: { id: true, name: true, verified: true, verifiedCapabilities: true } } },

@@ -388,7 +388,11 @@ export class MarketService {
     // Reverse bridge: a direct transport request also enters the classic load
     // feed so transporters using the legacy marketplace see it too.
     if (request.kind === 'transport' && !input.sourceType) {
-      await this.bridgeToLoad(request, user).catch(() => {})
+      try {
+        await this.bridgeToLoad(request, user)
+      } catch (e) {
+        console.error('[market] bridgeToLoad failed:', e)
+      }
     }
     return { request }
   }
@@ -416,6 +420,7 @@ export class MarketService {
         weight: weightT,
         distanceKm: 100,
         materialId: material.id,
+        fareEstimate: weightT * 100 * 15,
         status: 'posted' as never,
       } as never,
     })

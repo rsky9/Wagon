@@ -419,5 +419,21 @@ describe('Enablement platform (e2e)', () => {
       // Self-ask blocked: supplier is a member of their own listing's org.
       await api(supToken).post(`/market/listings/${listing.id}/request`, {}).expect(400)
     })
+
+    it('bridges transport request to classic load + quote withdraw/reject lifecycle', async () => {
+      // Direct transport request also creates a Load in the classic feed.
+      const before = (await api(supToken).get('/loads').expect(200)).body.items.length
+      await api(supToken).post('/market/requests', { kind: 'transport', originRef: 'E2ECity', destinationRef: 'E2EDrop', capacityNeeded: 3000 }).expect(201)
+      const after = (await api(supToken).get('/loads').expect(200)).body.items.length
+      expect(after).toBeGreaterThan(before)
+      // Quote lifecycle: provider withdraws -> request reverts; requester rejects.
+      const req = await api(supToken).post('/market/requests', { kind: 'warehouse', city: 'E2ECity', capacityNeeded: 200, budget: 2000 }).expect(201)
+      const q1 = await api(trToken).post(`/market/requests/${req.body.request.id}/quotes`, { amount: 1800 }).expect(201)
+      const withdrawn = await api(trToken).post(`/market/quotes/${q1.body.quote.id}/withdraw`).expect(201)
+      expect(withdrawn.body.quote.status).toBe('withdrawn')
+      const q2 = await api(trToken).post(`/market/requests/${req.body.request.id}/quotes`, { amount: 1900 }).expect(201)
+      const rejected = await api(supToken).post(`/market/quotes/${q2.body.quote.id}/reject`).expect(201)
+      expect(rejected.body.quote.status).toBe('rejected')
+    })
   })
 })
