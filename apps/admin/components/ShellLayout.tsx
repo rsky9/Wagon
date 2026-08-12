@@ -15,6 +15,7 @@ const nav = [
   { label: "Broadcast", href: "/broadcast", key: "/broadcast", icon: "📢" },
   { label: "Rate Cards", href: "/rate-cards", key: "/rate-cards", icon: "📊" },
   { label: "Audit Log", href: "/audit", key: "/audit", icon: "📜" },
+  { label: "Enablement", href: "/enablement", key: "/enablement", icon: "🧩" },
 ];
 
 const SECTION_LABELS: Record<string, string> = {
@@ -28,6 +29,7 @@ const SECTION_LABELS: Record<string, string> = {
   "/broadcast": "Engage",
   "/rate-cards": "Pricing",
   "/audit": "Security",
+  "/enablement": "Enablement",
 };
 
 export function ShellLayout({ children }: { children: React.ReactNode }) {
