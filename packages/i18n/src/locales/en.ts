@@ -45,7 +45,7 @@ export const en = {
       error: 'Error',
       unknown: '—',
     },
-    role: { supplier: 'Supplier', transporter: 'Transporter', driver: 'Driver', admin: 'Admin' },
+    role: { supplier: 'Supplier', transporter: 'Transporter', driver: 'Driver', admin: 'Admin', shipper: 'Shipper', forwarder: 'Forwarder', warehouse: 'Warehouse' },
     nav: {
       home: 'Home',
       marketplace: 'Marketplace',
@@ -596,6 +596,18 @@ export const en = {
       description: 'Description (optional)',
       shipping: 'What are you shipping?',
       post: 'Post Load',
+    },
+    how: {
+      headline: 'How Wagon works',
+      subheadline: 'One platform to onboard, plan and execute logistics — your way.',
+      onboard: 'Onboard',
+      onboardSub: 'Verify once, join the network',
+      choose: 'Choose',
+      chooseSub: 'Compare plans, pick your option',
+      execute: 'Execute',
+      executeSub: 'You run it — we enable you',
+      forEveryone: 'For everyone in the supply chain',
+      promise: 'You execute the task. We give you the tools, data and freedom to choose.',
     },
     ui: {
       availableBalance: 'Available balance',

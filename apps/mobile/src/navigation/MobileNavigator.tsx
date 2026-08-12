@@ -32,6 +32,7 @@ import { RateCardScreen } from '../screens/RateCardScreen'
 import { NotificationsScreen } from '../screens/NotificationsScreen'
 import { QuestsScreen } from '../screens/QuestsScreen'
 import { SettingsScreen } from '../screens/SettingsScreen'
+import { HowWagonWorks } from '../screens/HowWagonWorks'
 import { SearchScreen } from '../screens/SearchScreen'
 import { FiltersScreen } from '../screens/FiltersScreen'
 import { useLoadFilters, filtersActions } from '../filters'
@@ -435,6 +436,7 @@ export function MobileNavigator() {
   const [lang, setLang] = useState<LanguageCode>('en')
   const [firstRun, setFirstRun] = useState<boolean | null>(null)
   const [needRole, setNeedRole] = useState(false)
+  const [showHowWorks, setShowHowWorks] = useState(true)
   const [showOnboarding, setShowOnboarding] = useState(false)
 
   useEffect(() => {
@@ -514,7 +516,12 @@ export function MobileNavigator() {
             <StatusBar style={isDark ? 'light' : 'dark'} />
             <LoginScreen auth={auth} />
           </ThemeContext.Provider>
-        ) : needRole ? (
+        ) : needRole ? showHowWorks ? (
+          <ThemeContext.Provider value={theme}>
+            <StatusBar style="light" />
+            <HowWagonWorks onContinue={() => setShowHowWorks(false)} />
+          </ThemeContext.Provider>
+        ) : (
           <ThemeContext.Provider value={theme}>
             <StatusBar style="light" />
             <CapabilitySelection onSelect={chooseCapabilities} />

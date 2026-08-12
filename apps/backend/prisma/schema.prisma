@@ -146,6 +146,7 @@ model User {
   reportsReceived Report[] @relation("Reported")
   disputesRaised Dispute[] @relation("RaisedBy")
   exceptionsReported TripException[]
+  memberships  OrganizationMember[]
   @@index([role])
 }
 
@@ -736,4 +737,151 @@ model WalletTransaction {
   createdAt DateTime @default(now())
 
   @@index([userId])
+}
+
+// ============================================================
+// Phase 0 — Universal enablement foundation
+// Organizations, Shipments, canonical Events + outbox
+// ============================================================
+
+/// A first-class organization: shipper, transporter, forwarder, warehouse, carrier, broker...
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  kind      String   // shipper | transporter | forwarder | warehouse | carrier | broker | other
+  gst       String?
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members   OrganizationMember[]
+  shipments Shipment[] @relation("Origin")
+  destShipments Shipment[] @relation("Destination")
+  legOrigins ShipmentLeg[] @relation("LegOrigin")
+  legDestinations ShipmentLeg[] @relation("LegDestination")
+  legProviders ShipmentLeg[] @relation("LegProvider")
+  @@index([kind])
+}
+
+/// A person who belongs to an organization and acts on its behalf.
+model OrganizationMember {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String       @default("member") // owner | admin | operator | member
+  createdAt      DateTime     @default(now())
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+}
+
+/// Mode-agnostic shipment: the commercial/operational intent. Not tied to a mode.
+model Shipment {
+  id            String    @id @default(cuid())
+  ref           String
+  originId      String?
+  origin        Organization? @relation("Origin", fields: [originId], references: [id])
+  destinationId String?
+  destination   Organization? @relation("Destination", fields: [destinationId], references: [id])
+  commodity     String?
+  description   String?
+  weightKg      Float?
+  volumeM3      Float?
+  pieces        Int?
+  pickupWindow  DateTime?
+  deliveryWindow DateTime?
+  value         Float?
+  status        ShipmentStatus @default(draft)
+  mode          String    @default("road") // preferred/primary mode; a shipment is not a mode
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  legs      ShipmentLeg[]
+  events    LogisticsEvent[]
+  @@index([status])
+}
+
+/// One physical movement within a shipment — mode + equipment + route.
+model ShipmentLeg {
+  id         String   @id @default(cuid())
+  shipmentId String
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  sequence   Int
+  mode       String   // road | rail | ocean | air | inland_water | multimodal
+  originId   String?
+  origin     Organization? @relation("LegOrigin", fields: [originId], references: [id])
+  destinationId String?
+  destination Organization? @relation("LegDestination", fields: [destinationId], references: [id])
+  pickupAddr String?
+  dropAddr   String?
+  distanceKm Float?
+  equipment  String?
+  providerId String?
+  provider   Organization? @relation("LegProvider", fields: [providerId], references: [id])
+  bookedAt   DateTime?
+  departedAt DateTime?
+  arrivedAt  DateTime?
+  status     String   @default("planned")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  events LogisticsEvent[]
+  @@index([shipmentId])
+}
+
+enum ShipmentStatus {
+  draft
+  planned
+  quoted
+  booked
+  in_transit
+  delivered
+  closed
+  cancelled
+}
+
+/// Canonical event — every important state change becomes one. DCSA/ONE-Record aligned.
+model LogisticsEvent {
+  id            String    @id @default(cuid())
+  eventType     String    // SHIPMENT | TRANSPORT | EQUIPMENT | DOCUMENT | EXCEPTION | FINANCE
+  eventCode     String    // e.g. LOADED, DEPARTED, GATE_IN, ARRI, DELIVERED, CUSTOMS_HOLD
+  classifier    String    @default("ACT") // PLN | ACT | EST
+  entityType    String    // shipment | leg | equipment | organization
+  entityId      String
+  shipmentId    String?
+  shipment      Shipment?  @relation(fields: [shipmentId], references: [id])
+  legId         String?
+  leg           ShipmentLeg? @relation(fields: [legId], references: [id])
+  occurredAt    DateTime
+  receivedAt    DateTime  @default(now())
+  source        String    // api | webhook | driver_app | sensor | system
+  actorId       String?
+  actorName     String?
+  location      String?
+  confidence    Float     @default(1)
+  evidence      String?
+  correlationId String?
+  payload       Json?
+  schemaVersion Int       @default(1)
+
+  @@index([shipmentId])
+  @@index([entityType, entityId])
+  @@index([eventType, eventCode])
+}
+
+/// Transactional outbox — domain writes + outbox row commit atomically.
+model OutboxMessage {
+  id        String   @id @default(cuid())
+  aggregateType String
+  aggregateId   String
+  eventType     String
+  payload       Json
+  status        String   @default("pending") // pending | published | failed
+  attempts      Int      @default(0)
+  createdAt     DateTime @default(now())
+  publishedAt   DateTime?
+
+  @@index([status, createdAt])
 }
