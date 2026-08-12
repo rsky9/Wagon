@@ -183,6 +183,10 @@ export class StorageService {
       })
       return changed
     })
+    // Marketplace trust: auto-rate the warehouse org once the op completes.
+    if (next === 'done') {
+      await this.market.autoRateFromWarehouseOp(updated, user).catch(() => {})
+    }
     return { operation: updated }
   }
 

@@ -845,4 +845,54 @@ export class AdminService {
       webhookDeliveries, webhookFailed, settlements, facilities, consolidations,
     }
   }
+
+  // ---------- Marketplace oversight ----------
+
+  async marketListings(query?: { kind?: string; status?: string }) {
+    const where: Record<string, unknown> = {}
+    if (query?.kind) where.kind = query.kind
+    if (query?.status) where.status = query.status
+    const listings = await this.prisma.marketListing.findMany({
+      where: where as never,
+      include: { providerOrg: { select: { id: true, name: true, kind: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    })
+    return { listings }
+  }
+
+  async marketRequests(query?: { kind?: string; status?: string }) {
+    const where: Record<string, unknown> = {}
+    if (query?.kind) where.kind = query.kind
+    if (query?.status) where.status = query.status
+    const requests = await this.prisma.marketRequest.findMany({
+      where: where as never,
+      include: { requesterOrg: { select: { id: true, name: true, kind: true } }, quotes: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    })
+    return { requests }
+  }
+
+  async marketStats() {
+    const [listings, liveListings, requests, openRequests, quotes, ratings, carrierServices] = await Promise.all([
+      this.prisma.marketListing.count(),
+      this.prisma.marketListing.count({ where: { status: 'live' } }),
+      this.prisma.marketRequest.count(),
+      this.prisma.marketRequest.count({ where: { status: 'open' } }),
+      this.prisma.marketQuote.count(),
+      this.prisma.orgRating.count(),
+      this.prisma.carrierService.count(),
+    ])
+    return { listings, liveListings, requests, openRequests, quotes, ratings, carrierServices }
+  }
+
+  /** Admin moderation: pause a listing. */
+  async pauseListing(listingId: string, actor: User) {
+    const listing = await this.prisma.marketListing.findUnique({ where: { id: listingId } })
+    if (!listing) throw new NotFoundException('Listing not found')
+    const updated = await this.prisma.marketListing.update({ where: { id: listingId }, data: { status: 'paused' } })
+    await this.audit.log({ actorId: actor.id, action: 'listing_pause', resource: listingId })
+    return { listing: updated }
+  }
 }

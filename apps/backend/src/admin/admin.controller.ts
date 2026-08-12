@@ -225,4 +225,26 @@ export class AdminController {
   retryWebhookDelivery(@Param('id') id: string, @CurrentUser() actor: User) {
     return this.admin.retryWebhookDelivery(id, actor)
   }
+
+  // ---------- Marketplace oversight ----------
+
+  @Get('market/listings')
+  marketListings(@Query('kind') kind?: string, @Query('status') status?: string) {
+    return this.admin.marketListings({ kind, status })
+  }
+
+  @Get('market/requests')
+  marketRequests(@Query('kind') kind?: string, @Query('status') status?: string) {
+    return this.admin.marketRequests({ kind, status })
+  }
+
+  @Get('market/stats')
+  marketStats() {
+    return this.admin.marketStats()
+  }
+
+  @Post('market/listings/:id/pause')
+  pauseListing(@Param('id') id: string, @CurrentUser() actor: User) {
+    return this.admin.pauseListing(id, actor)
+  }
 }

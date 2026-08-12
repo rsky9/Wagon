@@ -87,7 +87,43 @@ interface DeliveryRow {
   createdAt: string;
 }
 
-type Tab = "orgs" | "shipments" | "plans" | "claims" | "webhooks" | "facilities" | "settlements" | "deliveries";
+interface MarketListingRow {
+  id: string;
+  kind: string;
+  originRef: string | null;
+  destinationRef: string | null;
+  city: string | null;
+  capacityAvailable: number | null;
+  capacityUnit: string;
+  price: number | null;
+  status: string;
+  providerOrg: { name: string; kind: string } | null;
+  createdAt: string;
+}
+
+interface MarketRequestRow {
+  id: string;
+  kind: string;
+  originRef: string | null;
+  destinationRef: string | null;
+  city: string | null;
+  status: string;
+  requesterOrg: { name: string; kind: string } | null;
+  quotes: unknown[];
+  createdAt: string;
+}
+
+interface MarketStats {
+  listings: number;
+  liveListings: number;
+  requests: number;
+  openRequests: number;
+  quotes: number;
+  ratings: number;
+  carrierServices: number;
+}
+
+type Tab = "orgs" | "shipments" | "plans" | "claims" | "webhooks" | "facilities" | "settlements" | "deliveries" | "market";
 
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: "orgs", label: "Organizations" },
@@ -98,6 +134,7 @@ const TABS: Array<{ key: Tab; label: string }> = [
   { key: "deliveries", label: "Webhook deliveries" },
   { key: "facilities", label: "Facilities" },
   { key: "settlements", label: "Settlements" },
+  { key: "market", label: "Marketplace" },
 ];
 
 function ActionBtn({ label, tone = "orange", disabled, onClick }: { label: string; tone?: "orange" | "green" | "red" | "slate"; disabled?: boolean; onClick: () => void }) {
@@ -130,6 +167,9 @@ export default function Enablement() {
   const [facilities, setFacilities] = useState<FacilityRow[]>([]);
   const [settlements, setSettlements] = useState<SettlementRow[]>([]);
   const [deliveries, setDeliveries] = useState<DeliveryRow[]>([]);
+  const [marketListings, setMarketListings] = useState<MarketListingRow[]>([]);
+  const [marketRequests, setMarketRequests] = useState<MarketRequestRow[]>([]);
+  const [marketStats, setMarketStats] = useState<MarketStats | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   const run = async (label: string, fn: () => Promise<unknown>) => {
@@ -165,6 +205,15 @@ export default function Enablement() {
       } else if (tab === "deliveries") {
         const r = await api.get<{ deliveries: DeliveryRow[] }>("/admin/webhook-deliveries");
         setDeliveries(r.deliveries);
+      } else if (tab === "market") {
+        const [l, req, st] = await Promise.all([
+          api.get<{ listings: MarketListingRow[] }>("/admin/market/listings"),
+          api.get<{ requests: MarketRequestRow[] }>("/admin/market/requests"),
+          api.get<MarketStats>("/admin/market/stats"),
+        ]);
+        setMarketListings(l.listings);
+        setMarketRequests(req.requests);
+        setMarketStats(st);
       } else {
         const r = await api.get<{ facilities: FacilityRow[] }>("/admin/facilities");
         setFacilities(r.facilities);
@@ -383,7 +432,7 @@ export default function Enablement() {
             </tbody>
           </table>
         </div>
-      ) : (
+      ) : tab === "facilities" ? (
         <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 dark:bg-slate-800/60">
@@ -402,7 +451,74 @@ export default function Enablement() {
             </tbody>
           </table>
         </div>
-      )}
+      ) : tab === "market" ? (
+        <div className="space-y-6">
+          {marketStats && (
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+              {[
+                { label: "Listings", value: marketStats.listings, sub: `${marketStats.liveListings} live` },
+                { label: "Requests", value: marketStats.requests, sub: `${marketStats.openRequests} open` },
+                { label: "Quotes", value: marketStats.quotes, sub: "" },
+                { label: "Ratings", value: marketStats.ratings, sub: `${marketStats.carrierServices} carrier services` },
+              ].map((s) => (
+                <div key={s.label} className="rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+                  <p className="text-xs text-slate-500">{s.label}</p>
+                  <p className="text-2xl font-extrabold text-slate-900 dark:text-slate-100">{s.value}</p>
+                  {s.sub && <p className="text-xs text-slate-400">{s.sub}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-slate-500 dark:text-slate-400">Listings ({marketListings.length})</h3>
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 dark:bg-slate-800/60">
+                  <tr><Th>Kind</Th><Th>Lane / City</Th><Th>Capacity</Th><Th>Price</Th><Th>Provider</Th><Th>Status</Th><Th>Actions</Th></tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {marketListings.map((l) => (
+                    <tr key={l.id}>
+                      <Td>{l.kind}</Td>
+                      <Td>{l.originRef ?? l.city ?? "—"} → {l.destinationRef ?? "—"}</Td>
+                      <Td>{l.capacityAvailable ?? "—"} {l.capacityUnit}</Td>
+                      <Td>{l.price != null ? `${l.price.toLocaleString("en-IN")}` : "—"}</Td>
+                      <Td>{l.providerOrg?.name ?? "—"}</Td>
+                      <Td><StatusBadge status={l.status} /></Td>
+                      <Td>
+                        {l.status === "live" && (
+                          <ActionBtn label="Pause" tone="slate" disabled={busy === `ml:${l.id}`} onClick={() => run(`ml:${l.id}`, () => api.post(`/admin/market/listings/${l.id}/pause`))} />
+                        )}
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-slate-500 dark:text-slate-400">Requests ({marketRequests.length})</h3>
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 dark:bg-slate-800/60">
+                  <tr><Th>Kind</Th><Th>Lane / City</Th><Th>Status</Th><Th>Requester</Th><Th>Quotes</Th></tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {marketRequests.map((r) => (
+                    <tr key={r.id}>
+                      <Td>{r.kind}</Td>
+                      <Td>{r.originRef ?? r.city ?? "—"} → {r.destinationRef ?? "—"}</Td>
+                      <Td><StatusBadge status={r.status} /></Td>
+                      <Td>{r.requesterOrg?.name ?? "—"}</Td>
+                      <Td>{r.quotes.length}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </ShellLayout>
   );
 }

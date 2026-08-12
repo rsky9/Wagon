@@ -473,6 +473,21 @@ export class MarketService {
       // Materialize the booked request into an operational object so the
       // execute/settle layers can run (not just a paper booking).
       await this.materializeBooking(tx as unknown as Record<string, never>, quote)
+      // Money flow: the accepted quote becomes a settlement (requester pays provider).
+      if (quote.amount != null) {
+        const shipment = await tx.shipment.findFirst({ where: { ownerOrgId: quote.request.requesterOrgId } })
+        await tx.settlement.create({
+          data: {
+            shipmentId: shipment?.id ?? quote.request.id,
+            payerId: quote.request.requesterOrgId,
+            payeeId: quote.providerOrgId,
+            type: 'freight',
+            amount: quote.amount,
+            currency: quote.currency,
+            status: 'due',
+          },
+        })
+      }
       return accepted
     })
     return { quote: updated }
@@ -556,10 +571,44 @@ export class MarketService {
         }
         break
       }
-      default:
-        // transport: no operational object (road trips are created by the
-        // classic accept/bid flow). The market request links the intent.
+      default: {
+        // transport: create the canonical Shipment + road leg + a CarrierBooking
+        // so booked road capacity is operational in the enablement model.
+        const shipment = await tx.shipment.create({
+          data: {
+            ref: `MK-TR-${r.id.slice(-6)}`,
+            ownerOrgId: r.requesterOrgId,
+            commodity: 'transport',
+            status: 'booked',
+            mode: 'road',
+            originId: quote.providerOrgId,
+            destinationId: r.requesterOrgId,
+          },
+        })
+        await tx.shipmentLeg.create({
+          data: {
+            shipmentId: shipment.id,
+            sequence: 1,
+            mode: 'road',
+            pickupAddr: r.originRef ?? r.city ?? 'origin',
+            dropAddr: r.destinationRef ?? 'destination',
+            status: 'booked',
+            providerId: quote.providerOrgId,
+            bookedAt: new Date(),
+          },
+        })
+        await tx.carrierBooking.create({
+          data: {
+            shipmentId: shipment.id,
+            carrierId: quote.providerOrgId,
+            bookingRef: `MK-TR-${r.id.slice(-6)}`,
+            rate: quote.amount,
+            currency: quote.currency,
+            status: 'confirmed',
+          },
+        })
         break
+      }
     }
   }
 
@@ -609,8 +658,21 @@ export class MarketService {
         if (c.capacityAvailable && request.capacityNeeded && c.capacityAvailable >= request.capacityNeeded) score += 10
         const orgRating = await this.orgAverageRating(c.providerOrgId)
         score += (orgRating.avg ?? 3) * 2 // up to +10
+        // Reliability: completion rate rewards orgs that actually finish work.
+        const trust = await this.orgTrust(c.providerOrgId)
+        if (trust.completionRate != null) {
+          score += (trust.completionRate / 100) * 10 // up to +10
+        }
+        // Per-kind verification: the provider verified FOR this role outranks
+        // a generic verified org.
+        const kinds: string[] = (c.providerOrg.verifiedCapabilities as string[] | null) ?? []
+        const kindMatch = kinds.some((k) => {
+          const map: Record<string, string> = { truck_capacity: 'transporter', warehouse_space: 'warehouse', carrier_service: 'carrier', forwarder_service: 'forwarder' }
+          return k === (map[c.kind] ?? '')
+        })
         if (c.providerOrg.verified) score += 5
-        return { ...c, score, orgRating: orgRating.avg }
+        if (kindMatch) score += 5
+        return { ...c, score, orgRating: orgRating.avg, completionRate: trust.completionRate }
       }),
     )
     const matches = scored.sort((a, b) => b.score - a.score).slice(0, 10)
@@ -822,6 +884,22 @@ export class MarketService {
       take: 100,
     })
     return { partners }
+  }
+
+  /** Auto-rate a warehouse org after a completed warehouse operation. */
+  async autoRateFromWarehouseOp(op: { id: string; operatorId: string | null; shipmentId: string | null }, user: User) {
+    if (!op.operatorId || !op.shipmentId) return null
+    const shipment = await this.prisma.shipment.findUnique({ where: { id: op.shipmentId } })
+    if (!shipment?.ownerOrgId) return null
+    const existing = await this.prisma.orgRating.findFirst({
+      where: { subjectOrgId: op.operatorId, axis: 'warehouse', referenceId: op.id },
+    })
+    if (!existing) {
+      await this.prisma.orgRating.create({
+        data: { subjectOrgId: op.operatorId, giverOrgId: shipment.ownerOrgId, axis: 'warehouse', score: 5, referenceType: 'warehouse_op', referenceId: op.id },
+      })
+    }
+    return null
   }
 
   /** Resolve the first org of a user, if any. */
