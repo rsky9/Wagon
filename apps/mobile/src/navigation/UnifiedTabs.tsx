@@ -12,6 +12,7 @@ import { AppLogo } from '../components/AppLogo'
 import { RupeeIcon } from '../components/RupeeIcon'
 import { HomeCockpitScreen } from '../screens/HomeCockpitScreen'
 import { LoadFeedScreen } from '../screens/LoadFeedScreen'
+import { MarketScreen } from '../screens/MarketScreen'
 import { MyLoads } from '../screens/MyLoadsScreen'
 import { TripsScreen } from '../screens/TripsScreen'
 import { PassbookScreen } from '../screens/PassbookScreen'
@@ -177,9 +178,9 @@ function MarketplaceTab({ navigation }: any) {
     )
   }
 
-  // Suppliers see their own loads. Everyone else (forwarder/warehouse/carrier/
-  // driver/enablement) sees the open marketplace feed — NOT the supplier-only
-  // My Loads surface.
+  // Suppliers see their own loads. Transporters see the load feed. Everyone
+  // else (forwarder/warehouse/carrier/enablement) sees the cross-type capability
+  // marketplace — the road-load feed isn't actionable for them.
   if (isSupplier) {
     return (
       <MyLoads
@@ -192,15 +193,20 @@ function MarketplaceTab({ navigation }: any) {
     )
   }
 
-  return (
-    <LoadFeedScreen
-      onSelect={(load) => root?.navigate('LoadDetail', { load })}
-      onOpenTrips={() => navigation.navigate('Trips')}
-      onOpenKyc={() => root?.navigate('Kyc')}
-      filters={filters}
-      onOpenFilters={() => root?.navigate('Filters')}
-    />
-  )
+  if (isTransporter) {
+    return (
+      <LoadFeedScreen
+        onSelect={(load) => root?.navigate('LoadDetail', { load })}
+        onOpenTrips={() => navigation.navigate('Trips')}
+        onOpenKyc={() => root?.navigate('Kyc')}
+        filters={filters}
+        onOpenFilters={() => root?.navigate('Filters')}
+      />
+    )
+  }
+
+  // Enablement-only users (no supplier/transporter capability): cross-type market.
+  return <MarketScreen onBack={() => navigation.navigate('Home')} capabilities={caps} />
 }
 
 function TripsTab({ navigation }: any) {

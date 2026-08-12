@@ -338,6 +338,7 @@ export interface MarketListing {
   description?: string | null
   sourceType?: string | null
   orgRating?: { avg: number | null; count: number } | null
+  completionRate?: number | null
   providerOrg?: { id: string; name: string; verified: boolean } | null
   createdAt: string
 }

@@ -11,7 +11,7 @@ interface Props {
   capabilities?: string[]
 }
 
-type Tab = 'listings' | 'requests' | 'carriers' | 'mine'
+type Tab = 'listings' | 'requests' | 'carriers' | 'mine' | 'partners'
 
 const KIND_LABEL: Record<string, string> = {
   truck_capacity: 'Truck capacity',
@@ -30,6 +30,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
   const theme = useTheme()
   const [tab, setTab] = useState<Tab>('listings')
   const [listings, setListings] = useState<MarketListing[]>([])
+  const [myListings, setMyListings] = useState<MarketListing[]>([])
   const [requests, setRequests] = useState<MarketRequest[]>([])
   const [mine, setMine] = useState<MineItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -37,6 +38,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
   const [searchOrigin, setSearchOrigin] = useState('')
   const [searchDest, setSearchDest] = useState('')
   const [carrierServices, setCarrierServices] = useState<Array<{ id: string; carrierOrg?: { name: string; verified: boolean } | null; vessel?: string | null; flight?: string | null; originRef?: string | null; destinationRef?: string | null; rate?: number | null; currency: string; availableSlots: number; totalSlots: number; status: string }>>([])
+  const [partners, setPartners] = useState<Array<{ id: string; name: string; kind: string; baseUrl?: string | null; org?: { name: string; verified: boolean } | null }>>([])
 
   const canPublishCarrier = capabilities.includes('carrier')
 
@@ -84,6 +86,8 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
       api.get<{ requests: MarketRequest[] }>('/market/requests'),
       api.get<{ requests: MineItem[] }>('/market/requests/mine').then((r) => setMine(r.requests)).catch(() => {}),
       api.get<{ services: typeof carrierServices }>('/market/carrier-services').then((r) => setCarrierServices(r.services)).catch(() => {}),
+      api.get<{ listings: MarketListing[] }>('/market/listings/mine').then((r) => setMyListings(r.listings)).catch(() => {}),
+      api.get<{ partners: typeof partners }>('/market/partners').then((r) => setPartners(r.partners)).catch(() => {}),
     ]).then(([l, r]) => { setListings(l.listings); setRequests(r.requests) })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -188,6 +192,14 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
     ])
   }
 
+  const toggleListing = (l: MarketListing) => {
+    setBusy(true)
+    api.patch(`/market/listings/${l.id}/status`, { status: l.status === 'live' ? 'paused' : 'live' })
+      .then(() => fetch())
+      .catch((e) => Alert.alert('Error', e.message))
+      .finally(() => setBusy(false))
+  }
+
   const renderListing = (l: MarketListing) => (
     <View key={l.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
       <View style={styles.cardTop}>
@@ -199,7 +211,10 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
       </Text>
       <View style={styles.cardTop}>
         <Text style={[styles.price, { color: theme.foreground }]}>{l.price != null ? `${l.currency} ${l.price.toLocaleString('en-IN')}` : '—'}</Text>
-        <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>{l.providerOrg?.name ?? '—'} · ★ {l.orgRating?.avg ? l.orgRating.avg.toFixed(1) : 'new'}</Text>
+        <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>
+          {l.providerOrg?.name ?? '—'} · ★ {l.orgRating?.avg ? l.orgRating.avg.toFixed(1) : 'new'}
+          {l.completionRate != null ? ` · ${l.completionRate}% done` : ''}
+        </Text>
       </View>
       <View style={styles.actions}>
         <Pressable style={[styles.actionBtn, { backgroundColor: '#F97316' }]} onPress={() => askProvider(l)}>
@@ -270,7 +285,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
       </View>
 
       <View style={styles.tabs}>
-        {([['listings', 'Supply'], ['requests', 'Demand'], ['carriers', 'Carriers'], ['mine', 'My market']] as [Tab, string][]).map(([k, label]) => (
+        {([['listings', 'Supply'], ['requests', 'Demand'], ['carriers', 'Carriers'], ['partners', 'Partners'], ['mine', 'My market']] as [Tab, string][]).map(([k, label]) => (
           <Pressable key={k} style={[styles.tabBtn, tab === k && { backgroundColor: '#F97316' }]} onPress={() => setTab(k)}>
             <Text style={{ color: tab === k ? '#fff' : theme.mutedForeground, fontWeight: '800', fontSize: 13 }}>{label}</Text>
           </Pressable>
@@ -321,6 +336,24 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
         />
       )}
 
+      {tab === 'partners' && (
+        <FlatList
+          contentContainerStyle={styles.list}
+          data={partners}
+          keyExtractor={(p) => p.id}
+          ListEmptyComponent={loading ? undefined : <EmptyState title="No partners yet" message="Integration partners join the network here" icon="🤝" />}
+          renderItem={({ item }) => (
+            <View key={item.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <View style={styles.cardTop}>
+                <Text style={[styles.cardTitle, { color: theme.foreground }]}>{item.name}</Text>
+                {item.org?.verified && <Text style={[styles.verified, { color: theme.success }]}>✓ verified</Text>}
+              </View>
+              <Text style={[styles.meta, { color: theme.mutedForeground }]}>{item.kind} · {item.org?.name ?? '—'} · {item.baseUrl ?? '—'}</Text>
+            </View>
+          )}
+        />
+      )}
+
       {tab === 'requests' && (
         <FlatList
           contentContainerStyle={styles.list}
@@ -334,10 +367,38 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
       {tab === 'mine' && (
         <FlatList
           contentContainerStyle={styles.list}
-          data={mine}
-          keyExtractor={(m) => m.request.id}
-          ListEmptyComponent={loading ? undefined : <EmptyState title="Nothing yet" message="Your requests and their quotes appear here" icon="📋" />}
-          renderItem={({ item }) => renderRequest(item.request, true)}
+          data={[{ type: 'requests' as const }, { type: 'supply' as const }]}
+          keyExtractor={(i) => i.type}
+          renderItem={({ item }) => item.type === 'requests' ? (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: theme.foreground }]}>My requests ({mine.length})</Text>
+              {mine.length === 0
+                ? <EmptyState title="No requests yet" message="Your requests and their quotes appear here" icon="📋" />
+                : mine.map((m) => renderRequest(m.request, true))}
+            </View>
+          ) : (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: theme.foreground }]}>My supply ({myListings.length})</Text>
+              {myListings.length === 0
+                ? <EmptyState title="No supply published" message="Tap + Offer to publish capacity" icon="🏪" />
+                : myListings.map((l) => (
+                  <View key={l.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    <View style={styles.cardTop}>
+                      <Text style={[styles.cardTitle, { color: theme.foreground }]}>{KIND_LABEL[l.kind] ?? l.kind}</Text>
+                      <Text style={[styles.chip, { color: l.status === 'live' ? theme.success : theme.warning, borderColor: l.status === 'live' ? theme.success : theme.warning }]}>{l.status}</Text>
+                    </View>
+                    <Text style={[styles.meta, { color: theme.mutedForeground }]}>
+                      {l.originRef ?? l.city ?? '—'} → {l.destinationRef ?? '—'} · {l.price != null ? `${l.currency} ${l.price.toLocaleString('en-IN')}` : '—'}
+                    </Text>
+                    <View style={styles.actions}>
+                      <Pressable style={[styles.actionBtn, { backgroundColor: l.status === 'live' ? theme.warning : theme.success }]} onPress={() => toggleListing(l)}>
+                        <Text style={styles.actionText}>{l.status === 'live' ? 'Pause' : 'Resume'}</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ))}
+            </View>
+          )}
         />
       )}
 
@@ -453,6 +514,8 @@ const styles = StyleSheet.create({
   meta: { fontSize: 13 },
   price: { fontSize: 15, fontWeight: '800', fontVariant: ['tabular-nums'] },
   chip: { fontSize: 11, fontWeight: '700', borderWidth: 1, borderRadius: radius.full, paddingHorizontal: spacing.sm, paddingVertical: 2, textTransform: 'uppercase' },
+  section: { gap: spacing.md },
+  sectionTitle: { fontSize: 14, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   actionBtn: { borderRadius: radius.md, padding: spacing.sm, alignItems: 'center', marginTop: spacing.xs },
   actionText: { color: '#fff', fontWeight: '800', fontSize: 12 },

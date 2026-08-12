@@ -144,7 +144,11 @@ export class MarketService {
     })
     // Attach org reputation for trust signals.
     const withRating = await Promise.all(
-      listings.map(async (l) => ({ ...l, orgRating: await this.orgAverageRating(l.providerOrgId) })),
+      listings.map(async (l) => ({
+        ...l,
+        orgRating: await this.orgAverageRating(l.providerOrgId),
+        completionRate: (await this.orgTrust(l.providerOrgId)).completionRate,
+      })),
     )
     return { listings: withRating }
   }
@@ -155,7 +159,8 @@ export class MarketService {
       include: { providerOrg: { select: { id: true, name: true, verified: true, verifiedCapabilities: true } }, lane: true },
     })
     if (!listing) throw new NotFoundException('Listing not found')
-    return { listing: { ...listing, orgRating: await this.orgAverageRating(listing.providerOrgId) } }
+    const trust = await this.orgTrust(listing.providerOrgId)
+    return { listing: { ...listing, orgRating: trust.rating, completionRate: trust.completionRate } }
   }
 
   /** Provider pauses/resumes/expires their own listing. */
@@ -166,6 +171,18 @@ export class MarketService {
     if (!(await this.orgAccess.isMember(user, listing.providerOrgId))) throw new ForbiddenException('Not your listing')
     const updated = await this.prisma.marketListing.update({ where: { id }, data: { status } })
     return { listing: updated }
+  }
+
+  /** Listings the caller's orgs publish (supply management). */
+  async myListings(user: User) {
+    const orgIds = await this.orgAccess.memberOrgIds(user)
+    const listings = await this.prisma.marketListing.findMany({
+      where: { providerOrgId: { in: orgIds } },
+      include: { lane: true, quotes: { select: { id: true, amount: true, status: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    })
+    return { listings }
   }
 
   /** Auto-publish listings from existing supply records (facilities, consolidations). */

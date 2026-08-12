@@ -36,6 +36,11 @@ export class MarketController {
     return this.market.listingDetail(id)
   }
 
+  @Get('listings/mine')
+  myListings(@CurrentUser() user: User) {
+    return this.market.myListings(user)
+  }
+
   @Patch('listings/:id/status')
   setListingStatus(@Param('id') id: string, @Body() body: { status: string }, @CurrentUser() user: User) {
     return this.market.setListingStatus(id, body.status, user)
