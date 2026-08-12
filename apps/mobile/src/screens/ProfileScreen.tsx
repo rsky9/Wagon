@@ -137,16 +137,18 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <Text style={{ color: theme.mutedForeground }}>›</Text>
         </Pressable>
 
-        <Pressable style={[styles.row, { backgroundColor: theme.background, borderColor: theme.border }]} onPress={onOpenFleet}>
-          <View style={styles.rowLeft}>
-            <Text style={[styles.rowIcon, { color: theme.primary }]}>🚚</Text>
-            <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.fleet')}</Text>
-              <Text style={[styles.rowStatus, { color: theme.mutedForeground }]}>Trucks · documents · maintenance</Text>
+        {profile?.capabilities?.includes('transporter') && (
+          <Pressable style={[styles.row, { backgroundColor: theme.background, borderColor: theme.border }]} onPress={onOpenFleet}>
+            <View style={styles.rowLeft}>
+              <Text style={[styles.rowIcon, { color: theme.primary }]}>🚚</Text>
+              <View>
+                <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.fleet')}</Text>
+                <Text style={[styles.rowStatus, { color: theme.mutedForeground }]}>Trucks · documents · maintenance</Text>
+              </View>
             </View>
-          </View>
-          <Text style={{ color: theme.mutedForeground }}>›</Text>
-        </Pressable>
+            <Text style={{ color: theme.mutedForeground }}>›</Text>
+          </Pressable>
+        )}
 
         {(profile?.capabilities?.some((c: string) => ['supplier', 'forwarder', 'warehouse', 'carrier', 'transporter'].includes(c)) ?? true) && (
           <Pressable style={[styles.row, { backgroundColor: theme.background, borderColor: theme.border }]} onPress={onOpenEnablement}>
@@ -275,35 +277,39 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
           <Text style={{ color: theme.mutedForeground }}>›</Text>
         </Pressable>
 
-        <Pressable style={[styles.row, { backgroundColor: theme.background, borderColor: theme.border }]} onPress={onOpenTrucks}>
-          <View style={styles.rowLeft}>
-            <Text style={[styles.rowIcon, { color: theme.primary }]}>🚛</Text>
-            <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.myTrucks')}</Text>
-            </View>
-          </View>
-          <Text style={{ color: theme.mutedForeground }}>›</Text>
-        </Pressable>
+        {profile?.capabilities?.includes('transporter') && (
+          <>
+            <Pressable style={[styles.row, { backgroundColor: theme.background, borderColor: theme.border }]} onPress={onOpenTrucks}>
+              <View style={styles.rowLeft}>
+                <Text style={[styles.rowIcon, { color: theme.primary }]}>🚛</Text>
+                <View>
+                  <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.myTrucks')}</Text>
+                </View>
+              </View>
+              <Text style={{ color: theme.mutedForeground }}>›</Text>
+            </Pressable>
 
-        <Pressable style={[styles.row, { backgroundColor: theme.background, borderColor: theme.border }]} onPress={onOpenDrivers}>
-          <View style={styles.rowLeft}>
-            <Text style={[styles.rowIcon, { color: theme.primary }]}>👤</Text>
-            <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.drivers')}</Text>
-            </View>
-          </View>
-          <Text style={{ color: theme.mutedForeground }}>›</Text>
-        </Pressable>
+            <Pressable style={[styles.row, { backgroundColor: theme.background, borderColor: theme.border }]} onPress={onOpenDrivers}>
+              <View style={styles.rowLeft}>
+                <Text style={[styles.rowIcon, { color: theme.primary }]}>👤</Text>
+                <View>
+                  <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.drivers')}</Text>
+                </View>
+              </View>
+              <Text style={{ color: theme.mutedForeground }}>›</Text>
+            </Pressable>
 
-        <Pressable style={[styles.row, { backgroundColor: theme.background, borderColor: theme.border }]} onPress={onOpenRateCard}>
-          <View style={styles.rowLeft}>
-            <Text style={[styles.rowIcon, { color: theme.primary }]}>📋</Text>
-            <View>
-              <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.rateCard')}</Text>
-            </View>
-          </View>
-          <Text style={{ color: theme.mutedForeground }}>›</Text>
-        </Pressable>
+            <Pressable style={[styles.row, { backgroundColor: theme.background, borderColor: theme.border }]} onPress={onOpenRateCard}>
+              <View style={styles.rowLeft}>
+                <Text style={[styles.rowIcon, { color: theme.primary }]}>📋</Text>
+                <View>
+                  <Text style={[styles.rowLabel, { color: theme.foreground }]}>{t('profile.rateCard')}</Text>
+                </View>
+              </View>
+              <Text style={{ color: theme.mutedForeground }}>›</Text>
+            </Pressable>
+          </>
+        )}
 
         <Pressable style={[styles.row, { backgroundColor: theme.background, borderColor: theme.border }]} onPress={onOpenSettings}>
           <View style={styles.rowLeft}>

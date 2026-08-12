@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common'
+import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { UploadsService, ALLOWED_UPLOAD_MIMES } from '../uploads/uploads.service'
 import type { DocumentKind, User } from '@prisma/client'
@@ -45,8 +45,15 @@ export class KycService {
     return { uploadUrl: presigned.uploadUrl, documentId: doc.id, key: presigned.key }
   }
 
-  async requestPodUpload(tripId: string, mimeType: string, size: number, _user: User) {
+  async requestPodUpload(tripId: string, mimeType: string, size: number, user: User) {
     this.assertMime(mimeType)
+    // Only the assigned transporter may upload POD for a trip.
+    const trip = await this.prisma.trip.findUnique({ where: { id: tripId } })
+    if (!trip) throw new NotFoundException('Trip not found')
+    const transporter = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
+    if (!transporter || transporter.id !== trip.transporterId) {
+      throw new ForbiddenException('Only the assigned transporter can upload POD')
+    }
     const presigned = await this.uploads.presignUpload({
       folder: `pod/${tripId}`,
       mimeType,

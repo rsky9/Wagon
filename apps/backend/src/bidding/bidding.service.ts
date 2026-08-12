@@ -511,10 +511,16 @@ export class BiddingService {
     return { bids }
   }
 
-  /** Read the booking snapshot for a trip. */
+  /** Read the booking snapshot for a trip (participants only). */
   async bookingForTrip(tripId: string, user: User) {
-    const trip = await this.prisma.trip.findUnique({ where: { id: tripId } })
+    const trip = await this.prisma.trip.findUnique({ where: { id: tripId }, include: { load: true } })
     if (!trip) throw new NotFoundException('Trip not found')
+    // Only the assigned transporter or the load's supplier may read the booking.
+    const transporter = await this.transporterFor(user)
+    const supplier = await this.supplierFor(user)
+    const isTransporter = transporter?.id === trip.transporterId
+    const isSupplier = supplier?.id === trip.load.supplierId
+    if (!isTransporter && !isSupplier) throw new BadRequestException('Only trip participants can view the booking')
     const snapshot = await this.prisma.bookingSnapshot.findUnique({ where: { tripId } })
     if (!snapshot) throw new NotFoundException('No booking snapshot')
     return { snapshot }

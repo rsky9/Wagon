@@ -142,7 +142,7 @@ export function LoadDetailScreen({ load, onBack, onAccepted, onOpenBid }: Props)
         <Button
           label={accepted ? 'Accepted' : load.commercialModel === 'open_bidding' ? 'Submit bid' : 'Accept Load'}
           onPress={load.commercialModel === 'open_bidding' ? openBid : accept}
-          disabled={accepted || loading || (!canHaul && load.commercialModel !== 'open_bidding')}
+          disabled={accepted || loading || !canHaul}
           loading={loading}
         />
         {!accepted && (

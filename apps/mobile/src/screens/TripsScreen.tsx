@@ -30,6 +30,7 @@ interface Props {
   onOpenPassbook: () => void
   onOpenExecution: (tripId: string) => void
   onReturnLoads?: (tripId: string) => void
+  capabilities?: string[]
 }
 
 const TONE: Record<string, StatusTone> = {
@@ -39,9 +40,13 @@ const TONE: Record<string, StatusTone> = {
   cancelled: 'danger',
 }
 
-export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnLoads }: Props) {
+export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnLoads, capabilities = [] }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
+  // Transporter-side execution (start/mark-delivered/POD/payout/rate/return loads)
+  // is only valid for users with the transporter capability; suppliers and
+  // others should only track their trips, not run them.
+  const canHaul = capabilities.includes('transporter')
   const [trips, setTrips] = useState<TripInfo[]>([])
   const [pending, setPending] = useState<Array<{ id: string; load: Load }>>([])
   const [loading, setLoading] = useState(true)
@@ -63,8 +68,9 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
   }, [])
 
   const fetchPending = useCallback(() => {
+    if (!canHaul) return
     api.get<{ pending: Array<{ id: string; load: Load }> }>('/bidding/pending-bookings').then((res) => setPending(res.pending)).catch(() => {})
-  }, [])
+  }, [canHaul])
 
   useEffect(() => {
     fetchTrips()
@@ -178,7 +184,7 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
           }
           contentContainerStyle={styles.list}
           ListHeaderComponent={
-            pending.length > 0 ? (
+            canHaul && pending.length > 0 ? (
               <View style={[styles.pendingCard, { backgroundColor: theme.card, borderColor: theme.primary + '44' }]}>
                 <Text style={[styles.pendingTitle, { color: theme.foreground }]}>{t('trip.pendingConfirm')}</Text>
                 {pending.map((b) => (
@@ -196,7 +202,7 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
           ListEmptyComponent={
             <EmptyState
               title={t('trip.noTrips')}
-              message="Accept a load to start your first trip"
+              message={canHaul ? 'Accept a load to start your first trip' : 'No trips on your shipments yet'}
               actionLabel="Browse loads"
               onAction={onBack}
             />
@@ -205,12 +211,13 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
             <TripCard
               trip={item}
               busy={busy === item.id}
+              canHaul={canHaul}
               onAdvance={advance}
               onUploadPod={uploadPod}
               onPayout={requestPayout}
               onOpenExecution={onOpenExecution}
-              onReturnLoads={onReturnLoads}
-              onRateSupplier={() => rateSupplier(item)}
+              onReturnLoads={canHaul ? onReturnLoads : undefined}
+              onRateSupplier={canHaul ? () => rateSupplier(item) : undefined}
             />
           )}
         />
@@ -222,6 +229,7 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
 function TripCard({
   trip,
   busy,
+  canHaul,
   onAdvance,
   onUploadPod,
   onPayout,
@@ -231,6 +239,7 @@ function TripCard({
 }: {
   trip: TripInfo
   busy: boolean
+  canHaul: boolean
   onAdvance: (t: TripInfo, s: 'in_transit' | 'delivered') => void
   onUploadPod: (t: TripInfo) => void
   onPayout: (t: TripInfo) => void
@@ -264,24 +273,28 @@ function TripCard({
       </View>
 
       <View style={styles.actions}>
-        <Button label="Execute trip →" onPress={() => onOpenExecution(trip.id)} size="md" variant="secondary" />
-        {trip.status === 'accepted' && (
-          <Button label="Start trip" onPress={() => onAdvance(trip, 'in_transit')} loading={busy} size="md" />
-        )}
-        {trip.status === 'in_transit' && (
-          <Button label="Mark delivered" onPress={() => onAdvance(trip, 'delivered')} loading={busy} size="md" />
-        )}
-        {trip.status === 'delivered' && !trip.podUrl && (
-          <Button label="Upload POD" onPress={() => onUploadPod(trip)} loading={busy} size="md" />
-        )}
-        {trip.status === 'delivered' && trip.podUrl && (
-          <Button label="Request payout" onPress={() => onPayout(trip)} loading={busy} size="md" />
-        )}
-        {trip.status === 'delivered' && onReturnLoads && (
-          <Button label="Find return loads 🔄" onPress={() => onReturnLoads(trip.id)} size="md" variant="secondary" />
-        )}
-        {trip.status === 'delivered' && onRateSupplier && (
-          <Button label="Rate supplier ⭐" onPress={onRateSupplier} size="md" variant="secondary" />
+        {canHaul && (
+          <>
+            <Button label="Execute trip →" onPress={() => onOpenExecution(trip.id)} size="md" variant="secondary" />
+            {trip.status === 'accepted' && (
+              <Button label="Start trip" onPress={() => onAdvance(trip, 'in_transit')} loading={busy} size="md" />
+            )}
+            {trip.status === 'in_transit' && (
+              <Button label="Mark delivered" onPress={() => onAdvance(trip, 'delivered')} loading={busy} size="md" />
+            )}
+            {trip.status === 'delivered' && !trip.podUrl && (
+              <Button label="Upload POD" onPress={() => onUploadPod(trip)} loading={busy} size="md" />
+            )}
+            {trip.status === 'delivered' && trip.podUrl && (
+              <Button label="Request payout" onPress={() => onPayout(trip)} loading={busy} size="md" />
+            )}
+            {trip.status === 'delivered' && onReturnLoads && (
+              <Button label="Find return loads 🔄" onPress={() => onReturnLoads(trip.id)} size="md" variant="secondary" />
+            )}
+            {trip.status === 'delivered' && onRateSupplier && (
+              <Button label="Rate supplier ⭐" onPress={onRateSupplier} size="md" variant="secondary" />
+            )}
+          </>
         )}
       </View>
     </View>

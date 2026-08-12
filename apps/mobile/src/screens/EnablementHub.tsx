@@ -26,8 +26,8 @@ interface Section {
   screen: Props['onOpen'] extends (s: infer S) => void ? S : never
 }
 
-/** Warehouse-ish org kinds that unlock the storage workspace. */
-const WAREHOUSE_KINDS = ['warehouse', 'cfs', 'icd', 'cross_dock', 'yard', 'cold']
+/** Warehouse-ish org kinds that unlock the storage workspace (matches backend gate). */
+const WAREHOUSE_KINDS = ['warehouse', 'cfs', 'icd', 'cross_dock', 'yard']
 
 export function EnablementHub({ capabilities = [], onOpen }: Props) {
   const theme = useTheme()

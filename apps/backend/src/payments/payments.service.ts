@@ -172,6 +172,11 @@ export class PaymentsService {
   async passbook(user: User) {
     const isTransporter = (user.capabilities?.includes('transporter') as boolean) || user.role === 'transporter'
     const isSupplier = (user.capabilities?.includes('supplier') as boolean) || user.role === 'supplier'
+    // Non-participants (driver/forwarder/warehouse/carrier/enablement-only) have
+    // no ledger — never fall back to an unscoped query.
+    if (!isTransporter && !isSupplier) {
+      return { entries: [], balance: 0 }
+    }
     // Both-capability users see trips from both sides.
     const trips =
       isTransporter && isSupplier
@@ -186,12 +191,9 @@ export class PaymentsService {
             orderBy: { createdAt: 'desc' },
           })
         : await this.prisma.trip.findMany({
-            where:
-              isTransporter
-                ? { transporterId: (await this.transporterId(user)) ?? '' }
-                : isSupplier
-                  ? { load: { supplierId: (await this.supplierId(user)) ?? '' } }
-                  : {},
+            where: isTransporter
+              ? { transporterId: (await this.transporterId(user)) ?? '' }
+              : { load: { supplierId: (await this.supplierId(user)) ?? '' } },
             include: { payments: true, load: true },
             orderBy: { createdAt: 'desc' },
           })

@@ -177,25 +177,42 @@ function MarketplaceTab({ navigation }: any) {
     )
   }
 
+  // Suppliers see their own loads. Everyone else (forwarder/warehouse/carrier/
+  // driver/enablement) sees the open marketplace feed — NOT the supplier-only
+  // My Loads surface.
+  if (isSupplier) {
+    return (
+      <MyLoads
+        onPostLoad={() => root?.navigate('PostLoadWizard')}
+        onLogout={logout}
+        onSelectLoad={(loadId) => root?.navigate('TripDetail', { loadId })}
+        onOpenKyc={() => root?.navigate('Kyc')}
+        onOpenDecisionRoom={(loadId) => root?.navigate('DecisionRoom', { loadId })}
+      />
+    )
+  }
+
   return (
-    <MyLoads
-      onPostLoad={() => root?.navigate('PostLoadWizard')}
-      onLogout={logout}
-      onSelectLoad={(loadId) => root?.navigate('TripDetail', { loadId })}
+    <LoadFeedScreen
+      onSelect={(load) => root?.navigate('LoadDetail', { load })}
+      onOpenTrips={() => navigation.navigate('Trips')}
       onOpenKyc={() => root?.navigate('Kyc')}
-      onOpenDecisionRoom={(loadId) => root?.navigate('DecisionRoom', { loadId })}
+      filters={filters}
+      onOpenFilters={() => root?.navigate('Filters')}
     />
   )
 }
 
 function TripsTab({ navigation }: any) {
   const root = navigation.getParent()
+  const { session } = useAuth()
   return (
     <TripsScreen
       onBack={() => navigation.navigate('Home')}
       onOpenPassbook={() => root?.navigate('Passbook')}
       onOpenExecution={(tripId) => root?.navigate('TripExecute', { tripId })}
       onReturnLoads={(tripId) => root?.navigate('ReturnLoads', { tripId })}
+      capabilities={session?.profile?.capabilities ?? []}
     />
   )
 }
