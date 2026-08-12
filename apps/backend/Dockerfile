@@ -21,4 +21,4 @@ COPY --from=builder /app/node_modules ./node_modules
 # Regenerate the Prisma client inside the final image (matches its OpenSSL).
 RUN cd apps/backend && ./node_modules/.bin/prisma generate --schema=prisma/schema.prisma
 EXPOSE 4000
-CMD ["node", "apps/backend/dist/src/main.js"]
+CMD ["sh", "-c", "cd apps/backend && ./node_modules/.bin/prisma migrate deploy --schema=prisma/schema.prisma && node dist/src/main.js"]
