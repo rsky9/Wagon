@@ -44,6 +44,7 @@ export class EwbService {
       title: 'E-way bill generated',
       body: `EWB ${result.ewbNumber} for load #${loadId.slice(-6)}`,
       data: { loadId },
+      category: 'system',
     })
 
     return { ewbNumber: updated.ewbNumber, alreadyGenerated: false }

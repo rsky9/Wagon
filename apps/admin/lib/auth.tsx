@@ -1,7 +1,7 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode } from "react";
-import { api, setAccessToken } from "./api";
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { api, setAccessToken, setRefreshToken } from "./api";
 
 interface Session {
   accessToken: string;
@@ -23,11 +23,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(() => {
     if (typeof window === "undefined") return null;
     const token = localStorage.getItem("wagon_admin_token");
+    const refreshToken = localStorage.getItem("wagon_admin_refresh");
     return token
-      ? { accessToken: token, refreshToken: "", profile: { id: "", mobile: "", role: "admin" } }
+      ? { accessToken: token, refreshToken: refreshToken ?? "", profile: { id: "", mobile: "", role: "admin" } }
       : null;
   });
-  const [loading] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (typeof window === "undefined") {
+      setLoading(false);
+      return;
+    }
+    const token = localStorage.getItem("wagon_admin_token");
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    (async () => {
+      try {
+        const res = await api.get<{ profile: { id: string; mobile: string; role: string } }>("/auth/me");
+        if (cancelled) return;
+        const accessToken = localStorage.getItem("wagon_admin_token");
+        const refreshToken = localStorage.getItem("wagon_admin_refresh") ?? "";
+        setSession({ accessToken: accessToken ?? "", refreshToken, profile: res.profile });
+      } catch {
+        if (cancelled) return;
+        setAccessToken(null);
+        setRefreshToken(null);
+        setSession(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const requestOtp = async (mobile: string) => {
     const res = await api.post<{ devCode?: string }>("/auth/otp", { mobile });
@@ -40,11 +73,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error("Not an admin account");
     }
     setAccessToken(res.accessToken);
+    setRefreshToken(res.refreshToken);
     setSession(res);
   };
 
   const logout = () => {
     setAccessToken(null);
+    setRefreshToken(null);
     setSession(null);
   };
 

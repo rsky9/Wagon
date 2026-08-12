@@ -112,6 +112,7 @@ export class BiddingService {
         title: 'New bid',
         body: `Transporter bid ₹${input.amount.toLocaleString('en-IN')} on ${load.pickupAddr} → ${load.dropAddr}`,
         data: { loadId: load.id },
+        category: 'loads',
       })
     }
     return { bid }
@@ -197,6 +198,7 @@ export class BiddingService {
         title: 'You are shortlisted',
         body: `Supplier shortlisted your bid of ₹${bid.amount.toLocaleString('en-IN')}`,
         data: { loadId: load.id },
+        category: 'loads',
       })
     }
     return { bid: updated }
@@ -237,6 +239,7 @@ export class BiddingService {
         title: 'Counteroffer received',
         body: `Supplier countered at ₹${amount.toLocaleString('en-IN')}`,
         data: { loadId: load.id },
+        category: 'loads',
       })
     }
     return { offer }
@@ -289,6 +292,7 @@ export class BiddingService {
             title: 'Bid accepted',
             body: `Offer of ₹${offer.amount.toLocaleString('en-IN')} accepted`,
             data: { loadId: load.id },
+            category: 'loads',
           })
         }
       }
@@ -338,6 +342,7 @@ export class BiddingService {
         title: 'Booking confirmation requested',
         body: `Confirm terms to book ${load.pickupAddr} → ${load.dropAddr} at ₹${bid.amount.toLocaleString('en-IN')}`,
         data: { loadId, bidId },
+        category: 'booking',
       })
     }
     return { status: 'awaiting_transporter_confirmation', bidId }
@@ -395,6 +400,7 @@ export class BiddingService {
         title: 'Booking locked in',
         body: `Transporter confirmed — trip created for ${load.pickupAddr} → ${load.dropAddr}`,
         data: { tripId: trip.id, loadId },
+        category: 'booking',
       })
     }
     return { trip, snapshot: { rate: bid.amount } }

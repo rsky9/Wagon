@@ -236,6 +236,8 @@ export const ta: { translation: TranslationSchema } = {
       availableForTrips: 'பயணங்களுக்கு கிடைக்கிறது',
       activeTrip: 'செயலில் உள்ள பயணம்',
       noTripsToday: 'இன்று பயணங்கள் இல்லை',
+      earnings: 'மொத்த வருவாய்',
+      tripsCompleted: 'நிறைவுற்ற பயணங்கள்',
     },
     settings: {
       title: 'அமைப்புகள்',

@@ -125,7 +125,7 @@ export default function Loads() {
                   <StatusBadge status={l.status} />
                 </Td>
                 <td className="px-5 py-3.5 text-right">
-                  {l.status !== "cancelled" && l.status !== "delivered" && (
+                  {["posted", "interested", "paused"].includes(l.status) && (
                     <button
                       onClick={() => cancelLoad(l)}
                       disabled={busy === l.id}
@@ -170,7 +170,7 @@ export default function Loads() {
                   <StatusBadge status={t.status} />
                 </Td>
                 <td className="px-5 py-3.5 text-right">
-                  {t.status !== "delivered" && (
+                  {["accepted", "in_transit"].includes(t.status) && (
                     <button
                       onClick={() => forceComplete(t)}
                       disabled={busy === t.id}

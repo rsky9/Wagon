@@ -48,6 +48,7 @@ export class ExceptionsService {
           title: `Trip exception: ${kind.replace('_', ' ')}`,
           body: title.trim(),
           data: { tripId, loadId: trip.loadId },
+          category: 'trips',
         })
       }
     } else {
@@ -59,6 +60,7 @@ export class ExceptionsService {
           title: `Trip exception: ${kind.replace('_', ' ')}`,
           body: title.trim(),
           data: { tripId, loadId: trip.loadId },
+          category: 'trips',
         })
       }
     }

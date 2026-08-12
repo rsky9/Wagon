@@ -1,6 +1,7 @@
 import {
   Injectable,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import type { User } from '@prisma/client'
@@ -132,16 +133,26 @@ export class GamificationService {
     return this.state(user)
   }
 
-  /** Award XP + an optional badge directly (e.g. onboarding completion). */
+  /**
+   * Award the onboarding milestone XP + badge. Server-validated: only the
+   * single 'onboarded' award is allowed, and only after onboarding is complete.
+   * (Prevents clients from minting arbitrary XP, which converts to Wagon Cash.)
+   */
   async awardXp(amount: number, badge: string | undefined, user: User) {
-    await this.prisma.user.update({ where: { id: user.id }, data: { xp: { increment: amount } } })
-    if (badge && BADGES[badge]) {
-      await this.prisma.userBadge.upsert({
-        where: { userId_badgeId: { userId: user.id, badgeId: badge } },
-        update: {},
-        create: { userId: user.id, badgeId: badge },
-      })
+    if (badge !== 'onboarded' || amount !== 120) {
+      throw new BadRequestException('Invalid reward')
     }
+    const supplier = await this.prisma.supplier.findUnique({ where: { userId: user.id } })
+    const transporter = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
+    if (!supplier?.onboarded && !transporter?.onboarded) {
+      throw new BadRequestException('Complete onboarding first')
+    }
+    await this.prisma.user.update({ where: { id: user.id }, data: { xp: { increment: amount } } })
+    await this.prisma.userBadge.upsert({
+      where: { userId_badgeId: { userId: user.id, badgeId: badge } },
+      update: {},
+      create: { userId: user.id, badgeId: badge },
+    })
     return this.state(user)
   }
 

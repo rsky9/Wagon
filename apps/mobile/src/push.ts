@@ -5,6 +5,28 @@ import { api } from './config'
 
 const STORAGE_KEY = 'wagon_push_registered'
 
+type NavigateFn = (url: string) => void
+let navigateToUrl: NavigateFn | null = null
+let handlersReady = false
+
+/**
+ * Wires up tapped-notification handling. Registers the response listener
+ * once, then delegates the notification's `data.url` deep link to the
+ * provided navigate callback (the app's navigation ref).
+ * Best-effort: never throws; missing params are ignored.
+ */
+export function setUpNotificationHandlers(navigate: NavigateFn): void {
+  navigateToUrl = navigate
+  if (handlersReady) return
+  handlersReady = true
+  Notifications.addNotificationResponseReceivedListener((response) => {
+    const url = response.notification.request.content.data?.url
+    if (typeof url === 'string' && url && navigateToUrl) {
+      navigateToUrl(url)
+    }
+  })
+}
+
 /**
  * Registers the device with FCM and uploads the token to the backend.
  * Best-effort: never blocks or throws on failure. Uses expo-notifications

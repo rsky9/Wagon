@@ -232,6 +232,8 @@ export const en = {
       availableForTrips: 'Available for trips',
       activeTrip: 'ACTIVE TRIP',
       noTripsToday: 'No trips today',
+      earnings: 'Total earned',
+      tripsCompleted: 'Trips completed',
     },
     settings: {
       title: 'Settings',

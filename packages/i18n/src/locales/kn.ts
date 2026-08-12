@@ -236,6 +236,8 @@ export const kn: { translation: TranslationSchema } = {
       availableForTrips: 'ಟ್ರಿಪ್‌ಗಳಿಗೆ ಲಭ್ಯವಿದೆ',
       activeTrip: 'ಸಕ್ರಿಯ ಟ್ರಿಪ್',
       noTripsToday: 'ಇಂದು ಯಾವುದೇ ಟ್ರಿಪ್‌ಗಳಿಲ್ಲ',
+      earnings: 'ಒಟ್ಟು ಗಳಿಕೆ',
+      tripsCompleted: 'ಪೂರ್ಣಗೊಂಡ ಟ್ರಿಪ್‌ಗಳು',
     },
     settings: {
       title: 'ಸೆಟ್ಟಿಂಗ್‌ಗಳು',

@@ -227,6 +227,8 @@ export const ur: { translation: TranslationSchema } = {
       availableForTrips: 'ٹرپس کے لیے دستیاب',
       activeTrip: 'فعال ٹرپ',
       noTripsToday: 'آج کوئی ٹرپ نہیں',
+      earnings: 'کل آمدنی',
+      tripsCompleted: 'مکمل شدہ ٹرپس',
     },
     settings: {
       title: 'ترتیبات',

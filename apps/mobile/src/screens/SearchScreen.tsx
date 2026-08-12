@@ -25,7 +25,7 @@ const TONE: Record<string, StatusTone> = {
 export function SearchScreen({ onBack, onSelect, initialQuery }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
-  const [query, setQuery] = useState(initialQuery ?? '')
+  const [query, setQuery] = useState(typeof initialQuery === 'string' ? initialQuery : '')
   const [results, setResults] = useState<Load[]>([])
   const [searched, setSearched] = useState(false)
   const [loading, setLoading] = useState(false)

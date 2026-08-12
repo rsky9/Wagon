@@ -22,7 +22,7 @@ interface SavedSearch {
 interface Props {
   onBack: () => void
   onOpenLoad?: (load: Load) => void
-  onRunSearch?: (query: Record<string, unknown>) => void
+  onRunSearch?: (query: string) => void
 }
 
 export function FavoritesScreen({ onBack, onOpenLoad, onRunSearch }: Props) {
@@ -76,7 +76,7 @@ export function FavoritesScreen({ onBack, onOpenLoad, onRunSearch }: Props) {
               <Text style={[styles.section, { color: theme.foreground }]}>{t('favorites.savedSearches')}</Text>
               {searches.map((s) => (
                 <View key={s.id} style={[styles.searchRow, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                  <Pressable style={{ flex: 1 }} onPress={() => onRunSearch?.(s.query ?? {})}>
+                  <Pressable style={{ flex: 1 }} onPress={() => onRunSearch?.(typeof s.query?.q === 'string' ? s.query.q : '')}>
                     <Text style={[styles.searchName, { color: theme.foreground }]}>{s.name}</Text>
                   </Pressable>
                   <Pressable onPress={() => deleteSearch(s.id)} hitSlop={8}>

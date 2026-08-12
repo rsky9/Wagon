@@ -77,6 +77,7 @@ export class AlertsService {
         title: 'New load on your lane',
         body: `A ${load.truckType} load from ${load.pickupAddr} matches your saved lane`,
         data: { fromLane: alert.fromLane },
+        category: 'loads',
       })
     }
   }

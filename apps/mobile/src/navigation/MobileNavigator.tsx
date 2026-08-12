@@ -2,7 +2,7 @@ import { StatusBar } from 'expo-status-bar'
 import { View, Text } from 'react-native'
 import { useState, useEffect } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native'
+import { NavigationContainer, DefaultTheme, DarkTheme, createNavigationContainerRef } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { ThemeContext, createTheme } from '@wagon/design'
@@ -60,6 +60,7 @@ import { SplashScreen, LanguageSelection, RoleSelection, CapabilitySelection } f
 import { AppLogo } from '../components/AppLogo'
 import { UnifiedTabs } from './UnifiedTabs'
 import { api } from '../config'
+import { setUpNotificationHandlers } from '../push'
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import type { LinkingOptions } from '@react-navigation/native'
 import type { Load, LanguageCode } from '@wagon/contracts'
@@ -111,27 +112,66 @@ export type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>()
 
+const navigationRef = createNavigationContainerRef<RootStackParamList>()
+
+/**
+ * Routes a `wagon://` deep link to the matching screen. `load/{id}` and
+ * `trip/{id}` both go to TripDetail by id (safe path — LoadDetail needs a
+ * full load object). Best-effort: unknown/missing params fall back safely.
+ */
+function navigateToUrl(nav: any, url: string) {
+  if (!url) return
+  const m = url.match(/^wagon:\/\/(load|trip)\/(.+)$/)
+  if (m && m[2]) {
+    nav.navigate('TripDetail', { loadId: m[2] })
+  } else if (url.endsWith('loads')) {
+    nav.navigate('UnifiedTabs', { screen: 'Marketplace' } as never)
+  } else if (url.endsWith('trips')) {
+    nav.navigate('UnifiedTabs', { screen: 'Trips' } as never)
+  } else if (url.endsWith('kyc')) {
+    nav.navigate('Kyc')
+  } else if (url.endsWith('search')) {
+    nav.navigate('Search', {})
+  } else if (url.endsWith('notifications')) {
+    nav.navigate('Notifications')
+  }
+}
+
 const linking: LinkingOptions<RootStackParamList> = {
   prefixes: ['wagon://'],
   config: {
     screens: {
       LoadDetail: 'load/:id',
-      TripDetail: 'load/:loadId',
+      TripDetail: 'trip/:tripId',
       Track: 'track/:tripId',
       Kyc: 'kyc',
       Notifications: 'notifications',
       Search: 'search',
+      UnifiedTabs: {
+        screens: {
+          Marketplace: 'loads',
+          Trips: 'trips',
+        },
+      },
     },
   },
 }
 
 // Route wrappers (all shared stack screens)
 function LoadDetailRoute({ route, navigation }: NativeStackScreenProps<RootStackParamList, 'LoadDetail'>) {
-  return <LoadDetailScreen load={route.params.load} onBack={() => navigation.goBack()} onAccepted={() => navigation.navigate('UnifiedTabs', { screen: 'Trips' } as never)} onOpenBid={() => navigation.navigate('BidForm', { load: route.params.load })} />
+  const load = route.params?.load
+  const deepId = (route.params as { id?: string })?.id
+  if (!load && deepId) {
+    return <TripDetailScreen loadId={deepId} onBack={() => navigation.goBack()} onTrack={(tripId) => navigation.navigate('Track', { tripId })} />
+  }
+  if (!load) return null
+  return <LoadDetailScreen load={load} onBack={() => navigation.goBack()} onAccepted={() => navigation.navigate('UnifiedTabs', { screen: 'Trips' } as never)} onOpenBid={() => navigation.navigate('BidForm', { load })} />
 }
 
 function TripDetailRoute({ route, navigation }: NativeStackScreenProps<RootStackParamList, 'TripDetail'>) {
-  return <TripDetailScreen loadId={route.params.loadId} onBack={() => navigation.goBack()} onTrack={(tripId) => navigation.navigate('Track', { tripId })} />
+  const p = route.params as { loadId?: string; tripId?: string }
+  const loadId = p?.loadId ?? p?.tripId ?? ''
+  return <TripDetailScreen loadId={loadId} onBack={() => navigation.goBack()} onTrack={(tripId) => navigation.navigate('Track', { tripId })} />
 }
 
 function TrackRoute({ route, navigation }: NativeStackScreenProps<RootStackParamList, 'Track'>) {
@@ -159,7 +199,7 @@ function FavoritesRoute({ navigation }: any) {
     <FavoritesScreen
       onBack={() => navigation.goBack()}
       onOpenLoad={(load) => navigation.navigate('LoadDetail', { load })}
-      onRunSearch={(query) => navigation.navigate('Search', { preset: query } as never)}
+      onRunSearch={(query) => navigation.navigate('Search', { preset: query })}
     />
   )
 }
@@ -177,12 +217,7 @@ function NotificationsRoute({ navigation }: any) {
     <NotificationsScreen
       onBack={() => navigation.goBack()}
       onNavigate={(route) => {
-        const m = route.match(/^wagon:\/\/(load|trip)\/(.+)$/)
-        if (m && m[1] === 'trip') navigation.navigate('Track', { tripId: m[2] })
-        else if (m && m[1] === 'load') navigation.navigate('TripDetail', { loadId: m[2] })
-        else if (route.endsWith('loads')) navigation.navigate('UnifiedTabs', { screen: 'Marketplace' } as never)
-        else if (route.endsWith('trips')) navigation.navigate('UnifiedTabs', { screen: 'Trips' } as never)
-        else navigation.navigate('Notifications')
+        navigateToUrl(navigation, route)
       }}
     />
   )
@@ -417,6 +452,13 @@ export function MobileNavigator() {
     })
   }, [])
 
+  useEffect(() => {
+    if (!auth.session) return
+    setUpNotificationHandlers((url) => {
+      if (navigationRef.isReady()) navigateToUrl(navigationRef, url)
+    })
+  }, [auth.session])
+
   const persistLang = (l: LanguageCode) => {
     setLang(l)
     AsyncStorage.setItem('wagon_lang', l).catch(() => {})
@@ -488,7 +530,7 @@ export function MobileNavigator() {
           </ThemeContext.Provider>
         ) : (
           <ThemeContext.Provider value={theme}>
-            <NavigationContainer theme={navTheme} linking={linking}>
+            <NavigationContainer ref={navigationRef} theme={navTheme} linking={linking}>
               <StatusBar style={isDark ? 'light' : 'dark'} />
               <Stack.Navigator
                 screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}

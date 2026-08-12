@@ -147,7 +147,7 @@ export default function Payments() {
                 </td>
                 <td className="px-5 py-3.5 text-xs text-slate-400">{new Date(p.createdAt).toLocaleString()}</td>
                 <td className="px-5 py-3.5 text-right">
-                  {p.type !== "refund" && (
+                  {p.type !== "refund" && p.status === "succeeded" && (
                     <button
                       onClick={() => refund(p)}
                       disabled={busy === p.id}

@@ -45,6 +45,16 @@ export class TripsController {
     return this.trips.advanceStage(id, user)
   }
 
+  @Post(':id/cancel')
+  @Roles('transporter', 'supplier')
+  cancelTrip(
+    @Param('id') id: string,
+    @Body() body: { reason: string },
+    @CurrentUser() user: User,
+  ) {
+    return this.trips.cancelTrip(id, body.reason, user)
+  }
+
   @Post(':id/otp/:kind')
   @Roles('transporter')
   generateOtp(@Param('id') id: string, @Param('kind') kind: 'pickup' | 'delivery', @CurrentUser() user: User) {

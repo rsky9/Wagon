@@ -236,6 +236,8 @@ export const gu: { translation: TranslationSchema } = {
       availableForTrips: 'ટ્રિપ માટે ઉપલબ્ધ',
       activeTrip: 'સક્રિય ટ્રિપ',
       noTripsToday: 'આજે કોઈ ટ્રિપ નથી',
+      earnings: 'કુલ કમાણી',
+      tripsCompleted: 'પૂર્ણ થયેલ ટ્રિપ્સ',
     },
     settings: {
       title: 'સેટિંગ્સ',

@@ -488,6 +488,8 @@ export const hi: { translation: TranslationSchema } = {
       availableForTrips: 'ट्रिप के लिए उपलब्ध',
       activeTrip: 'सक्रिय ट्रिप',
       noTripsToday: 'आज कोई ट्रिप नहीं',
+      earnings: 'कुल कमाई',
+      tripsCompleted: 'पूर्ण की गई ट्रिप',
     },
     review: { title: 'समीक्षाएं', none: 'अभी कोई समीक्षा नहीं' },
     rateCard: { title: 'रेट कार्ड', perKm: '/किमी' },

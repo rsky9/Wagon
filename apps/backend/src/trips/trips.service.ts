@@ -92,6 +92,7 @@ export class TripsService {
         title: 'Load accepted',
         body: `Transporter accepted your load #${loadId.slice(-6)}`,
         data: { tripId: trip.id, loadId },
+        category: 'booking',
       })
     }
 
@@ -147,6 +148,7 @@ export class TripsService {
         title: status === 'in_transit' ? 'Trip in transit' : 'Load delivered',
         body: `Load #${trip.loadId.slice(-6)} is ${status === 'in_transit' ? 'in transit' : 'delivered'}`,
         data: { tripId: trip.id, loadId: trip.loadId },
+        category: 'trips',
       })
     }
 
@@ -205,6 +207,7 @@ export class TripsService {
         title: this.stageLabel(next),
         body: `Load #${trip.loadId.slice(-6)} ${this.stageLabel(next).toLowerCase()}`,
         data: { tripId: trip.id, loadId: trip.loadId, stage: next },
+        category: 'trips',
       })
     }
 
@@ -245,6 +248,58 @@ export class TripsService {
       data: kind === 'pickup' ? { pickupOtp: null, pickupOtpVerifiedAt: new Date() } : { deliveryOtp: null, deliveryOtpVerifiedAt: new Date() },
     })
     return { trip: updated, verified: true }
+  }
+
+  /** Transporter or supplier cancels an active trip; the load returns to the feed. */
+  async cancelTrip(tripId: string, reason: string, user: User) {
+    if (!reason?.trim()) throw new BadRequestException('Cancellation reason is required')
+    const trip = await this.prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { load: true },
+    })
+    if (!trip) throw new NotFoundException('Trip not found')
+    if (trip.status !== 'accepted' && trip.status !== 'in_transit') {
+      throw new BadRequestException('Only active trips (accepted/in_transit) can be cancelled')
+    }
+
+    const [transporter, supplier] = await Promise.all([
+      this.prisma.transporter.findUnique({ where: { userId: user.id } }),
+      this.prisma.supplier.findUnique({ where: { userId: user.id } }),
+    ])
+    const isTransporter = transporter?.id === trip.transporterId
+    const isSupplier = supplier?.id === trip.load.supplierId
+    if (!isTransporter && !isSupplier) {
+      throw new BadRequestException('Only the assigned transporter or supplier can cancel this trip')
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const t = await tx.trip.update({
+        where: { id: tripId },
+        data: { status: 'cancelled' },
+      })
+      // Return the load to 'posted' so it can be re-bid, unless it's already delivered.
+      if (trip.load.status !== 'delivered' && trip.load.status !== 'completed') {
+        await tx.load.update({ where: { id: trip.loadId }, data: { status: 'posted' } })
+      }
+      return t
+    })
+
+    // Notify the counterparty.
+    const counterparty = isTransporter
+      ? await this.prisma.supplier.findUnique({ where: { id: trip.load.supplierId }, include: { user: true } })
+      : await this.prisma.transporter.findUnique({ where: { id: trip.transporterId }, include: { user: true } })
+    if (counterparty) {
+      await this.notifications.create({
+        userId: counterparty.userId,
+        type: 'trip_cancelled',
+        title: 'Trip cancelled',
+        body: `Trip for load #${trip.loadId.slice(-6)} was cancelled: ${reason.trim()}`,
+        data: { tripId, loadId: trip.loadId },
+        category: 'trips',
+      })
+    }
+
+    return { trip: updated }
   }
 
   private stageLabel(stage: string) {

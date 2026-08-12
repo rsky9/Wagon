@@ -72,6 +72,7 @@ export class PaymentsService {
         title: 'Booking amount received',
         body: `Supplier paid ₹${amount} for load #${trip.loadId.slice(-6)}`,
         data: { tripId, loadId: trip.loadId },
+        category: 'payments',
       })
     }
 

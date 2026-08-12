@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { PushService } from '../push/push.service'
+import type { NotificationPreference } from '@prisma/client'
 
 interface CreateNotificationInput {
   userId: string
@@ -8,6 +9,22 @@ interface CreateNotificationInput {
   title: string
   body: string
   data?: Record<string, unknown>
+  /** Category used to look up the user's NotificationPreference toggle. */
+  category?: string
+}
+
+// Maps notification categories to the boolean toggle fields on
+// NotificationPreference. Categories not listed here (e.g. 'system', 'general')
+// are never suppressed.
+const CATEGORY_TO_PREF: Record<string, keyof Omit<NotificationPreference, 'id' | 'userId' | 'updatedAt'> | undefined> = {
+  loads: 'loadAlerts',
+  booking: 'booking',
+  trips: 'trip',
+  payments: 'payment',
+  kyc: 'kyc',
+  docs: 'docExpiry',
+  promo: 'promo',
+  chat: 'trip',
 }
 
 @Injectable()
@@ -18,6 +35,16 @@ export class NotificationsService {
   ) {}
 
   async create(input: CreateNotificationInput) {
+    const prefKey = CATEGORY_TO_PREF[input.category ?? 'general']
+    if (prefKey) {
+      const prefs = await this.prisma.notificationPreference.findUnique({
+        where: { userId: input.userId },
+      })
+      // No pref row → default to enabled. Only skip when explicitly disabled.
+      if (prefs && prefs[prefKey] === false) {
+        return null
+      }
+    }
     const data = {
       ...(input.data ?? {}),
       route: this.deepLink(input.type, input.data),

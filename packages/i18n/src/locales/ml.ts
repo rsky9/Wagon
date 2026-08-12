@@ -227,6 +227,8 @@ export const ml: { translation: TranslationSchema } = {
       availableForTrips: 'ട്രിപ്പുകൾക്ക് ലഭ്യമാണ്',
       activeTrip: 'സജീവ ട്രിപ്പ്',
       noTripsToday: 'ഇന്ന് ട്രിപ്പുകൾ ഇല്ല',
+      earnings: 'മൊത്തം വരുമാനം',
+      tripsCompleted: 'പൂർത്തിയായ ട്രിപ്പുകൾ',
     },
     settings: {
       title: 'ക്രമീകരണങ്ങൾ',

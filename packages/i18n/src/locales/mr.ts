@@ -236,6 +236,8 @@ export const mr: { translation: TranslationSchema } = {
       availableForTrips: 'ट्रिप्ससाठी उपलब्ध',
       activeTrip: 'सक्रिय ट्रिप',
       noTripsToday: 'आज कोणतीही ट्रिप नाही',
+      earnings: 'एकूण कमाई',
+      tripsCompleted: 'पूर्ण ट्रिप',
     },
     settings: {
       title: 'सेटिंग्ज',

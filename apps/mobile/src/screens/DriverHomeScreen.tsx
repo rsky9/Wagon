@@ -12,6 +12,11 @@ interface DriverTrip {
   load: { pickupAddr: string; dropAddr: string; weight: number; distanceKm: number; fareEstimate: number; material?: { name: string } | null }
 }
 
+interface DriverEarnings {
+  trips: number
+  earned: number
+}
+
 interface DriverHome {
   todayTrips: DriverTrip[]
   activeTrip: DriverTrip | null
@@ -33,12 +38,14 @@ export function DriverHomeScreen({ onOpenTrip }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
   const [data, setData] = useState<DriverHome | null>(null)
+  const [earnings, setEarnings] = useState<DriverEarnings | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [available, setAvailable] = useState(true)
 
   const fetch = useCallback(() => {
     api.get<DriverHome>('/driver/home').then((d) => { setData(d); setAvailable(d.available) }).catch(() => {}).finally(() => setLoading(false))
+    api.get<DriverEarnings>('/driver/earnings').then(setEarnings).catch(() => {})
   }, [])
 
   useEffect(() => { fetch() }, [fetch])
@@ -66,6 +73,19 @@ export function DriverHomeScreen({ onOpenTrip }: Props) {
         </View>
         <Switch value={available} onValueChange={toggleAvailability} trackColor={{ true: theme.primary, false: theme.border }} thumbColor="#fff" />
       </View>
+
+      {earnings && (
+        <View style={[styles.earningsCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.earningsLabel, { color: theme.mutedForeground }]}>{t('driver.earnings')}</Text>
+            <Text style={[styles.earningsValue, { color: theme.foreground }]}>{formatINR(earnings.earned)}</Text>
+          </View>
+          <View style={styles.earningsRight}>
+            <Text style={[styles.earningsTrips, { color: theme.primary }]}>{earnings.trips}</Text>
+            <Text style={[styles.earningsLabel, { color: theme.mutedForeground }]}>{t('driver.tripsCompleted')}</Text>
+          </View>
+        </View>
+      )}
 
       <FlatList
         data={data?.todayTrips ?? []}
@@ -110,6 +130,11 @@ const styles = StyleSheet.create({
   availRow: { flexDirection: 'row', alignItems: 'center', margin: spacing.lg, marginTop: spacing.sm, borderRadius: radius.xl, borderWidth: 1, padding: spacing.lg },
   availTitle: { fontSize: 15, fontWeight: '700' },
   availSub: { fontSize: 12, marginTop: 1 },
+  earningsCard: { flexDirection: 'row', alignItems: 'center', marginHorizontal: spacing.lg, marginBottom: spacing.md, borderRadius: radius.xl, borderWidth: 1, padding: spacing.lg },
+  earningsLabel: { fontSize: 12 },
+  earningsValue: { fontSize: 24, fontWeight: '800', marginTop: 2 },
+  earningsRight: { alignItems: 'center' },
+  earningsTrips: { fontSize: 22, fontWeight: '800' },
   list: { padding: spacing.lg, gap: spacing.md },
   activeCard: { borderRadius: radius.xl, padding: spacing.lg, marginBottom: spacing.md },
   card: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, gap: spacing.sm },

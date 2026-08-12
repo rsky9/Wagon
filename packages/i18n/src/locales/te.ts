@@ -236,6 +236,8 @@ export const te: { translation: TranslationSchema } = {
       availableForTrips: 'ట్రిప్పులకు అందుబాటులో ఉంది',
       activeTrip: 'యాక్టివ్ ట్రిప్',
       noTripsToday: 'ఈరోజు ట్రిప్పులు లేవు',
+      earnings: 'మొత్తం సంపాదన',
+      tripsCompleted: 'పూర్తైన ట్రిప్పులు',
     },
     settings: {
       title: 'సెట్టింగ్స్',

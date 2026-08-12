@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { AlertsService } from '../alerts/alerts.service'
+import { NotificationsService } from '../notifications/notifications.service'
 import type { User } from '@prisma/client'
 import type { Load } from '@wagon/contracts'
 
@@ -62,6 +63,7 @@ export class LoadsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly alerts: AlertsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async create(input: CreateLoadInput, user: User) {
@@ -311,11 +313,38 @@ export class LoadsService {
     if (!reason?.trim()) throw new BadRequestException('Cancellation reason is required')
     const load = await this.ownedLoad(id, user)
     if (load.status === 'delivered') throw new BadRequestException('Cannot cancel a delivered load')
-    const updated = await this.prisma.load.update({
-      where: { id },
-      data: { status: 'cancelled', cancelReason: reason.trim() },
+
+    const { cancelled, trips } = await this.prisma.$transaction(async (tx) => {
+      const cancelled = await tx.load.update({
+        where: { id },
+        data: { status: 'cancelled', cancelReason: reason.trim() },
+      })
+      // Cancel any active trips so none are left orphaned on a cancelled load.
+      const trips = await tx.trip.findMany({
+        where: { loadId: id, status: { in: ['accepted', 'in_transit'] } },
+        include: { transporter: { include: { user: true } } },
+      })
+      if (trips.length > 0) {
+        await tx.trip.updateMany({
+          where: { loadId: id, status: { in: ['accepted', 'in_transit'] } },
+          data: { status: 'cancelled' },
+        })
+      }
+      return { cancelled, trips }
     })
-    return { load: updated }
+
+    for (const trip of trips) {
+      await this.notifications.create({
+        userId: trip.transporter.userId,
+        type: 'trip_cancelled',
+        title: 'Load cancelled — trip cancelled',
+        body: `Your trip for load #${id.slice(-6)} was cancelled by the supplier: ${reason.trim()}`,
+        data: { tripId: trip.id, loadId: id },
+        category: 'trips',
+      })
+    }
+
+    return { load: cancelled }
   }
 
   async complete(id: string, user: User) {

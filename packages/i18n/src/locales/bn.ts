@@ -236,6 +236,8 @@ export const bn: { translation: TranslationSchema } = {
       availableForTrips: 'ট্রিপের জন্য উপলব্ধ',
       activeTrip: 'সক্রিয় ট্রিপ',
       noTripsToday: 'আজ কোনো ট্রিপ নেই',
+      earnings: 'মোট আয়',
+      tripsCompleted: 'সম্পন্ন ট্রিপ',
     },
     settings: {
       title: 'সেটিংস',
