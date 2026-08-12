@@ -342,5 +342,46 @@ describe('Enablement platform (e2e)', () => {
       expect(booked.body.service.status).toBe('sold_out')
       await api(trToken).post(`/market/carrier-services/${svc.body.service.id}/book`).expect(400)
     })
+
+    it('bridges load -> transport request and truck -> truck_capacity listing', async () => {
+      // Creating a load auto-publishes a transport MarketRequest.
+      const model = (await api(supToken).get('/reference').expect(200)).body.models[0]
+      const material = (await api(supToken).get('/loads').expect(200)).body.items[0]?.materialId
+      await api(supToken).post('/loads', {
+        pickupAddr: 'Delhi', dropAddr: 'Jaipur', pickupLat: 28.6, pickupLng: 77.2,
+        dropLat: 26.9, dropLng: 75.8, date: '2026-09-05', truckType: 'open', modelId: model.id,
+        weight: 6, distanceKm: 280, materialId: material,
+      }).expect(201)
+      const reqs = await api(supToken).get('/market/requests?kind=transport').expect(200)
+      expect(reqs.body.requests.some((r: { sourceType?: string }) => r.sourceType === 'load')).toBe(true)
+      // Creating a truck auto-publishes a truck_capacity listing.
+      await api(trToken).post('/trucks', { truckNo: 'DL9NETE2E', type: 'open', modelId: model.id, origin: 'Delhi' }).expect(201)
+      const listings = await api(supToken).get('/market/listings?kind=truck_capacity').expect(200)
+      expect(listings.body.listings.some((l: { sourceType?: string }) => l.sourceType === 'truck')).toBe(true)
+    })
+
+    it('accepting a quote materializes an operational object', async () => {
+      // Warehouse org (create under trToken) quotes supplier's warehouse demand.
+      await api(trToken).post('/foundation/organizations', { name: 'E2E WH', kind: 'warehouse' }).expect(201)
+      const fac = await api(trToken).post('/storage/facilities', { name: 'E2E WH CFS', kind: 'cfs', city: 'Pune', capacitySlots: 10 }).expect(201)
+      // Supplier posts warehouse demand in Pune.
+      const req = await api(supToken).post('/market/requests', { kind: 'warehouse', city: 'Pune', capacityNeeded: 500, capacityUnit: 'm3', budget: 3000 }).expect(201)
+      // Transporter (provider org) quotes — but they own the facility, so it must be a different org. Use the warehouse org as provider.
+      const whOrg = (await api(trToken).get('/foundation/organizations').expect(200)).body.organizations.find((o: { kind: string }) => o.kind === 'warehouse')
+      // Ensure the provider is not the requester's org (they differ), and quote.
+      const quote = await api(trToken).post(`/market/requests/${req.body.request.id}/quotes`, { amount: 2800 }).expect(201)
+      await api(supToken).post(`/market/quotes/${quote.body.quote.id}/accept`).expect(201)
+      // The warehouse operator now has an operation with a market ref.
+      const ops = await api(trToken).get('/storage/operations').expect(200)
+      expect(ops.body.operations.some((o: { ref: string }) => o.ref.startsWith('MK-'))).toBe(true)
+      void whOrg
+    })
+
+    it('runs the guardrailed AI market agent', async () => {
+      const req = await api(supToken).post('/market/requests', { kind: 'transport', originRef: 'Delhi', destinationRef: 'Jaipur', capacityNeeded: 2000 }).expect(201)
+      const ai = await api(supToken).post(`/ai/market/${req.body.request.id}`).expect(201)
+      expect(ai.body.recommendation.agent).toBe('market')
+      expect(ai.body.recommendation.guardrails.neverAutoBooks).toBe(true)
+    })
   })
 })

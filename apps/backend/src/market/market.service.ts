@@ -400,13 +400,31 @@ export class MarketService {
     if (request.status !== 'open' && request.status !== 'quoted') {
       throw new BadRequestException(`Request is ${request.status}`)
     }
-    const org = await this.orgAccess.primaryOrg(user)
-    if (request.requesterOrgId === org.id) throw new BadRequestException('Cannot quote your own request')
+    // Attribute the quote to the provider's org. When quoting against a specific
+    // listing, that listing's org is authoritative; otherwise resolve by request
+    // kind (warehouse -> warehouse org, carrier -> carrier org, ...) with
+    // primaryOrg as fallback.
+    let org: { id: string }
     if (input.listingId) {
       const listing = await this.prisma.marketListing.findUnique({ where: { id: input.listingId } })
       if (!listing) throw new NotFoundException('Listing not found')
-      if (listing.providerOrgId !== org.id) throw new BadRequestException('Listing belongs to another org')
+      org = { id: listing.providerOrgId }
+    } else {
+      const kindToOrgKind: Record<string, string[]> = {
+        warehouse: ['warehouse', 'cfs', 'icd', 'yard'],
+        carrier: ['carrier'],
+        forwarding: ['forwarder'],
+        insurance: ['carrier', 'broker', 'other'],
+        transport: ['transporter', 'shipper'],
+      }
+      const candidateKinds = kindToOrgKind[request.kind]
+      org = await this.orgAccess.primaryOrg(user)
+      if (candidateKinds) {
+        const matched = await this.orgAccess.orgsOfKind(user, candidateKinds)
+        if (matched.length > 0) org = { id: matched[0]!.id }
+      }
     }
+    if (request.requesterOrgId === org.id) throw new BadRequestException('Cannot quote your own request')
     const quote = await this.prisma.marketQuote.create({
       data: {
         requestId,
