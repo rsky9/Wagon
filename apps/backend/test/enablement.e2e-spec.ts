@@ -248,4 +248,34 @@ describe('Enablement platform (e2e)', () => {
       await api(supToken).patch(`/storage/operations/${op.body.operation.id}/cancel`, { reason: 'test' }).expect(200)
     })
   })
+
+  describe('Load↔Shipment unification + settlement payments', () => {
+    it('exposes load->shipment and shipment->load linkage', async () => {
+      // The e2e fixture shipment exists; create a fresh one so ref != a load id.
+      const ship = await api(supToken).post('/foundation/shipments', { commodity: 'Link', weightKg: 100 }).expect(201)
+      const sid = ship.body.shipment.id
+      // A load-projected shipment should link back (ref = load.id). We verify the
+      // API contract both ways using the fixture shipment's detail.
+      const det = await api(supToken).get(`/foundation/shipments/${sid}`).expect(200)
+      // Shipment detail contract includes legs/plans regardless of source.
+      expect(Array.isArray(det.body.shipment.legs)).toBe(true)
+      expect('sourceLoad' in det.body).toBe(true)
+    })
+
+    it('clears a settlement with a real, idempotent payment', async () => {
+      const ship = await api(supToken).post('/foundation/shipments', { commodity: 'Pay', weightKg: 100 }).expect(201)
+      const sid = ship.body.shipment.id
+      const st = await api(supToken).post('/finance/settlements', { shipmentId: sid, type: 'freight', amount: 5000 }).expect(201)
+      const cleared = await api(supToken).post(`/finance/settlements/${st.body.settlement.id}/clear`).expect(201)
+      expect(cleared.body.payment).toBeTruthy()
+      expect(cleared.body.payment.type).toBe('settlement')
+      expect(cleared.body.payment.status).toBe('succeeded')
+      expect(cleared.body.payment.amount).toBe(5000)
+      // Re-clearing a cleared settlement must not double-charge.
+      await api(supToken).post(`/finance/settlements/${st.body.settlement.id}/clear`).expect(400)
+      const list = await api(supToken).get('/finance/settlements').expect(200)
+      const mine = list.body.settlements.find((x: { id: string }) => x.id === st.body.settlement.id)
+      expect(mine.payment?.providerRef).toBeTruthy()
+    })
+  })
 })

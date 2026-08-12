@@ -213,22 +213,24 @@ export class FinanceService {
     if (!['freight', 'advance', 'balance', 'commission', 'claim'].includes(input.type)) throw new BadRequestException('Invalid settlement type')
     if (input.amount != null && input.amount <= 0) throw new BadRequestException('Settlement amount must be positive')
     const shipment = await this.requireShipmentAccess(user, input.shipmentId)
-    // Validate counterparties exist; at least one must be the caller's org.
+    // Default the payer to the caller's org when neither side is specified.
     const memberOrgIds = await this.orgAccess.memberOrgIds(user)
+    const payerId = input.payerId ?? (memberOrgIds[0] ?? undefined)
+    // Validate counterparties exist; at least one must be the caller's org.
     for (const side of ['payerId', 'payeeId'] as const) {
-      const orgId = input[side]
+      const orgId = side === 'payerId' ? payerId : input.payeeId
       if (!orgId) continue
       const org = await this.prisma.organization.findUnique({ where: { id: orgId } })
       if (!org) throw new NotFoundException(`Unknown organization for ${side}`)
     }
-    if (!(input.payerId && memberOrgIds.includes(input.payerId)) && !(input.payeeId && memberOrgIds.includes(input.payeeId))) {
+    if (!(payerId && memberOrgIds.includes(payerId)) && !(input.payeeId && memberOrgIds.includes(input.payeeId))) {
       throw new ForbiddenException('A settlement must involve one of your organizations')
     }
     const settlement = await this.prisma.$transaction(async (tx) => {
       const created = await tx.settlement.create({
         data: {
           shipmentId: input.shipmentId,
-          payerId: input.payerId,
+          payerId,
           payeeId: input.payeeId,
           type: input.type,
           amount: input.amount,
