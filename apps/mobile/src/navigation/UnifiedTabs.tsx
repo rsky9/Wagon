@@ -109,6 +109,7 @@ function HomeTab({ navigation }: any) {
       onOpenTrips={() => navigation.navigate('Trips')}
       onOpenMarketplace={() => navigation.navigate('Marketplace')}
       onPostLoad={() => root?.navigate('PostLoadWizard')}
+      onOpenMarket={() => root?.navigate('Market')}
     />
   )
 }

@@ -51,19 +51,23 @@ interface Props {
   onOpenTrips: () => void
   onOpenMarketplace: () => void
   onPostLoad: () => void
+  onOpenMarket?: () => void
 }
 
-export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, onPostLoad }: Props) {
+export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, onPostLoad, onOpenMarket }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
   const { session } = useAuth()
   const activeMode = useActiveMode()
   const [data, setData] = useState<HomeSummary | null>(null)
+  const [marketCounts, setMarketCounts] = useState<{ listings?: number; requests?: number } | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const fetch = useCallback(() => {
     api.get<HomeSummary>('/home/summary').then(setData).catch(() => {}).finally(() => setLoading(false))
+    api.get<{ listings: unknown[] }>('/market/listings').then((r) => setMarketCounts((c) => ({ ...c, listings: r.listings.length }))).catch(() => {})
+    api.get<{ requests: unknown[] }>('/market/requests').then((r) => setMarketCounts((c) => ({ ...c, requests: r.requests.length }))).catch(() => {})
   }, [])
 
   useEffect(() => { fetch() }, [fetch])
@@ -164,20 +168,35 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
         )}
 
         {!loading && !data?.transporter && !data?.supplier && (
-          <View style={{ alignItems: 'center', paddingTop: 60, gap: spacing.lg }}>
-            <Text style={{ fontSize: 48 }}>🚀</Text>
-            <Text style={[styles.emptyTitle, { color: theme.foreground }]}>{t('home.welcome')}</Text>
-            <Text style={[styles.emptySub, { color: theme.mutedForeground }]}>
-              {t('home.pickCapability')}
-            </Text>
-            {isTransporter ? (
-              <Pressable style={[styles.emptyCta, { backgroundColor: theme.primary }]} onPress={onOpenMarketplace}>
-                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>{t('home.browseLoads')}</Text>
-              </Pressable>
+          <View style={{ alignItems: 'center', paddingTop: 40, gap: spacing.lg }}>
+            {onOpenMarket ? (
+              <>
+                <Text style={{ fontSize: 48 }}>🏪</Text>
+                <Text style={[styles.emptyTitle, { color: theme.foreground }]}>Capability marketplace</Text>
+                <Text style={[styles.emptySub, { color: theme.mutedForeground }]}>
+                  {marketCounts ? `${marketCounts.listings ?? 0} supply listings · ${marketCounts.requests ?? 0} open requests` : 'Browse & post across every capability'}
+                </Text>
+                <Pressable style={[styles.emptyCta, { backgroundColor: theme.primary }]} onPress={onOpenMarket}>
+                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>Open marketplace</Text>
+                </Pressable>
+              </>
             ) : (
-              <Pressable style={[styles.emptyCta, { backgroundColor: theme.primary }]} onPress={onPostLoad}>
-                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>{t('load.postNew')}</Text>
-              </Pressable>
+              <>
+                <Text style={{ fontSize: 48 }}>🚀</Text>
+                <Text style={[styles.emptyTitle, { color: theme.foreground }]}>{t('home.welcome')}</Text>
+                <Text style={[styles.emptySub, { color: theme.mutedForeground }]}>
+                  {t('home.pickCapability')}
+                </Text>
+                {isTransporter ? (
+                  <Pressable style={[styles.emptyCta, { backgroundColor: theme.primary }]} onPress={onOpenMarketplace}>
+                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>{t('home.browseLoads')}</Text>
+                  </Pressable>
+                ) : (
+                  <Pressable style={[styles.emptyCta, { backgroundColor: theme.primary }]} onPress={onPostLoad}>
+                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>{t('load.postNew')}</Text>
+                  </Pressable>
+                )}
+              </>
             )}
           </View>
         )}

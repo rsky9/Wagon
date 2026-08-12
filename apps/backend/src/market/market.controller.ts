@@ -91,6 +91,16 @@ export class MarketController {
     return this.market.acceptQuote(id, user)
   }
 
+  @Post('quotes/:id/withdraw')
+  withdrawQuote(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.market.withdrawQuote(id, user)
+  }
+
+  @Post('quotes/:id/reject')
+  rejectQuote(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.market.rejectQuote(id, user)
+  }
+
   @Get('requests/:id/quotes')
   quotesFor(@Param('id') id: string, @CurrentUser() user: User) {
     return this.market.quotesFor(id, user)

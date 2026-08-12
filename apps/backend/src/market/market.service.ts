@@ -123,14 +123,19 @@ export class MarketService {
     })
     return { listing }
   }
-
-  /** Browse supply — PUBLIC read (any authenticated user; cross-type discovery). */  async browseListings(query?: {
+  /** Browse supply — PUBLIC read (any authenticated user; cross-type discovery). */
+  async browseListings(query?: {
     kind?: string
     city?: string
     origin?: string
     destination?: string
     status?: string
   }) {
+    // Expiry sweep: listings past their availableTo window go off-market.
+    await this.prisma.marketListing.updateMany({
+      where: { status: 'live', availableTo: { lte: new Date() } },
+      data: { status: 'expired' },
+    })
     const where: Record<string, unknown> = { status: query?.status ?? 'live' }
     if (query?.kind) where.kind = query.kind
     if (query?.city) where.city = { contains: query.city.toLowerCase() }
@@ -380,7 +385,41 @@ export class MarketService {
         }).catch(() => {})
       }
     }
+    // Reverse bridge: a direct transport request also enters the classic load
+    // feed so transporters using the legacy marketplace see it too.
+    if (request.kind === 'transport' && !input.sourceType) {
+      await this.bridgeToLoad(request, user).catch(() => {})
+    }
     return { request }
+  }
+
+  /** Create a classic Load mirroring a transport MarketRequest. */
+  private async bridgeToLoad(request: { id: string; originRef?: string | null; destinationRef?: string | null; capacityNeeded?: number | null }, user: User) {
+    const supplier = await this.prisma.supplier.findUnique({ where: { userId: user.id } })
+    if (!supplier) return null
+    const material = await this.prisma.material.findFirst()
+    const model = await this.prisma.truckModel.findFirst()
+    if (!material || !model) return null
+    const weightT = Math.max(1, Math.round((request.capacityNeeded ?? 1000) / 1000))
+    await this.prisma.load.create({
+      data: {
+        supplierId: supplier.id,
+        pickupAddr: request.originRef ?? 'Origin',
+        dropAddr: request.destinationRef ?? 'Destination',
+        pickupLat: 0,
+        pickupLng: 0,
+        dropLat: 0,
+        dropLng: 0,
+        date: new Date(),
+        truckType: 'open',
+        modelId: model.id,
+        weight: weightT,
+        distanceKm: 100,
+        materialId: material.id,
+        status: 'posted' as never,
+      } as never,
+    })
+    return null
   }
 
   /**
@@ -564,6 +603,32 @@ export class MarketService {
       }
       return accepted
     })
+    return { quote: updated }
+  }
+
+  /** A provider withdraws their own submitted quote. */
+  async withdrawQuote(quoteId: string, user: User) {
+    const quote = await this.prisma.marketQuote.findUnique({ where: { id: quoteId }, include: { request: true } })
+    if (!quote) throw new NotFoundException('Quote not found')
+    if (!(await this.orgAccess.isMember(user, quote.providerOrgId))) throw new ForbiddenException('Not your quote')
+    if (quote.status !== 'submitted') throw new BadRequestException(`Quote is ${quote.status}`)
+    const updated = await this.prisma.marketQuote.update({ where: { id: quoteId }, data: { status: 'withdrawn' } })
+    // Revert the request to open if no other quotes remain.
+    const otherSubmitted = await this.prisma.marketQuote.count({ where: { requestId: quote.requestId, status: 'submitted' } })
+    if (otherSubmitted === 0 && quote.request.status === 'quoted') {
+      await this.prisma.marketRequest.update({ where: { id: quote.requestId }, data: { status: 'open' } })
+    }
+    return { quote: updated }
+  }
+
+  /** A requester rejects a specific quote (leaves others open). */
+  async rejectQuote(quoteId: string, user: User) {
+    const quote = await this.prisma.marketQuote.findUnique({ where: { id: quoteId }, include: { request: true } })
+    if (!quote) throw new NotFoundException('Quote not found')
+    const orgIds = await this.orgAccess.memberOrgIds(user)
+    if (!orgIds.includes(quote.request.requesterOrgId)) throw new ForbiddenException('Only the requester can reject')
+    if (quote.status !== 'submitted') throw new BadRequestException(`Quote is ${quote.status}`)
+    const updated = await this.prisma.marketQuote.update({ where: { id: quoteId }, data: { status: 'rejected' } })
     return { quote: updated }
   }
 

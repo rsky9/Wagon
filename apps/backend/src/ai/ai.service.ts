@@ -222,6 +222,53 @@ export class AiService {
   }
 
   /**
+   * Carrier agent: rank active carrier services for a lane and log a
+   * guardrailed recommendation. Never auto-books — a forwarder must choose.
+   */
+  async recommendCarrier(input: { originRef: string; destinationRef: string; mode?: string }, user: User) {
+    if (!input.originRef?.trim() || !input.destinationRef?.trim()) {
+      throw new BadRequestException('Origin and destination required')
+    }
+    const services = await this.prisma.carrierService.findMany({
+      where: {
+        status: 'active',
+        originRef: { contains: input.originRef.toLowerCase() },
+        destinationRef: { contains: input.destinationRef.toLowerCase() },
+        ...(input.mode ? { mode: input.mode } : {}),
+      },
+      include: { carrierOrg: { select: { id: true, name: true, verified: true, verifiedCapabilities: true } } },
+      orderBy: { departureAt: 'asc' },
+      take: 50,
+    })
+    const scored = services
+      .map((s) => ({
+        ...s,
+        score: this.clampScore(
+          (s.availableSlots / Math.max(1, s.totalSlots)) * 0.5 +
+            (s.rate && s.rate > 0 ? Math.max(0, 1 - s.rate / 500_000) * 0.3 : 0.3) +
+            (s.carrierOrg.verified ? 0.2 : 0),
+        ),
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10)
+
+    const recommendation = await this.prisma.aiRecommendation.create({
+      data: {
+        agent: 'carrier',
+        entityType: 'service',
+        entityId: `${input.originRef}→${input.destinationRef}`,
+        summary: `Ranked ${scored.length} carrier service(s) on ${input.originRef}→${input.destinationRef}`,
+        output: scored.map((s) => ({ serviceId: s.id, vessel: s.vessel, voyage: s.voyage, flight: s.flight, rate: s.rate, availableSlots: s.availableSlots, score: s.score })) as never,
+        constraints: { originRef: input.originRef, destinationRef: input.destinationRef, mode: input.mode } as never,
+        rationale: { slotAvailability: 'scored by available slots, price, verification' } as never,
+        guardrails: { neverAutoBooks: true, humanMustBook: true } as never,
+        createdBy: user.id,
+      },
+    })
+    return { recommendation, services: scored }
+  }
+
+  /**
    * Invite a matched transporter to bid on a load (the actionable follow-up to
    * the match agent). Creates a shortlist entry + a notification.
    */
