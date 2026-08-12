@@ -1169,3 +1169,26 @@ model RiskAssessment {
   createdAt   DateTime @default(now())
   @@index([shipmentId])
 }
+
+// ============================================================
+// Phase 7 — Guardrailed AI
+// ============================================================
+
+/// Audit trail of an agent run: what was recommended, under what constraints,
+/// and why. Agents never execute — a human must act on the recommendation.
+model AiRecommendation {
+  id         String   @id @default(cuid())
+  agent      String   // plan | match | risk
+  entityType String   // shipment | load
+  entityId   String
+  summary    String
+  score      Float?
+  output     Json
+  constraints Json?
+  rationale  Json?
+  guardrails Json?
+  status     String   @default("proposed") // proposed | accepted | dismissed
+  createdBy  String?
+  createdAt  DateTime @default(now())
+  @@index([entityType, entityId])
+}

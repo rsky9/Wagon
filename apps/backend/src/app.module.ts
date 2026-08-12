@@ -43,6 +43,7 @@ import { ForwardingModule } from './forwarding/forwarding.module'
 import { PlanningModule } from './planning/planning.module'
 import { IntegrationsModule } from './integrations/integrations.module'
 import { FinanceModule } from './finance/finance.module'
+import { AiModule } from './ai/ai.module'
 
 @Module({
   imports: [
@@ -95,6 +96,7 @@ import { FinanceModule } from './finance/finance.module'
     PlanningModule,
     IntegrationsModule,
     FinanceModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [
