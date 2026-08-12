@@ -90,15 +90,15 @@ export class AuthService {
     return { profile: updated }
   }
 
-  /** Unified capabilities: a single account can be supplier, transporter or both. */
+  /** Unified capabilities: one account can be supplier, transporter, driver, forwarder, warehouse or carrier. */
   async setCapabilities(user: User, capabilities: string[]) {
-    const valid = ['supplier', 'transporter', 'driver']
+    const valid = ['supplier', 'transporter', 'driver', 'forwarder', 'warehouse', 'carrier']
     const clean = [...new Set(capabilities.map((c) => c.toLowerCase()))]
     if (clean.length === 0 || clean.some((c) => !valid.includes(c))) {
       throw new BadRequestException('Invalid capabilities')
     }
     // Keep the primary role in sync for backward-compat with guards.
-    const primary = clean[0] === 'supplier' || clean[0] === 'transporter' || clean[0] === 'driver' ? (clean[0] as User['role']) : user.role
+    const primary = valid.includes(clean[0] as string) ? (clean[0] as User['role']) : user.role
     const updated = await this.prisma.user.update({
       where: { id: user.id },
       data: {

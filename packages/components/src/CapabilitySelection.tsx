@@ -44,6 +44,27 @@ const OPTIONS: Array<{ key: string; icon: string; title: string; sub: string; ca
     sub: 'Get trips, share location, upload POD',
     caps: ['driver'],
   },
+  {
+    key: 'forwarder',
+    icon: '🧳',
+    title: 'I’m a forwarder',
+    sub: 'Take customer orders, book carriers, consolidate cargo',
+    caps: ['forwarder'],
+  },
+  {
+    key: 'warehouse',
+    icon: '🏭',
+    title: 'I run a warehouse',
+    sub: 'Operate facilities, manage storage & gate-in/out',
+    caps: ['warehouse'],
+  },
+  {
+    key: 'carrier',
+    icon: '🚢',
+    title: 'I’m a carrier',
+    sub: 'Offer ocean/air/rail capacity for bookings',
+    caps: ['carrier'],
+  },
 ]
 
 /** Unified capability selection: one account, choose what you can do. */

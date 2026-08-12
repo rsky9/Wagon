@@ -20,6 +20,9 @@ enum Capability {
   supplier
   transporter
   driver
+  forwarder
+  warehouse
+  carrier
 }
 
 enum TruckType {
