@@ -766,6 +766,8 @@ model Organization {
   forwarderOrders ForwardOrder[] @relation("ForwarderOrders")
   customerOrders ForwardOrder[] @relation("CustomerOrders")
   documents ForwardDocument[]
+  connectors IntegrationConnector[]
+  webhookSubscriptions WebhookSubscription[]
   @@index([kind])
 }
 
@@ -1017,6 +1019,56 @@ model CarrierBooking {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   @@index([shipmentId])
+}
+
+/// An external system integration connector (Phase 5): TMS, ERP, carrier API, tracking.
+model IntegrationConnector {
+  id         String   @id @default(cuid())
+  orgId      String
+  org        Organization @relation(fields: [orgId], references: [id])
+  kind       String   // tms | erp | carrier_api | tracking | customs
+  name       String
+  baseUrl    String?
+  apiKeyRef  String?  // reference to a stored secret; never store the key itself
+  config     Json?
+  status     String   @default("active") // active | disabled
+  lastSyncAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@index([orgId])
+}
+
+/// A webhook subscription to receive logistics events (Phase 5).
+model WebhookSubscription {
+  id         String   @id @default(cuid())
+  orgId      String
+  org        Organization @relation(fields: [orgId], references: [id])
+  name       String
+  url        String
+  secret     String   @default("") // HMAC secret; rotates via update
+  eventTypes Json     // array of event codes, e.g. ["LOAD_CREATED","DELIVERED"]
+  status     String   @default("active") // active | paused
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  deliveries WebhookDelivery[]
+  @@index([orgId])
+}
+
+/// One attempted fan-out of a logistics event to a webhook URL.
+model WebhookDelivery {
+  id             String   @id @default(cuid())
+  subscriptionId String
+  subscription   WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  eventCode      String
+  payload        Json?
+  status         String   @default("pending") // pending | sent | failed
+  attempts       Int      @default(0)
+  lastAttemptAt  DateTime?
+  responseStatus Int?
+  nextRetryAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  @@index([subscriptionId, status])
 }
 
 /// A trade/transport/customs document on a shipment.

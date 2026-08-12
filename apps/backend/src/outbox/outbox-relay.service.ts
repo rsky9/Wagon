@@ -1,5 +1,6 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common'
+import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { WebhookDispatcher } from '../integrations/webhook-dispatcher.service'
 
 /**
  * Transactional outbox relay: claims pending OutboxMessage rows and "publishes"
@@ -11,7 +12,10 @@ export class OutboxRelay implements OnModuleInit {
   private readonly logger = new Logger(OutboxRelay.name)
   private running = false
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly webhooks?: WebhookDispatcher,
+  ) {}
 
   onModuleInit() {
     this.running = true
@@ -47,8 +51,9 @@ export class OutboxRelay implements OnModuleInit {
     })
 
     for (const msg of batch) {
-      // Publish to subscribers (log-only here; webhook fan-out comes in Phase 5).
-      this.logger.log(`[outbox] ${msg.aggregateType}:${msg.aggregateId} → ${msg.eventType}`)
+      // Publish to subscribers: webhook fan-out + logging.
+      this.logger.log(`[outbox] ${msg.aggregateType}:${msg.aggregateId} → ${msg.eventType} (webhooks=${!!this.webhooks})`)
+      await this.webhooks?.enqueue(msg.eventType, msg.payload)
       await this.prisma.outboxMessage.update({
         where: { id: msg.id },
         data: { status: 'published', publishedAt: new Date() },

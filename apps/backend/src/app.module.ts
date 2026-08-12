@@ -41,6 +41,7 @@ import { OutboxModule } from './outbox/outbox.module'
 import { StorageModule } from './storage/storage.module'
 import { ForwardingModule } from './forwarding/forwarding.module'
 import { PlanningModule } from './planning/planning.module'
+import { IntegrationsModule } from './integrations/integrations.module'
 
 @Module({
   imports: [
@@ -91,6 +92,7 @@ import { PlanningModule } from './planning/planning.module'
     StorageModule,
     ForwardingModule,
     PlanningModule,
+    IntegrationsModule,
   ],
   controllers: [AppController],
   providers: [
