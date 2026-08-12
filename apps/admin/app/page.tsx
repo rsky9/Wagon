@@ -24,6 +24,19 @@ interface DashboardData {
   weeklyTrend: TrendPoint[];
 }
 
+interface EnablementData {
+  organizations: number;
+  shipments: number;
+  plans: number;
+  claims: number;
+  claimOpen: number;
+  webhookDeliveries: number;
+  webhookFailed: number;
+  settlements: number;
+  facilities: number;
+  consolidations: number;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   posted: "#3b82f6",
   interested: "#f59e0b",
@@ -35,6 +48,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function Home() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [enablement, setEnablement] = useState<EnablementData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -42,6 +56,10 @@ export default function Home() {
       .get<DashboardData>("/admin/dashboard")
       .then(setData)
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load dashboard"));
+    api
+      .get<EnablementData>("/admin/enablement-dashboard")
+      .then(setEnablement)
+      .catch(() => {});
   }, []);
 
   const maxTrend = Math.max(1, ...(data?.weeklyTrend.map((t) => t.count) ?? [1]));
@@ -78,6 +96,21 @@ export default function Home() {
             <StatCard label="Active users" value={String(data.activeUsers)} icon="👥" tone="sky" />
             <StatCard label="Open disputes" value={String(data.disputesOpen)} icon="⚖️" tone="red" />
           </div>
+
+          {enablement && (
+            <>
+              <div className="mt-6">
+                <h2 className="mb-3 text-sm font-semibold text-slate-500 dark:text-slate-400">Enablement platform</h2>
+                <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+                  <StatCard label="Organizations" value={String(enablement.organizations)} icon="🏢" tone="orange" />
+                  <StatCard label="Shipments" value={String(enablement.shipments)} icon="📦" tone="emerald" />
+                  <StatCard label="Plans" value={String(enablement.plans)} icon="🗺️" tone="sky" />
+                  <StatCard label="Open claims" value={String(enablement.claimOpen)} icon="⚖️" tone="red" />
+                  <StatCard label="Webhook fails" value={String(enablement.webhookFailed)} icon="📡" tone="red" />
+                </div>
+              </div>
+            </>
+          )}
 
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
             {/* Weekly trend */}

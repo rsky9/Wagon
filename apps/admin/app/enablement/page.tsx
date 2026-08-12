@@ -67,7 +67,27 @@ interface FacilityRow {
   capacitySlots: number;
 }
 
-type Tab = "orgs" | "shipments" | "plans" | "claims" | "webhooks" | "facilities";
+interface SettlementRow {
+  id: string;
+  type: string;
+  amount: number | null;
+  status: string;
+  shipment: { ref: string } | null;
+  payer?: { name: string } | null;
+  payee?: { name: string } | null;
+}
+
+interface DeliveryRow {
+  id: string;
+  eventCode: string;
+  status: string;
+  attempts: number;
+  responseStatus: number | null;
+  subscription: { name: string; org: { name: string } | null } | null;
+  createdAt: string;
+}
+
+type Tab = "orgs" | "shipments" | "plans" | "claims" | "webhooks" | "facilities" | "settlements" | "deliveries";
 
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: "orgs", label: "Organizations" },
@@ -75,8 +95,28 @@ const TABS: Array<{ key: Tab; label: string }> = [
   { key: "plans", label: "Plans" },
   { key: "claims", label: "Claims" },
   { key: "webhooks", label: "Webhooks" },
+  { key: "deliveries", label: "Webhook deliveries" },
   { key: "facilities", label: "Facilities" },
+  { key: "settlements", label: "Settlements" },
 ];
+
+function ActionBtn({ label, tone = "orange", disabled, onClick }: { label: string; tone?: "orange" | "green" | "red" | "slate"; disabled?: boolean; onClick: () => void }) {
+  const tones: Record<string, string> = {
+    orange: "bg-orange-500 hover:bg-orange-600 text-white",
+    green: "bg-emerald-500 hover:bg-emerald-600 text-white",
+    red: "bg-red-500 hover:bg-red-600 text-white",
+    slate: "bg-slate-500 hover:bg-slate-600 text-white",
+  };
+  return (
+    <button
+      disabled={disabled}
+      onClick={onClick}
+      className={`px-3 py-1 rounded-md text-xs font-semibold transition ${tones[tone]} disabled:opacity-40 disabled:cursor-not-allowed`}
+    >
+      {label}
+    </button>
+  );
+}
 
 export default function Enablement() {
   const [tab, setTab] = useState<Tab>("orgs");
@@ -88,6 +128,17 @@ export default function Enablement() {
   const [claims, setClaims] = useState<ClaimRow[]>([]);
   const [webhooks, setWebhooks] = useState<WebhookRow[]>([]);
   const [facilities, setFacilities] = useState<FacilityRow[]>([]);
+  const [settlements, setSettlements] = useState<SettlementRow[]>([]);
+  const [deliveries, setDeliveries] = useState<DeliveryRow[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const run = async (label: string, fn: () => Promise<unknown>) => {
+    setBusy(label);
+    setError(null);
+    try { await fn(); fetchTab(); }
+    catch (e: any) { setError(e.message ?? "Action failed"); }
+    finally { setBusy(null); }
+  };
 
   const fetchTab = useCallback(async () => {
     setLoading(true);
@@ -108,6 +159,12 @@ export default function Enablement() {
       } else if (tab === "webhooks") {
         const r = await api.get<{ webhooks: WebhookRow[] }>("/admin/webhooks");
         setWebhooks(r.webhooks);
+      } else if (tab === "settlements") {
+        const r = await api.get<{ settlements: SettlementRow[] }>("/admin/settlements");
+        setSettlements(r.settlements);
+      } else if (tab === "deliveries") {
+        const r = await api.get<{ deliveries: DeliveryRow[] }>("/admin/webhook-deliveries");
+        setDeliveries(r.deliveries);
       } else {
         const r = await api.get<{ facilities: FacilityRow[] }>("/admin/facilities");
         setFacilities(r.facilities);
@@ -123,7 +180,7 @@ export default function Enablement() {
 
   return (
     <ShellLayout>
-      <PageHeader title="Enablement" subtitle="Orgs · shipments · plans · claims · webhooks · facilities" />
+      <PageHeader title="Enablement" subtitle="Orgs · shipments · plans · claims · webhooks · facilities · settlements" />
       <div className="flex gap-2 mb-6 flex-wrap">
         {TABS.map((t) => (
           <button
@@ -149,7 +206,7 @@ export default function Enablement() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 dark:bg-slate-800/60">
               <tr>
-                <Th>Name</Th><Th>Kind</Th><Th>Country</Th><Th>Verified</Th><Th>Shipments</Th><Th>Members</Th>
+                <Th>Name</Th><Th>Kind</Th><Th>Country</Th><Th>Verified</Th><Th>Shipments</Th><Th>Members</Th><Th>Actions</Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -161,6 +218,11 @@ export default function Enablement() {
                   <Td>{o.verified ? <StatusBadge status="verified" /> : <StatusBadge status="unverified" />}</Td>
                   <Td>{o.shipmentCount}</Td>
                   <Td>{o.members.length}</Td>
+                  <Td>
+                    {o.verified
+                      ? <ActionBtn label="Unverify" tone="slate" disabled={busy === `org:${o.id}`} onClick={() => run(`org:${o.id}`, () => api.post(`/admin/organizations/${o.id}/verify`, { verified: false }))} />
+                      : <ActionBtn label="Verify" tone="green" disabled={busy === `org:${o.id}`} onClick={() => run(`org:${o.id}`, () => api.post(`/admin/organizations/${o.id}/verify`, { verified: true }))} />}
+                  </Td>
                 </tr>
               ))}
             </tbody>
@@ -170,7 +232,7 @@ export default function Enablement() {
         <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 dark:bg-slate-800/60">
-              <tr><Th>Ref</Th><Th>Commodity</Th><Th>Status</Th><Th>Mode</Th><Th>Owner</Th><Th>Legs</Th></tr>
+              <tr><Th>Ref</Th><Th>Commodity</Th><Th>Status</Th><Th>Mode</Th><Th>Owner</Th><Th>Legs</Th><Th>Actions</Th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {shipments.map((s) => (
@@ -181,6 +243,13 @@ export default function Enablement() {
                   <Td>{s.mode}</Td>
                   <Td>{s.ownerOrg?.name ?? "—"}</Td>
                   <Td>{s.legs.length}</Td>
+                  <Td>
+                    <div className="flex gap-1">
+                      {["planned", "booked", "in_transit", "delivered"].filter((st) => st !== s.status).slice(0, 2).map((st) => (
+                        <ActionBtn key={st} label={st} disabled={busy === `ship:${s.id}`} onClick={() => run(`ship:${s.id}`, () => api.patch(`/admin/shipments/${s.id}/status`, { status: st }))} />
+                      ))}
+                    </div>
+                  </Td>
                 </tr>
               ))}
             </tbody>
@@ -190,7 +259,7 @@ export default function Enablement() {
         <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 dark:bg-slate-800/60">
-              <tr><Th>Ref</Th><Th>Source</Th><Th>Status</Th><Th>Cost</Th><Th>ETA (h)</Th><Th>Shipment</Th></tr>
+              <tr><Th>Ref</Th><Th>Source</Th><Th>Status</Th><Th>Cost</Th><Th>ETA (h)</Th><Th>Shipment</Th><Th>Actions</Th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {plans.map((p) => (
@@ -201,6 +270,11 @@ export default function Enablement() {
                   <Td>{p.cost != null ? `₹${p.cost.toLocaleString("en-IN")}` : "—"}</Td>
                   <Td>{p.etaHours ?? "—"}</Td>
                   <Td>{p.shipment?.ref ?? "—"}</Td>
+                  <Td>
+                    {p.status !== "declined" && (
+                      <ActionBtn label="Cancel plan" tone="red" disabled={busy === `plan:${p.id}`} onClick={() => run(`plan:${p.id}`, () => api.post(`/admin/plans/${p.id}/cancel`))} />
+                    )}
+                  </Td>
                 </tr>
               ))}
             </tbody>
@@ -210,7 +284,7 @@ export default function Enablement() {
         <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 dark:bg-slate-800/60">
-              <tr><Th>Reason</Th><Th>Amount</Th><Th>Status</Th><Th>Shipment</Th><Th>Claimant</Th></tr>
+              <tr><Th>Reason</Th><Th>Amount</Th><Th>Status</Th><Th>Shipment</Th><Th>Claimant</Th><Th>Actions</Th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {claims.map((c) => (
@@ -220,6 +294,16 @@ export default function Enablement() {
                   <Td><StatusBadge status={c.status} /></Td>
                   <Td>{c.shipment?.ref ?? "—"}</Td>
                   <Td>{c.claimant?.name ?? "—"}</Td>
+                  <Td>
+                    <div className="flex gap-1">
+                      {c.status !== "approved" && (
+                        <ActionBtn label="Approve" tone="green" disabled={busy === `claim:${c.id}`} onClick={() => run(`claim:${c.id}`, () => api.post(`/admin/claims/${c.id}/decide`, { decision: "approved" }))} />
+                      )}
+                      {c.status !== "rejected" && (
+                        <ActionBtn label="Reject" tone="red" disabled={busy === `claim:${c.id}`} onClick={() => run(`claim:${c.id}`, () => api.post(`/admin/claims/${c.id}/decide`, { decision: "rejected" }))} />
+                      )}
+                    </div>
+                  </Td>
                 </tr>
               ))}
             </tbody>
@@ -229,7 +313,7 @@ export default function Enablement() {
         <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 dark:bg-slate-800/60">
-              <tr><Th>Name</Th><Th>URL</Th><Th>Status</Th><Th>Events</Th><Th>Org</Th></tr>
+              <tr><Th>Name</Th><Th>URL</Th><Th>Status</Th><Th>Events</Th><Th>Org</Th><Th>Actions</Th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {webhooks.map((w) => (
@@ -239,6 +323,61 @@ export default function Enablement() {
                   <Td><StatusBadge status={w.status} /></Td>
                   <Td>{w.eventTypes.join(", ")}</Td>
                   <Td>{w.org?.name ?? "—"}</Td>
+                  <Td>
+                    {w.status === "active"
+                      ? <ActionBtn label="Pause" tone="slate" disabled={busy === `wh:${w.id}`} onClick={() => run(`wh:${w.id}`, () => api.patch(`/admin/webhooks/${w.id}/status`, { status: "paused" }))} />
+                      : <ActionBtn label="Resume" tone="green" disabled={busy === `wh:${w.id}`} onClick={() => run(`wh:${w.id}`, () => api.patch(`/admin/webhooks/${w.id}/status`, { status: "active" }))} />}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : tab === "deliveries" ? (
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 dark:bg-slate-800/60">
+              <tr><Th>Event</Th><Th>Status</Th><Th>Attempts</Th><Th>HTTP</Th><Th>Webhook</Th><Th>Org</Th><Th>Actions</Th></tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {deliveries.map((d) => (
+                <tr key={d.id}>
+                  <Td className="font-mono">{d.eventCode}</Td>
+                  <Td><StatusBadge status={d.status} /></Td>
+                  <Td>{d.attempts}</Td>
+                  <Td>{d.responseStatus ?? "—"}</Td>
+                  <Td>{d.subscription?.name ?? "—"}</Td>
+                  <Td>{d.subscription?.org?.name ?? "—"}</Td>
+                  <Td>
+                    {d.status !== "sent" && (
+                      <ActionBtn label="Retry" tone="orange" disabled={busy === `del:${d.id}`} onClick={() => run(`del:${d.id}`, () => api.post(`/admin/webhook-deliveries/${d.id}/retry`))} />
+                    )}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : tab === "settlements" ? (
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 dark:bg-slate-800/60">
+              <tr><Th>Type</Th><Th>Amount</Th><Th>Status</Th><Th>Shipment</Th><Th>Payer</Th><Th>Payee</Th><Th>Actions</Th></tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {settlements.map((st) => (
+                <tr key={st.id}>
+                  <Td>{st.type}</Td>
+                  <Td>{st.amount != null ? `₹${st.amount.toLocaleString("en-IN")}` : "—"}</Td>
+                  <Td><StatusBadge status={st.status} /></Td>
+                  <Td>{st.shipment?.ref ?? "—"}</Td>
+                  <Td>{st.payer?.name ?? "—"}</Td>
+                  <Td>{st.payee?.name ?? "—"}</Td>
+                  <Td>
+                    {st.status !== "cleared" && (
+                      <ActionBtn label="Clear" tone="green" disabled={busy === `set:${st.id}`} onClick={() => run(`set:${st.id}`, () => api.post(`/admin/settlements/${st.id}/clear`))} />
+                    )}
+                  </Td>
                 </tr>
               ))}
             </tbody>
