@@ -330,7 +330,7 @@ function ForwardingRoute({ navigation }: any) {
   return (
     <ForwardingScreen
       onBack={() => navigation.goBack()}
-      onOpenOrders={() => navigation.navigate('Shipments')}
+      onOpenShipments={() => navigation.navigate('Shipments')}
     />
   )
 }

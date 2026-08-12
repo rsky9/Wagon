@@ -37,6 +37,16 @@ export function GlobalScreen({ onBack }: Props) {
       .catch((e) => Alert.alert('Error', e.message))
   }
 
+  const setHome = (code: string) => {
+    api.post('/countries/home', { code }).then(() => Alert.alert('Home country', `Set to ${code}`)).catch((e) => Alert.alert('Error', e.message))
+  }
+
+  const viewDocuments = (code: string) => {
+    api.get<{ documents: string[] }>(`/countries/${code}/documents`)
+      .then((r) => Alert.alert(`${code} documents`, r.documents.join('\n')))
+      .catch((e) => Alert.alert('Error', e.message))
+  }
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
@@ -78,6 +88,14 @@ export function GlobalScreen({ onBack }: Props) {
             <Text style={[styles.meta, { color: theme.mutedForeground }]}>
               {item.currency} · {item.baseCurrency} @ {(item.exchangeRateToBase ?? 1).toFixed(2)}
             </Text>
+            <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm }}>
+              <Pressable style={[styles.createBtn, styles.flexBtn, { backgroundColor: '#F97316' }]} onPress={() => setHome(item.code)}>
+                <Text style={styles.createBtnText}>Set home</Text>
+              </Pressable>
+              <Pressable style={[styles.createBtn, styles.flexBtn, { backgroundColor: theme.warning }]} onPress={() => viewDocuments(item.code)}>
+                <Text style={styles.createBtnText}>Documents</Text>
+              </Pressable>
+            </View>
           </View>
         )}
       />
@@ -97,6 +115,7 @@ const styles = StyleSheet.create({
   input: { borderRadius: radius.md, borderWidth: 1, padding: spacing.md, fontSize: 14 },
   createBtn: { borderRadius: radius.md, padding: spacing.md, alignItems: 'center' },
   createBtnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  flexBtn: { flex: 1 },
   card: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, gap: 4 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardTitle: { fontSize: 15, fontWeight: '800' },

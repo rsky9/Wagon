@@ -41,6 +41,20 @@ export function EnablementFinanceScreen({ onBack }: Props) {
 
   const firstShipment = claims[0]?.shipmentId
 
+  const assess = (c: Claim) => {
+    api.post(`/finance/claims/${c.id}/assess`, { recommendedAmount: c.amount })
+      .then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
+  }
+  const decide = (c: Claim, decision: 'approved' | 'rejected') => {
+    api.post(`/finance/claims/${c.id}/decide`, { decision })
+      .then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
+  }
+  const assessRisk = (sid: string) => {
+    api.post(`/finance/risk/${sid}/assess`)
+      .then((r) => Alert.alert('Risk score', `Band: ${(r as any).assessment?.band ?? 'n/a'}`))
+      .then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
+  }
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
@@ -92,6 +106,24 @@ export function EnablementFinanceScreen({ onBack }: Props) {
                     <Text style={[styles.chip, { color: c.status === 'approved' ? theme.success : c.status === 'rejected' ? theme.danger : theme.warning, borderColor: c.status === 'approved' ? theme.success : c.status === 'rejected' ? theme.danger : theme.warning }]}>{c.status}</Text>
                   </View>
                   <Text style={[styles.meta, { color: theme.mutedForeground }]}>Shipment {c.shipmentId.slice(-6)}</Text>
+                  {(c.status === 'filed' || c.status === 'assessed') && (
+                    <View style={styles.claimActions}>
+                      {c.status === 'filed' && (
+                        <Pressable style={[styles.smallBtn, { backgroundColor: theme.warning }]} onPress={() => assess(c)}>
+                          <Text style={styles.smallBtnText}>Assess</Text>
+                        </Pressable>
+                      )}
+                      <Pressable style={[styles.smallBtn, { backgroundColor: theme.success }]} onPress={() => decide(c, 'approved')}>
+                        <Text style={styles.smallBtnText}>Approve</Text>
+                      </Pressable>
+                      <Pressable style={[styles.smallBtn, { backgroundColor: theme.danger }]} onPress={() => decide(c, 'rejected')}>
+                        <Text style={styles.smallBtnText}>Reject</Text>
+                      </Pressable>
+                      <Pressable style={[styles.smallBtn, { backgroundColor: '#F97316' }]} onPress={() => assessRisk(c.shipmentId)}>
+                        <Text style={styles.smallBtnText}>Risk</Text>
+                      </Pressable>
+                    </View>
+                  )}
                 </View>
               )))}
             {item.k === 'settlements' && (settlements.length === 0
@@ -143,4 +175,7 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 15, fontWeight: '800' },
   chip: { fontSize: 11, fontWeight: '700', borderWidth: 1, borderRadius: radius.full, paddingHorizontal: spacing.sm, paddingVertical: 2, textTransform: 'uppercase' },
   meta: { fontSize: 13 },
+  claimActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm, flexWrap: 'wrap' },
+  smallBtn: { borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  smallBtnText: { color: '#fff', fontWeight: '800', fontSize: 12 },
 })

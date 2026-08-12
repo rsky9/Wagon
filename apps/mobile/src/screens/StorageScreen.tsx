@@ -41,6 +41,26 @@ export function StorageScreen({ onBack }: Props) {
     api.post(`/storage/operations/${opId}/advance`).then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
   }
 
+  const startOperation = (facilityId: string) => {
+    Alert.prompt('Start operation', 'Shipment id (optional)', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Start', onPress: (shipmentId?: string) => {
+        api.post(`/storage/facilities/${facilityId}/operations`, { shipmentId: shipmentId?.trim() || undefined })
+          .then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
+      } },
+    ])
+  }
+
+  const cancelOp = (opId: string) => {
+    Alert.prompt('Cancel operation', 'Reason', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Cancel operation', style: 'destructive', onPress: (reason?: string) => {
+        api.patch(`/storage/operations/${opId}/cancel`, { reason: reason ?? 'cancelled' })
+          .then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
+      } },
+    ])
+  }
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
@@ -84,6 +104,9 @@ export function StorageScreen({ onBack }: Props) {
                     <Text style={[styles.chip, { color: theme.warning, borderColor: theme.warning }]}>{f.kind}</Text>
                   </View>
                   <Text style={[styles.meta, { color: theme.mutedForeground }]}>{f.city ?? '—'} · {f.capacitySlots} slots</Text>
+                  <Pressable style={[styles.advanceBtn, { backgroundColor: '#F97316' }]} onPress={() => startOperation(f.id)}>
+                    <Text style={styles.advanceBtnText}>Start operation →</Text>
+                  </Pressable>
                 </View>
               )))}
             {item.k === 'operations' && (operations.length === 0
@@ -94,9 +117,16 @@ export function StorageScreen({ onBack }: Props) {
                     <Text style={[styles.cardTitle, { color: theme.foreground }]}>{op.ref}</Text>
                     <Text style={[styles.chip, { color: theme.warning, borderColor: theme.warning }]}>{op.status}</Text>
                   </View>
-                  <Pressable style={[styles.advanceBtn, { backgroundColor: '#F97316' }]} onPress={() => advance(op.id)}>
-                    <Text style={styles.advanceBtnText}>Advance →</Text>
-                  </Pressable>
+                  <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                    <Pressable style={[styles.advanceBtn, styles.flexBtn, { backgroundColor: '#F97316' }]} onPress={() => advance(op.id)}>
+                      <Text style={styles.advanceBtnText}>Advance →</Text>
+                    </Pressable>
+                    {op.status !== 'done' && op.status !== 'cancelled' && (
+                      <Pressable style={[styles.advanceBtn, styles.flexBtn, { backgroundColor: theme.danger }]} onPress={() => cancelOp(op.id)}>
+                        <Text style={styles.advanceBtnText}>Cancel</Text>
+                      </Pressable>
+                    )}
+                  </View>
                 </View>
               )))}
           </View>
@@ -129,4 +159,5 @@ const styles = StyleSheet.create({
   meta: { fontSize: 13 },
   advanceBtn: { borderRadius: radius.md, padding: spacing.sm, alignItems: 'center' },
   advanceBtnText: { color: '#fff', fontWeight: '800', fontSize: 13 },
+  flexBtn: { flex: 1 },
 })
