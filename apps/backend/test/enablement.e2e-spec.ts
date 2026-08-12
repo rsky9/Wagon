@@ -402,5 +402,22 @@ describe('Enablement platform (e2e)', () => {
       const stats = await api(admToken).get('/admin/market/stats').expect(200)
       expect(typeof stats.body.listings).toBe('number')
     })
+
+    it('supports reverse direction: request from a listing, provider notified, self-ask blocked', async () => {
+      // Supplier publishes a warehouse listing.
+      const fac = await api(supToken).post('/storage/facilities', { name: 'E2E Ask Wh', kind: 'cfs', city: 'Pune', capacitySlots: 10 }).expect(201)
+      const listing = (await api(supToken).get('/market/listings?kind=warehouse_space').expect(200)).body.listings.find(
+        (l: { sourceId: string }) => l.sourceId === fac.body.facility.id,
+      )
+      // Transporter (different org) asks the supplier's warehouse provider.
+      const asked = await api(trToken).post(`/market/listings/${listing.id}/request`, { originRef: 'Mumbai', destinationRef: 'Pune', capacityNeeded: 400 }).expect(201)
+      expect(asked.body.request.kind).toBe('warehouse')
+      expect(asked.body.request.status).toBe('open')
+      // Provider was notified.
+      const notif = await api(supToken).get('/notifications').expect(200)
+      expect(Array.isArray(notif.body.items)).toBe(true)
+      // Self-ask blocked: supplier is a member of their own listing's org.
+      await api(supToken).post(`/market/listings/${listing.id}/request`, {}).expect(400)
+    })
   })
 })

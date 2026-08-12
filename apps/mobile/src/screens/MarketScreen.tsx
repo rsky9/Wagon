@@ -11,7 +11,7 @@ interface Props {
   capabilities?: string[]
 }
 
-type Tab = 'listings' | 'requests' | 'mine'
+type Tab = 'listings' | 'requests' | 'carriers' | 'mine'
 
 const KIND_LABEL: Record<string, string> = {
   truck_capacity: 'Truck capacity',
@@ -26,7 +26,7 @@ interface MineItem {
   quotes: MarketQuote[]
 }
 
-export function MarketScreen({ onBack }: Props) {
+export function MarketScreen({ onBack, capabilities = [] }: Props) {
   const theme = useTheme()
   const [tab, setTab] = useState<Tab>('listings')
   const [listings, setListings] = useState<MarketListing[]>([])
@@ -34,6 +34,11 @@ export function MarketScreen({ onBack }: Props) {
   const [mine, setMine] = useState<MineItem[]>([])
   const [loading, setLoading] = useState(true)
   const [filterKind, setFilterKind] = useState('')
+  const [searchOrigin, setSearchOrigin] = useState('')
+  const [searchDest, setSearchDest] = useState('')
+  const [carrierServices, setCarrierServices] = useState<Array<{ id: string; carrierOrg?: { name: string; verified: boolean } | null; vessel?: string | null; flight?: string | null; originRef?: string | null; destinationRef?: string | null; rate?: number | null; currency: string; availableSlots: number; totalSlots: number; status: string }>>([])
+
+  const canPublishCarrier = capabilities.includes('carrier')
 
   // Listing publish modal
   const [showListing, setShowListing] = useState(false)
@@ -56,19 +61,33 @@ export function MarketScreen({ onBack }: Props) {
   // Quote modal
   const [quoteFor, setQuoteFor] = useState<MarketRequest | null>(null)
   const [quoteAmount, setQuoteAmount] = useState('')
+  const [quoteEta, setQuoteEta] = useState('')
+
+  // Carrier service publish modal
+  const [showCarrier, setShowCarrier] = useState(false)
+  const [carOrigin, setCarOrigin] = useState('')
+  const [carDest, setCarDest] = useState('')
+  const [carVessel, setCarVessel] = useState('')
+  const [carSlots, setCarSlots] = useState('')
+  const [carRate, setCarRate] = useState('')
 
   const [busy, setBusy] = useState(false)
 
   const fetch = useCallback(() => {
-    const q = filterKind ? `?kind=${filterKind}` : ''
+    const params = new URLSearchParams()
+    if (filterKind) params.set('kind', filterKind)
+    if (searchOrigin) params.set('origin', searchOrigin)
+    if (searchDest) params.set('destination', searchDest)
+    const qs = params.toString() ? `?${params.toString()}` : ''
     Promise.all([
-      api.get<{ listings: MarketListing[] }>(`/market/listings${q}`),
+      api.get<{ listings: MarketListing[] }>(`/market/listings${qs}`),
       api.get<{ requests: MarketRequest[] }>('/market/requests'),
       api.get<{ requests: MineItem[] }>('/market/requests/mine').then((r) => setMine(r.requests)).catch(() => {}),
+      api.get<{ services: typeof carrierServices }>('/market/carrier-services').then((r) => setCarrierServices(r.services)).catch(() => {}),
     ]).then(([l, r]) => { setListings(l.listings); setRequests(r.requests) })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [filterKind])
+  }, [filterKind, searchOrigin, searchDest])
   useEffect(() => { fetch() }, [fetch])
 
   const postListing = () => {
@@ -105,14 +124,28 @@ export function MarketScreen({ onBack }: Props) {
   const submitQuote = () => {
     if (!quoteFor || !quoteAmount) { Alert.alert('Amount required'); return }
     setBusy(true)
-    api.post(`/market/requests/${quoteFor.id}/quotes`, { amount: Number(quoteAmount) })
-      .then(() => { setQuoteFor(null); setQuoteAmount(''); Alert.alert('Quote sent', 'The requester can now review your quote'); fetch() })
+    api.post(`/market/requests/${quoteFor.id}/quotes`, { amount: Number(quoteAmount), etaHours: quoteEta ? Number(quoteEta) : undefined })
+      .then(() => { setQuoteFor(null); setQuoteAmount(''); setQuoteEta(''); Alert.alert('Quote sent', 'The requester can now review your quote'); fetch() })
       .catch((e) => Alert.alert('Error', e.message))
       .finally(() => setBusy(false))
   }
 
-  const acceptQuote = (q: MarketQuote) => {
+  const publishCarrier = () => {
+    if (!carOrigin || !carDest) { Alert.alert('Origin and destination required'); return }
     setBusy(true)
+    api.post('/market/carrier-services', {
+      originRef: carOrigin.trim(),
+      destinationRef: carDest.trim(),
+      mode: 'ocean',
+      vessel: carVessel.trim() || undefined,
+      totalSlots: carSlots ? Number(carSlots) : 1,
+      rate: carRate ? Number(carRate) : undefined,
+    }).then(() => { setShowCarrier(false); setCarOrigin(''); setCarDest(''); setCarVessel(''); setCarSlots(''); setCarRate(''); fetch() })
+      .catch((e) => Alert.alert('Error', e.message))
+      .finally(() => setBusy(false))
+  }
+
+  const acceptQuote = (q: MarketQuote) => {    setBusy(true)
     api.post(`/market/quotes/${q.id}/accept`)
       .then(() => { Alert.alert('Accepted', 'Request booked'); fetch() })
       .catch((e) => Alert.alert('Error', e.message))
@@ -130,6 +163,31 @@ export function MarketScreen({ onBack }: Props) {
       .finally(() => setBusy(false))
   }
 
+  const askProvider = (l: MarketListing) => {
+    Alert.alert('Ask this provider', `Request their ${KIND_LABEL[l.kind] ?? l.kind}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Ask', onPress: () => {
+        setBusy(true)
+        api.post(`/market/listings/${l.id}/request`, { originRef: l.originRef ?? undefined, destinationRef: l.destinationRef ?? undefined, city: l.city ?? undefined })
+          .then(() => { Alert.alert('Request sent', 'The provider has been notified'); fetch() })
+          .catch((e) => Alert.alert('Error', e.message))
+          .finally(() => setBusy(false))
+      } },
+    ])
+  }
+
+  const rateOrg = (l: MarketListing) => {
+    Alert.prompt('Rate this provider', `Score 1-5 for ${l.providerOrg?.name ?? 'provider'} (${KIND_LABEL[l.kind] ?? l.kind})`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Rate', onPress: (score?: string) => {
+        const axis = ({ truck_capacity: 'transporter', warehouse_space: 'warehouse', carrier_service: 'carrier', forwarder_service: 'forwarder' } as Record<string, string>)[l.kind] ?? 'supplier'
+        api.post('/market/ratings', { subjectOrgId: l.providerOrgId, axis, score: Number(score) })
+          .then(() => Alert.alert('Rated', 'Thanks for the feedback'))
+          .catch((e) => Alert.alert('Error', e.message))
+      } },
+    ])
+  }
+
   const renderListing = (l: MarketListing) => (
     <View key={l.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
       <View style={styles.cardTop}>
@@ -142,6 +200,14 @@ export function MarketScreen({ onBack }: Props) {
       <View style={styles.cardTop}>
         <Text style={[styles.price, { color: theme.foreground }]}>{l.price != null ? `${l.currency} ${l.price.toLocaleString('en-IN')}` : '—'}</Text>
         <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>{l.providerOrg?.name ?? '—'} · ★ {l.orgRating?.avg ? l.orgRating.avg.toFixed(1) : 'new'}</Text>
+      </View>
+      <View style={styles.actions}>
+        <Pressable style={[styles.actionBtn, { backgroundColor: '#F97316' }]} onPress={() => askProvider(l)}>
+          <Text style={styles.actionText}>Ask</Text>
+        </Pressable>
+        <Pressable style={[styles.actionBtn, { backgroundColor: theme.success }]} onPress={() => rateOrg(l)}>
+          <Text style={styles.actionText}>Rate</Text>
+        </Pressable>
       </View>
     </View>
   )
@@ -195,13 +261,16 @@ export function MarketScreen({ onBack }: Props) {
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
         <Text style={[styles.title, { color: theme.foreground }]}>Marketplace</Text>
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+          {canPublishCarrier && (
+            <Pressable onPress={() => setShowCarrier(true)} hitSlop={8}><Text style={{ color: '#F97316', fontSize: 14, fontWeight: '800' }}>🚢 Publish</Text></Pressable>
+          )}
           <Pressable onPress={() => setShowListing(true)} hitSlop={8}><Text style={{ color: '#F97316', fontSize: 14, fontWeight: '800' }}>+ Offer</Text></Pressable>
           <Pressable onPress={() => setShowRequest(true)} hitSlop={8}><Text style={{ color: '#F97316', fontSize: 14, fontWeight: '800' }}>+ Need</Text></Pressable>
         </View>
       </View>
 
       <View style={styles.tabs}>
-        {([['listings', 'Supply'], ['requests', 'Demand'], ['mine', 'My market']] as [Tab, string][]).map(([k, label]) => (
+        {([['listings', 'Supply'], ['requests', 'Demand'], ['carriers', 'Carriers'], ['mine', 'My market']] as [Tab, string][]).map(([k, label]) => (
           <Pressable key={k} style={[styles.tabBtn, tab === k && { backgroundColor: '#F97316' }]} onPress={() => setTab(k)}>
             <Text style={{ color: tab === k ? '#fff' : theme.mutedForeground, fontWeight: '800', fontSize: 13 }}>{label}</Text>
           </Pressable>
@@ -217,6 +286,10 @@ export function MarketScreen({ onBack }: Props) {
               </Pressable>
             ))}
           </View>
+          <View style={{ flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md }}>
+            <TextInput style={[styles.input, styles.half, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="From (city)" placeholderTextColor={theme.mutedForeground} value={searchOrigin} onChangeText={setSearchOrigin} />
+            <TextInput style={[styles.input, styles.half, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="To (city)" placeholderTextColor={theme.mutedForeground} value={searchDest} onChangeText={setSearchDest} />
+          </View>
           <FlatList
             contentContainerStyle={styles.list}
             data={listings}
@@ -225,6 +298,27 @@ export function MarketScreen({ onBack }: Props) {
             renderItem={({ item }) => renderListing(item)}
           />
         </>
+      )}
+
+      {tab === 'carriers' && (
+        <FlatList
+          contentContainerStyle={styles.list}
+          data={carrierServices}
+          keyExtractor={(s) => s.id}
+          ListEmptyComponent={loading ? undefined : <EmptyState title="No carrier schedules" message="Carriers publish vessel/flight space here" icon="🚢" />}
+          renderItem={({ item }) => (
+            <View key={item.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <View style={styles.cardTop}>
+                <Text style={[styles.cardTitle, { color: theme.foreground }]}>{item.vessel ?? item.flight ?? 'Carrier service'}</Text>
+                {item.carrierOrg?.verified && <Text style={[styles.verified, { color: theme.success }]}>✓ verified</Text>}
+              </View>
+              <Text style={[styles.meta, { color: theme.mutedForeground }]}>
+                {item.originRef ?? '—'} → {item.destinationRef ?? '—'} · {item.availableSlots}/{item.totalSlots} slots
+              </Text>
+              <Text style={[styles.price, { color: theme.foreground }]}>{item.rate != null ? `${item.currency} ${item.rate.toLocaleString('en-IN')}` : '—'}</Text>
+            </View>
+          )}
+        />
       )}
 
       {tab === 'requests' && (
@@ -310,9 +404,30 @@ export function MarketScreen({ onBack }: Props) {
               {quoteFor?.originRef ?? quoteFor?.city ?? '—'} → {quoteFor?.destinationRef ?? '—'}
             </Text>
             <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Amount (₹)" placeholderTextColor={theme.mutedForeground} keyboardType="numeric" value={quoteAmount} onChangeText={setQuoteAmount} />
+            <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="ETA (hours)" placeholderTextColor={theme.mutedForeground} keyboardType="numeric" value={quoteEta} onChangeText={setQuoteEta} />
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               <Pressable style={[styles.modalBtn, { backgroundColor: theme.muted }]} onPress={() => setQuoteFor(null)}><Text style={{ color: theme.foreground, fontWeight: '700' }}>Cancel</Text></Pressable>
               <Pressable style={[styles.modalBtn, { backgroundColor: '#F97316' }]} onPress={submitQuote} disabled={busy}><Text style={{ color: '#fff', fontWeight: '800' }}>{busy ? 'Sending…' : 'Send quote'}</Text></Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Carrier service publish modal */}
+      <Modal visible={showCarrier} transparent animationType="slide">
+        <View style={styles.modalWrap}>
+          <View style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Text style={[styles.modalTitle, { color: theme.foreground }]}>Publish carrier service</Text>
+            <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Origin (port/city)" placeholderTextColor={theme.mutedForeground} value={carOrigin} onChangeText={setCarOrigin} />
+            <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Destination (port/city)" placeholderTextColor={theme.mutedForeground} value={carDest} onChangeText={setCarDest} />
+            <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Vessel / flight" placeholderTextColor={theme.mutedForeground} value={carVessel} onChangeText={setCarVessel} />
+            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <TextInput style={[styles.input, styles.half, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Slots" placeholderTextColor={theme.mutedForeground} keyboardType="numeric" value={carSlots} onChangeText={setCarSlots} />
+              <TextInput style={[styles.input, styles.half, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Rate (₹)" placeholderTextColor={theme.mutedForeground} keyboardType="numeric" value={carRate} onChangeText={setCarRate} />
+            </View>
+            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <Pressable style={[styles.modalBtn, { backgroundColor: theme.muted }]} onPress={() => setShowCarrier(false)}><Text style={{ color: theme.foreground, fontWeight: '700' }}>Cancel</Text></Pressable>
+              <Pressable style={[styles.modalBtn, { backgroundColor: '#F97316' }]} onPress={publishCarrier} disabled={busy}><Text style={{ color: '#fff', fontWeight: '800' }}>{busy ? 'Publishing…' : 'Publish'}</Text></Pressable>
             </View>
           </View>
         </View>

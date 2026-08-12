@@ -124,8 +124,7 @@ export class MarketService {
     return { listing }
   }
 
-  /** Browse supply — PUBLIC read (any authenticated user; cross-type discovery). */
-  async browseListings(query?: {
+  /** Browse supply — PUBLIC read (any authenticated user; cross-type discovery). */  async browseListings(query?: {
     kind?: string
     city?: string
     origin?: string
@@ -365,6 +364,64 @@ export class MarketService {
       }
     }
     return { request }
+  }
+
+  /**
+   * Reverse direction: a requester finds a listing and asks that provider to
+   * fulfill their need. Creates a request pre-linked to the listing and
+   * notifies the provider's org members.
+   */
+  async requestFromListing(input: {
+    listingId: string
+    capacityNeeded?: number
+    budget?: number
+    originRef?: string
+    destinationRef?: string
+    city?: string
+    description?: string
+  }, user: User) {
+    const listing = await this.prisma.marketListing.findUnique({ where: { id: input.listingId } })
+    if (!listing) throw new NotFoundException('Listing not found')
+    if (listing.status !== 'live') throw new BadRequestException('Listing is not live')
+    const requester = await this.orgAccess.primaryOrg(user)
+    // Block if the requester belongs to the listing's provider org (can't ask yourself).
+    if (await this.orgAccess.isMember(user, listing.providerOrgId)) {
+      throw new BadRequestException('Cannot request from your own listing')
+    }
+    const kindFromListing: Record<string, string> = {
+      truck_capacity: 'transport',
+      warehouse_space: 'warehouse',
+      carrier_service: 'carrier',
+      forwarder_service: 'forwarding',
+    }
+    const request = await this.prisma.marketRequest.create({
+      data: {
+        requesterOrgId: requester.id,
+        kind: kindFromListing[listing.kind] ?? 'transport',
+        laneId: listing.laneId,
+        originRef: input.originRef ?? listing.originRef,
+        destinationRef: input.destinationRef ?? listing.destinationRef,
+        city: input.city ?? listing.city,
+        capacityNeeded: input.capacityNeeded,
+        capacityUnit: listing.capacityUnit,
+        budget: input.budget,
+        description: input.description ?? `Requested from ${listing.description ?? 'listing'} ${listing.id.slice(-6)}`,
+        status: 'open',
+      },
+    })
+    // Notify the provider's org members that demand arrived against their listing.
+    const members = await this.prisma.organizationMember.findMany({ where: { organizationId: listing.providerOrgId } })
+    for (const m of members) {
+      await this.notifications.create({
+        userId: m.userId,
+        type: 'market_ask',
+        title: 'Demand on your listing',
+        body: `Someone needs ${request.kind} from your ${listing.kind} listing`,
+        data: { requestId: request.id, listingId: listing.id },
+        category: 'market',
+      }).catch(() => {})
+    }
+    return { request, listing }
   }
 
   /** Browse open demand — PUBLIC read (providers discover what's needed). */

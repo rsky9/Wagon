@@ -57,6 +57,15 @@ export class MarketController {
     return this.market.createRequest(body as never, user)
   }
 
+  @Post('listings/:id/request')
+  requestFromListing(
+    @Param('id') id: string,
+    @Body() body: { capacityNeeded?: number; budget?: number; originRef?: string; destinationRef?: string; city?: string; description?: string },
+    @CurrentUser() user: User,
+  ) {
+    return this.market.requestFromListing({ listingId: id, ...body }, user)
+  }
+
   @Get('requests')
   browseRequests(@Query() query: Record<string, unknown>) {
     return this.market.browseRequests(query as never)
