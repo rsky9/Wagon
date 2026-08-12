@@ -1,7 +1,12 @@
-import { Injectable, BadRequestException, NotFoundException, Inject } from '@nestjs/common'
+import { Injectable, BadRequestException, NotFoundException, ForbiddenException, Inject } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { PlanningService, PlanLeg } from '../planning/planning.service'
+import { OrgAccessService } from '../org-access/org-access.service'
 import type { User } from '@prisma/client'
+
+const MAX_OPTIONS = 50
+const VALID_MODES = ['road', 'rail', 'ocean', 'air', 'inland_water', 'multimodal']
+const VALID_PREFS = ['cheapest', 'fastest', 'balanced']
 
 export interface PlanOption extends PlanLeg {
   name?: string
@@ -18,8 +23,36 @@ export interface PlanConstraints {
 export class AiService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly orgAccess: OrgAccessService,
     @Inject(PlanningService) private readonly planning: PlanningService,
   ) {}
+
+  /** Validate options and constraints; clamp scores to [0,1]. */
+  private validateInput(options: PlanOption[], constraints?: PlanConstraints) {
+    if (!options.length) throw new BadRequestException('No route options provided')
+    if (options.length > MAX_OPTIONS) throw new BadRequestException(`At most ${MAX_OPTIONS} options allowed`)
+    for (const o of options) {
+      if (!o.mode || !VALID_MODES.includes(o.mode)) throw new BadRequestException(`Invalid mode: ${o.mode}`)
+      if (o.cost != null && (typeof o.cost !== 'number' || !Number.isFinite(o.cost) || o.cost < 0)) {
+        throw new BadRequestException('Option cost must be a non-negative number')
+      }
+      if (o.etaHours != null && (typeof o.etaHours !== 'number' || !Number.isFinite(o.etaHours) || o.etaHours < 0)) {
+        throw new BadRequestException('Option etaHours must be a non-negative number')
+      }
+    }
+    if (constraints?.maxBudget != null && constraints.maxBudget < 0) throw new BadRequestException('maxBudget cannot be negative')
+    if (constraints?.maxEtaHours != null && constraints.maxEtaHours < 0) throw new BadRequestException('maxEtaHours cannot be negative')
+    if (constraints?.preference && !VALID_PREFS.includes(constraints.preference)) throw new BadRequestException('Invalid preference')
+    if (constraints?.modes) {
+      for (const m of constraints.modes) {
+        if (!VALID_MODES.includes(m)) throw new BadRequestException(`Invalid mode constraint: ${m}`)
+      }
+    }
+  }
+
+  private clampScore(n: number) {
+    return Math.max(0, Math.min(1, n))
+  }
 
   /**
    * Plan agent: rank candidate routes under constraints and propose the best
@@ -29,9 +62,8 @@ export class AiService {
    * - every recommendation is logged with rationale + guardrail notes
    */
   async recommendPlan(input: { shipmentId: string; options: PlanOption[]; constraints?: PlanConstraints }, user: User) {
-    if (!input.options?.length) throw new BadRequestException('No route options provided')
-    const shipment = await this.prisma.shipment.findUnique({ where: { id: input.shipmentId } })
-    if (!shipment) throw new NotFoundException('Shipment not found')
+    this.validateInput(input.options, input.constraints)
+    const shipment = await this.orgAccess.assertShipmentAccess(user, input.shipmentId)
 
     const constraints = input.constraints ?? {}
     const allowedModes = constraints.modes?.length ? constraints.modes : null
@@ -65,12 +97,12 @@ export class AiService {
       .map((o) => {
         const cost = o.cost ?? 0
         const eta = o.etaHours ?? 0
-        const costScore = cost === 0 ? 1 : Math.max(0, 1 - cost / (constraints.maxBudget ?? Math.max(cost, 1)))
-        const etaScore = eta === 0 ? 1 : Math.max(0, 1 - eta / (constraints.maxEtaHours ?? Math.max(eta, 1)))
+        const costScore = cost === 0 ? 1 : this.clampScore(1 - cost / (constraints.maxBudget ?? Math.max(cost, 1)))
+        const etaScore = eta === 0 ? 1 : this.clampScore(1 - eta / (constraints.maxEtaHours ?? Math.max(eta, 1)))
         const pref = constraints.preference ?? 'balanced'
         const score =
           pref === 'cheapest' ? costScore * 0.7 + etaScore * 0.3 : pref === 'fastest' ? etaScore * 0.7 + costScore * 0.3 : (costScore + etaScore) / 2
-        return { option: o, cost, eta, score }
+        return { option: o, cost, eta, score: this.clampScore(score) }
       })
       .sort((a, b) => b.score - a.score)
 
@@ -110,15 +142,17 @@ export class AiService {
   async matchTransporters(loadId: string, user: User) {
     const load = await this.prisma.load.findUnique({ where: { id: loadId } })
     if (!load) throw new NotFoundException('Load not found')
+    const supplier = await this.prisma.supplier.findUnique({ where: { id: load.supplierId }, include: { user: true } })
+    const isOwner = supplier?.userId === user.id
 
     const transporters = await this.prisma.user.findMany({
-      where: { role: 'transporter', transporterVerified: true, isActive: true },
+      where: { role: 'transporter', transporterVerified: true, isActive: true, NOT: { id: isOwner ? user.id : '__none__' } },
       include: { transporter: true },
     })
     const ranked = transporters
       .map((t) => ({
         transporter: t,
-        score: (t.rating ?? 3) * 0.5 + Math.min(1, (t.tripsCount ?? 0) / 50) * 0.3 + (t.transporter?.onboarded ? 0.2 : 0),
+        score: this.clampScore((Math.min(5, t.rating ?? 3) / 5) * 0.5 + Math.min(1, (t.tripsCount ?? 0) / 50) * 0.3 + (t.transporter?.onboarded ? 0.2 : 0)),
       }))
       .sort((a, b) => b.score - a.score)
       .slice(0, 5)
@@ -137,11 +171,41 @@ export class AiService {
     return { recommendation, matches: ranked.map((r) => ({ userId: r.transporter.id, name: r.transporter.name, rating: r.transporter.rating, score: r.score })) }
   }
 
-  async list(entityType: string, entityId: string) {
+  /** Human-in-the-loop: accept or dismiss a recommendation (audit trail). */
+  async setRecommendationStatus(id: string, status: 'accepted' | 'dismissed', user: User) {
+    const rec = await this.prisma.aiRecommendation.findUnique({ where: { id } })
+    if (!rec) throw new NotFoundException('Recommendation not found')
+    if (!['proposed', 'accepted', 'dismissed'].includes(rec.status)) throw new BadRequestException('Recommendation is final')
+    const updated = await this.prisma.aiRecommendation.update({
+      where: { id },
+      data: { status, guardrails: { ...(rec.guardrails as object | null), decidedBy: user.id, decidedAt: new Date().toISOString() } as never },
+    })
+    return { recommendation: updated }
+  }
+
+  async list(entityType: string, entityId: string, user: User, agent?: string, status?: string) {
+    // Scope by agent run ownership: entity type shipment/load must belong to the caller's orgs.
+    let orgWhere = {}
+    if (entityType === 'shipment') {
+      const orgIds = await this.orgAccess.memberOrgIds(user)
+      const owned = await this.prisma.shipment.findMany({ where: { ownerOrgId: { in: orgIds } }, select: { id: true } })
+      orgWhere = { entityId: { in: owned.map((s) => s.id) } }
+    } else if (entityType === 'load') {
+      const supplier = await this.prisma.supplier.findUnique({ where: { userId: user.id } })
+      const loads = supplier
+        ? await this.prisma.load.findMany({ where: { supplierId: supplier.id }, select: { id: true } })
+        : []
+      orgWhere = { entityId: { in: loads.map((l) => l.id) } }
+    }
     const recommendations = await this.prisma.aiRecommendation.findMany({
-      where: { entityType, entityId },
+      where: {
+        entityType,
+        ...orgWhere,
+        ...(agent ? { agent } : {}),
+        ...(status ? { status } : {}),
+      },
       orderBy: { createdAt: 'desc' },
-      take: 20,
+      take: 50,
     })
     return { recommendations }
   }

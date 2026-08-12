@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { CurrentUser } from '../auth/guards/current-user.decorator'
 import { AiService, PlanConstraints, PlanOption } from './ai.service'
@@ -22,8 +22,19 @@ export class AiController {
     return this.ai.matchTransporters(loadId, user)
   }
 
+  @Patch('recommendations/:id/status')
+  setRecommendationStatus(@Param('id') id: string, @Body() body: { status: 'accepted' | 'dismissed' }, @CurrentUser() user: User) {
+    return this.ai.setRecommendationStatus(id, body.status, user)
+  }
+
   @Get('recommendations')
-  list(@Query('entityType') entityType: string, @Query('entityId') entityId: string) {
-    return this.ai.list(entityType, entityId)
+  list(
+    @Query('entityType') entityType: string,
+    @Query('entityId') entityId: string,
+    @Query('agent') agent: string | undefined,
+    @Query('status') status: string | undefined,
+    @CurrentUser() user: User,
+  ) {
+    return this.ai.list(entityType, entityId, user, agent, status)
   }
 }

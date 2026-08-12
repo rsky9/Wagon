@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common'
+import { Roles } from '../auth/guards/roles.decorator'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { CurrentUser } from '../auth/guards/current-user.decorator'
 import { GlobalService } from './global.service'
@@ -12,6 +13,16 @@ export class GlobalController {
   @Get()
   countries() {
     return this.global.countries()
+  }
+
+  @Get('home')
+  homeCountry(@CurrentUser() user: User) {
+    return this.global.homeCountry(user)
+  }
+
+  @Get('convert')
+  convert(@Query('code') code: string, @Query('amount') amount: string) {
+    return this.global.convert(code, Number(amount))
   }
 
   @Get(':code')
@@ -30,7 +41,20 @@ export class GlobalController {
   }
 
   @Get('shipments/:shipmentId/checklist')
-  checklist(@Param('shipmentId') shipmentId: string) {
-    return this.global.checklist(shipmentId)
+  checklist(@Param('shipmentId') shipmentId: string, @CurrentUser() user: User) {
+    return this.global.checklist(shipmentId, user)
+  }
+
+  // Admin
+  @Roles('admin')
+  @Get('admin/list')
+  adminList() {
+    return this.global.adminList()
+  }
+
+  @Roles('admin')
+  @Post('admin/upsert')
+  upsertCountry(@Body() body: Record<string, unknown>) {
+    return this.global.upsertCountry(body as never)
   }
 }

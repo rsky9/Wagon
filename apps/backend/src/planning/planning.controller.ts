@@ -19,6 +19,11 @@ export class PlanningController {
     return this.planning.select(id, user)
   }
 
+  @Post('plans/:id/decline')
+  decline(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.planning.decline(id, user)
+  }
+
   @Post('plans/:id/replan')
   rePlan(
     @Param('id') id: string,
@@ -28,8 +33,13 @@ export class PlanningController {
     return this.planning.rePlan(id, body.failedLegIndex, body.replacement as never, user)
   }
 
+  @Get('plans/:id')
+  detail(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.planning.detail(id, user)
+  }
+
   @Get('shipments/:shipmentId/plans')
-  list(@Param('shipmentId') shipmentId: string) {
-    return this.planning.list(shipmentId)
+  list(@Param('shipmentId') shipmentId: string, @CurrentUser() user: User) {
+    return this.planning.list(shipmentId, user)
   }
 }

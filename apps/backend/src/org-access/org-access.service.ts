@@ -52,7 +52,7 @@ export class OrgAccessService {
   async requireOrgOfKind(user: User, kinds: string[]) {
     const orgs = await this.orgsOfKind(user, kinds)
     if (orgs.length === 0) throw new ForbiddenException(`Requires membership of an organization of kind: ${kinds.join('|')}`)
-    return orgs[0]
+    return orgs[0]!
   }
 
   /** Assert the shipment is owned by an org the user belongs to; return the shipment. */

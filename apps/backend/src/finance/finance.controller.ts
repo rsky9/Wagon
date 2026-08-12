@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { CurrentUser } from '../auth/guards/current-user.decorator'
 import { FinanceService } from './finance.service'
@@ -14,14 +14,29 @@ export class FinanceController {
     return this.finance.fileClaim(body as never, user)
   }
 
+  @Post('claims/:id/assess')
+  assessClaim(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentUser() user: User) {
+    return this.finance.assessClaim(id, body as never, user)
+  }
+
   @Post('claims/:id/decide')
   decideClaim(@Param('id') id: string, @Body() body: { decision: 'approved' | 'rejected'; notes?: string }, @CurrentUser() user: User) {
     return this.finance.decideClaim(id, body.decision, body.notes, user)
   }
 
+  @Get('claims')
+  listClaims(@Query('status') status: string | undefined, @CurrentUser() user: User) {
+    return this.finance.listClaims(user, status)
+  }
+
   @Post('policies')
   issuePolicy(@Body() body: Record<string, unknown>, @CurrentUser() user: User) {
     return this.finance.issuePolicy(body as never, user)
+  }
+
+  @Get('policies')
+  listPolicies(@CurrentUser() user: User) {
+    return this.finance.listPolicies(user)
   }
 
   @Post('settlements')
@@ -34,13 +49,18 @@ export class FinanceController {
     return this.finance.clearSettlement(id, user)
   }
 
+  @Get('settlements')
+  listSettlements(@Query('status') status: string | undefined, @CurrentUser() user: User) {
+    return this.finance.listSettlements(user, status)
+  }
+
   @Post('risk/:shipmentId/assess')
   assessRisk(@Param('shipmentId') shipmentId: string, @CurrentUser() user: User) {
     return this.finance.assessRisk(shipmentId, user)
   }
 
   @Get('shipments/:shipmentId/summary')
-  summary(@Param('shipmentId') shipmentId: string) {
-    return this.finance.summary(shipmentId)
+  summary(@Param('shipmentId') shipmentId: string, @CurrentUser() user: User) {
+    return this.finance.summary(shipmentId, user)
   }
 }

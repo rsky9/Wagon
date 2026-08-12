@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { CurrentUser } from '../auth/guards/current-user.decorator'
 import { StorageService } from './storage.service'
@@ -15,8 +15,13 @@ export class StorageController {
   }
 
   @Get('facilities')
-  facilities() {
-    return this.storage.facilities()
+  facilities(@CurrentUser() user: User) {
+    return this.storage.facilities(user)
+  }
+
+  @Get('facilities/:id')
+  facilityDetail(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.storage.facilityDetail(id, user)
   }
 
   @Post('facilities/:id/operations')
@@ -24,13 +29,23 @@ export class StorageController {
     return this.storage.startOperation(id, body, user)
   }
 
+  @Get('operations')
+  operations(@Query('facilityId') facilityId: string | undefined, @CurrentUser() user: User) {
+    return this.storage.operations(user, facilityId)
+  }
+
+  @Get('operations/:id')
+  operationDetail(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.storage.operationDetail(id, user)
+  }
+
   @Post('operations/:id/advance')
   advance(@Param('id') id: string, @CurrentUser() user: User) {
     return this.storage.advance(id, user)
   }
 
-  @Get('operations')
-  operations(@Query('facilityId') facilityId?: string) {
-    return this.storage.operations(facilityId)
+  @Patch('operations/:id/cancel')
+  cancel(@Param('id') id: string, @Body() body: { reason: string }, @CurrentUser() user: User) {
+    return this.storage.cancel(id, body.reason, user)
   }
 }
