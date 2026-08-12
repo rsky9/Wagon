@@ -810,6 +810,9 @@ model Shipment {
   bookings  CarrierBooking[]
   documents ForwardDocument[]
   forwardOrder ForwardOrder?
+  plans     Plan[]
+  activePlanId String?
+  activePlan Plan? @relation("ActivePlan", fields: [activePlanId], references: [id])
   @@index([status])
 }
 
@@ -851,6 +854,29 @@ enum ShipmentStatus {
   delivered
   closed
   cancelled
+}
+
+/// An alternative multimodal plan for a shipment (Phase 4). Selection is the orderer's choice.
+model Plan {
+  id          String   @id @default(cuid())
+  shipmentId  String
+  shipment    Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  ref         String
+  source      String   @default("manual") // manual | ai | re_plan
+  // Ordered leg descriptors: [{mode, equipment, carrier, provider, cost, etaHours, departure}]
+  legs        Json
+  cost        Float?
+  currency    String   @default("INR")
+  etaHours    Float?
+  riskScore   Float    @default(0)
+  status      String   @default("proposed") // proposed | selected | superseded | declined
+  selectedBy  String?
+  selectedAt  DateTime?
+  failedLegIndex Int?
+  forShipment Shipment[] @relation("ActivePlan")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([shipmentId])
 }
 
 /// Canonical event — every important state change becomes one. DCSA/ONE-Record aligned.

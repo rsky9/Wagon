@@ -40,6 +40,7 @@ import { FoundationModule } from './foundation/foundation.module'
 import { OutboxModule } from './outbox/outbox.module'
 import { StorageModule } from './storage/storage.module'
 import { ForwardingModule } from './forwarding/forwarding.module'
+import { PlanningModule } from './planning/planning.module'
 
 @Module({
   imports: [
@@ -89,6 +90,7 @@ import { ForwardingModule } from './forwarding/forwarding.module'
     OutboxModule,
     StorageModule,
     ForwardingModule,
+    PlanningModule,
   ],
   controllers: [AppController],
   providers: [
