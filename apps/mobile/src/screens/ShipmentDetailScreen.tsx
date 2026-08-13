@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, ScrollView, Pressable, Alert } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius } from '@wagon/design'
 import { api } from '../config'
-import type { Shipment, ShipmentLeg, Plan, ForwardOrder } from '@wagon/contracts'
+import type { Shipment, ShipmentLeg, Plan, ForwardOrder, CargoUnit } from '@wagon/contracts'
 
 interface Detail extends Shipment {
   legs: ShipmentLeg[]
@@ -34,11 +34,15 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
   const theme = useTheme()
   const [shipment, setShipment] = useState<Detail | null>(null)
   const [sourceLoad, setSourceLoad] = useState<SourceLoad | null>(null)
+  const [cargo, setCargo] = useState<CargoUnit[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetch = useCallback(() => {
     api.get<{ shipment: Detail; sourceLoad: SourceLoad | null }>(`/foundation/shipments/${shipmentId}`)
       .then((r) => { setShipment(r.shipment); setSourceLoad(r.sourceLoad ?? null) })
+      .catch(() => {})
+    api.get<{ units: CargoUnit[] }>(`/foundation/shipments/${shipmentId}/cargo`)
+      .then((r) => setCargo(r.units))
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [shipmentId])
@@ -66,6 +70,30 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
       { text: 'Book', onPress: () => {
         // Use the first forward order's forwarder as a placeholder; real picker in Forwarding flow.
         action('book', () => api.post('/forwarding/bookings', { shipmentId, bookingRef: `BK-${Date.now()}` }), 'Booking requested')
+      } },
+    ])
+  }
+
+  const legTransition = (legId: string, event: 'departed' | 'arrived') => {
+    action(event, () => api.post(`/foundation/legs/${legId}/transition`, { event }), `${event === 'departed' ? 'Departed' : 'Arrived'} recorded`)
+  }
+
+  const addCargo = () => {
+    Alert.prompt('Add cargo unit', 'Weight (kg)', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Add', onPress: (w?: string) => {
+        action('cargo', () => api.post(`/foundation/shipments/${shipmentId}/cargo`, { kind: 'package', weightKg: w ? Number(w) : undefined }), 'Cargo unit added')
+      } },
+    ])
+  }
+
+  const splitCargo = (unit: CargoUnit) => {
+    Alert.prompt('Split cargo unit', 'Two parts (kg, e.g. 1000,2000)', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Split', onPress: (parts?: string) => {
+        const nums = (parts ?? '').split(',').map((p) => ({ weightKg: Number(p.trim()) })).filter((p) => p.weightKg > 0)
+        if (nums.length < 2) { Alert.alert('Need 2+ parts'); return }
+        action('split', () => api.post(`/foundation/cargo/${unit.id}/split`, { parts: nums }), 'Cargo split')
       } },
     ])
   }
@@ -114,6 +142,43 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
             <Text style={[styles.meta, { color: theme.mutedForeground }]}>
               {l.pickupAddr ?? '—'} → {l.dropAddr ?? '—'} · {l.distanceKm ? `${l.distanceKm} km` : ''} · {l.status}
             </Text>
+            {l.departedAt && <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>Departed {new Date(l.departedAt).toLocaleString()}</Text>}
+            {l.arrivedAt && <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>Arrived {new Date(l.arrivedAt).toLocaleString()}</Text>}
+            {(l.status === 'planned' || l.status === 'booked' || l.status === 'in_transit') && (
+              <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm }}>
+                {(l.status === 'planned' || l.status === 'booked') && (
+                  <Pressable style={[styles.smallBtn, { backgroundColor: '#F97316' }]} onPress={() => legTransition(l.id, 'departed')}>
+                    <Text style={styles.smallBtnText}>Depart</Text>
+                  </Pressable>
+                )}
+                {l.status === 'in_transit' && (
+                  <Pressable style={[styles.smallBtn, { backgroundColor: theme.success }]} onPress={() => legTransition(l.id, 'arrived')}>
+                    <Text style={styles.smallBtnText}>Arrive</Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
+          </View>
+        ))}
+
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.sm }}>
+          <Text style={[styles.sectionTitle, { color: theme.foreground }]}>Cargo ({cargo.length})</Text>
+          <Pressable onPress={addCargo} hitSlop={8}><Text style={{ color: '#F97316', fontSize: 13, fontWeight: '800' }}>+ Add</Text></Pressable>
+        </View>
+        {cargo.map((u) => (
+          <View key={u.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <View style={styles.cardTop}>
+              <Text style={[styles.cardTitle, { color: theme.foreground }]}>{u.ref} · {u.kind}</Text>
+              <Text style={[styles.chip, { color: theme.warning, borderColor: theme.warning }]}>{u.status}</Text>
+            </View>
+            <Text style={[styles.meta, { color: theme.mutedForeground }]}>
+              {u.weightKg ? `${u.weightKg} kg` : '—'} · {u.equipment ?? '—'} {u.parent ? `· from ${u.parent.ref}` : ''}
+            </Text>
+            {!u.parent && (
+              <Pressable style={[styles.smallBtn, { backgroundColor: '#8B5CF6', alignSelf: 'flex-start', marginTop: spacing.sm }]} onPress={() => splitCargo(u)}>
+                <Text style={styles.smallBtnText}>Split</Text>
+              </Pressable>
+            )}
           </View>
         ))}
 
@@ -172,5 +237,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 14, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: spacing.sm },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   actionBtn: { borderRadius: radius.md, padding: spacing.md, paddingHorizontal: spacing.lg },
+  smallBtn: { borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  smallBtnText: { color: '#fff', fontWeight: '800', fontSize: 12 },
   actionText: { color: '#fff', fontWeight: '800', fontSize: 14 },
 })

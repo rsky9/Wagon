@@ -78,6 +78,7 @@ describe('Enablement platform (e2e)', () => {
       prisma.marketQuote.deleteMany(),
       prisma.marketRequest.deleteMany(),
       prisma.marketListing.deleteMany(),
+      prisma.cargoUnit.deleteMany(),
       prisma.orgRating.deleteMany(),
       prisma.carrierService.deleteMany(),
       prisma.lane.deleteMany(),
@@ -436,6 +437,28 @@ describe('Enablement platform (e2e)', () => {
       const q2 = await api(trToken).post(`/market/requests/${req.body.request.id}/quotes`, { amount: 1900 }).expect(201)
       const rejected = await api(supToken).post(`/market/quotes/${q2.body.quote.id}/reject`).expect(201)
       expect(rejected.body.quote.status).toBe('rejected')
+    })
+
+    it('tracks cargo unit lineage (create/split/merge) and leg lifecycle', async () => {
+      const ship = await api(supToken).post('/foundation/shipments', { commodity: 'CargoE2E', weightKg: 10000 }).expect(201)
+      const sid = ship.body.shipment.id
+      // Cargo create + split + merge.
+      const unit = await api(supToken).post(`/foundation/shipments/${sid}/cargo`, { kind: 'container', equipment: '40HC', weightKg: 10000 }).expect(201)
+      expect(unit.body.unit.status).toBe('created')
+      const split = await api(supToken).post(`/foundation/cargo/${unit.body.unit.id}/split`, { parts: [{ weightKg: 4000 }, { weightKg: 6000 }] }).expect(201)
+      expect(split.body.children.length).toBe(2)
+      const merged = await api(supToken).post(`/foundation/cargo/${split.body.children[0].id}/merge`, { parentId: unit.body.unit.id }).expect(201)
+      expect(merged.body.unit.status).toBe('consolidated')
+      const list = await api(supToken).get(`/foundation/shipments/${sid}/cargo`).expect(200)
+      expect(list.body.units.length).toBe(3)
+      // Leg departed/arrived lifecycle.
+      const leg = await api(supToken).post(`/foundation/shipments/${sid}/legs`, { mode: 'ocean', pickupAddr: 'Mundra', dropAddr: 'Singapore' }).expect(201)
+      const departed = await api(supToken).post(`/foundation/legs/${leg.body.leg.id}/transition`, { event: 'departed' }).expect(201)
+      expect(departed.body.leg.status).toBe('in_transit')
+      expect(departed.body.leg.departedAt).toBeTruthy()
+      const arrived = await api(supToken).post(`/foundation/legs/${leg.body.leg.id}/transition`, { event: 'arrived' }).expect(201)
+      expect(arrived.body.leg.status).toBe('arrived')
+      expect(arrived.body.leg.arrivedAt).toBeTruthy()
     })
   })
 })

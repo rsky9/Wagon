@@ -57,6 +57,9 @@ export interface ShipmentLeg {
   equipment?: string | null
   providerId?: string | null
   status: string
+  departedAt?: string | null
+  arrivedAt?: string | null
+  bookedAt?: string | null
   createdAt: string
 }
 
@@ -395,4 +398,22 @@ export interface CarrierService {
   rate?: number | null
   currency: string
   status: string
+}
+
+export interface CargoUnit {
+  id: string
+  ref: string
+  kind: string
+  weightKg?: number | null
+  volumeM3?: number | null
+  pieces?: number | null
+  equipment?: string | null
+  shipmentId?: string | null
+  legId?: string | null
+  parentId?: string | null
+  status: string
+  locationRef?: string | null
+  parent?: CargoUnit | null
+  children?: CargoUnit[]
+  createdAt: string
 }
