@@ -66,6 +66,7 @@ import { EnablementFinanceScreen } from '../screens/EnablementFinanceScreen'
 import { StorageScreen } from '../screens/StorageScreen'
 import { GlobalScreen } from '../screens/GlobalScreen'
 import { MarketScreen } from '../screens/MarketScreen'
+import { IntegrationsScreen } from '../screens/IntegrationsScreen'
 import { SplashScreen, LanguageSelection, RoleSelection, CapabilitySelection } from '@wagon/components'
 import { AppLogo } from '../components/AppLogo'
 import { UnifiedTabs } from './UnifiedTabs'
@@ -122,6 +123,7 @@ export type RootStackParamList = {
   Shipments: undefined
   ShipmentDetail: { shipmentId: string }
   Market: undefined
+  Integrations: undefined
   Forwarding: undefined
   Planning: undefined
   EnablementFinance: undefined
@@ -325,6 +327,7 @@ function EnablementHubRoute({ navigation }: any) {
         else if (screen === 'storage') navigation.navigate('Storage')
         else if (screen === 'global') navigation.navigate('Global')
         else if (screen === 'market') navigation.navigate('Market')
+        else if (screen === 'integrations') navigation.navigate('Integrations')
       }}
     />
   )
@@ -372,6 +375,10 @@ function GlobalRoute({ navigation }: any) {
 function MarketRoute({ navigation }: any) {
   const { session } = useAuth()
   return <MarketScreen onBack={() => navigation.goBack()} capabilities={session?.profile?.capabilities ?? []} />
+}
+
+function IntegrationsRoute({ navigation }: any) {
+  return <IntegrationsScreen onBack={() => navigation.goBack()} />
 }
 
 function RoleChangeRoute({ navigation }: any) {
@@ -683,6 +690,7 @@ export function MobileNavigator() {
                 <Stack.Screen name="Storage" component={StorageRoute} />
                 <Stack.Screen name="Global" component={GlobalRoute} />
                 <Stack.Screen name="Market" component={MarketRoute} />
+                <Stack.Screen name="Integrations" component={IntegrationsRoute} />
               </Stack.Navigator>
             </NavigationContainer>
           </ThemeContext.Provider>

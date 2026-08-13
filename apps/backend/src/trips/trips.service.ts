@@ -221,11 +221,13 @@ export class TripsService {
     unloading: ['delivered'],
   }
 
-  /** Advance the trip execution stage. Transporters drive this flow. */
+  /** Advance the trip execution stage. Transporters AND assigned drivers drive this flow. */
   async advanceStage(tripId: string, user: User) {
     const trip = await this.prisma.trip.findUnique({ where: { id: tripId } })
     if (!trip) throw new NotFoundException('Trip not found')
-    if (trip.transporterId !== (await this.transporterId(user))) throw new BadRequestException('Not your trip')
+    const isTransporter = trip.transporterId === (await this.transporterId(user))
+    const isDriver = await this.isAssignedDriver(trip.driverId, user)
+    if (!isTransporter && !isDriver) throw new BadRequestException('Not your trip')
     if (trip.status === 'delivered' || trip.stage === 'delivered') throw new BadRequestException('Trip already completed')
 
     const next = TripsService.STAGE_ORDER[trip.stage]?.[0]
@@ -280,7 +282,9 @@ export class TripsService {
   async generateOtp(tripId: string, kind: 'pickup' | 'delivery', user: User) {
     const trip = await this.prisma.trip.findUnique({ where: { id: tripId } })
     if (!trip) throw new NotFoundException('Trip not found')
-    if (trip.transporterId !== (await this.transporterId(user))) throw new BadRequestException('Not your trip')
+    const isTransporter = trip.transporterId === (await this.transporterId(user))
+    const isDriver = await this.isAssignedDriver(trip.driverId, user)
+    if (!isTransporter && !isDriver) throw new BadRequestException('Not your trip')
     const code = String(Math.floor(1000 + Math.random() * 9000))
     const updated = await this.prisma.trip.update({
       where: { id: tripId },
@@ -413,5 +417,12 @@ export class TripsService {
   private async transporterId(user: User) {
     const transporter = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
     return transporter?.id
+  }
+
+  /** True if the user is the driver assigned to a trip (drivers are matched by mobile). */
+  private async isAssignedDriver(tripDriverId: string | null, user: User) {
+    if (!tripDriverId) return false
+    const driver = await this.prisma.driver.findUnique({ where: { id: tripDriverId } })
+    return driver?.mobile === user.mobile
   }
 }

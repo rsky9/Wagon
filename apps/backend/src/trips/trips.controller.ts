@@ -40,7 +40,7 @@ export class TripsController {
   }
 
   @Post(':id/advance')
-  @Roles('transporter')
+  @Roles('transporter', 'driver')
   advance(@Param('id') id: string, @CurrentUser() user: User) {
     return this.trips.advanceStage(id, user)
   }
@@ -56,7 +56,7 @@ export class TripsController {
   }
 
   @Post(':id/otp/:kind')
-  @Roles('transporter')
+  @Roles('transporter', 'driver')
   generateOtp(@Param('id') id: string, @Param('kind') kind: 'pickup' | 'delivery', @CurrentUser() user: User) {
     return this.trips.generateOtp(id, kind, user)
   }
