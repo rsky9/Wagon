@@ -68,4 +68,21 @@ export class DriverService {
     const earned = trips.reduce((s, t) => s + t.load.fareEstimate, 0)
     return { trips: trips.length, earned }
   }
+
+  /** Driver uploads POD for a delivered trip they were assigned to. */
+  async uploadPod(tripId: string, podUrl: string, user: User) {
+    const driver = await this.driverFor(user)
+    if (!driver) throw new BadRequestException('Driver profile not found')
+    const trip = await this.prisma.trip.findUnique({ where: { id: tripId } })
+    if (!trip) throw new BadRequestException('Trip not found')
+    if (trip.driverId !== driver.id) throw new BadRequestException('Not your trip')
+    if (!trip.podUrl) {
+      const updated = await this.prisma.trip.update({
+        where: { id: tripId },
+        data: { podUrl },
+      })
+      return { trip: updated, podUploaded: true }
+    }
+    return { trip, podUploaded: false }
+  }
 }

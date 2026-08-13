@@ -300,6 +300,138 @@ export class FoundationService {
     return { leg }
   }
 
+  /** Mark a leg departed or arrived (execution lifecycle on the canonical leg). */  async legTransition(legId: string, event: 'departed' | 'arrived', user: User) {
+    const leg = await this.prisma.shipmentLeg.findUnique({
+      where: { id: legId },
+      include: { shipment: true },
+    })
+    if (!leg) throw new NotFoundException('Leg not found')
+    if (!leg.shipment.ownerOrgId || !(await this.orgAccess.isMember(user, leg.shipment.ownerOrgId))) {
+      throw new ForbiddenException('No access to this leg')
+    }
+    const ts = new Date()
+    const data: Record<string, unknown> = {
+      status: event === 'departed' ? 'in_transit' : 'arrived',
+    }
+    if (event === 'departed') data.departedAt = ts
+    if (event === 'arrived') data.arrivedAt = ts
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const changed = await tx.shipmentLeg.update({ where: { id: legId }, data: data as never })
+      await this.outbox.emit(tx as never, {
+        eventType: 'TRANSPORT',
+        eventCode: event === 'departed' ? 'LEG_DEPARTED' : 'LEG_ARRIVED',
+        entityType: 'leg',
+        entityId: legId,
+        orgId: leg.shipment.ownerOrgId ?? null,
+        shipmentId: leg.shipmentId,
+        legId,
+        actorId: user.id,
+        location: event === 'departed' ? leg.pickupAddr : leg.dropAddr,
+        payload: { mode: leg.mode, sequence: leg.sequence, at: ts.toISOString() },
+      })
+      return changed
+    })
+    return { leg: updated }
+  }
+
+  /** Create a cargo unit on a shipment (or a leg). */
+  async createCargoUnit(input: {
+    shipmentId: string
+    legId?: string
+    kind?: string
+    weightKg?: number
+    volumeM3?: number
+    pieces?: number
+    equipment?: string
+    ref?: string
+  }, user: User) {
+    await this.orgAccess.assertShipmentAccess(user, input.shipmentId)
+    const unit = await this.prisma.cargoUnit.create({
+      data: {
+        ref: input.ref ?? `CU-${Date.now().toString(36).toUpperCase()}`,
+        kind: input.kind ?? 'package',
+        weightKg: input.weightKg,
+        volumeM3: input.volumeM3,
+        pieces: input.pieces,
+        equipment: input.equipment,
+        shipmentId: input.shipmentId,
+        legId: input.legId,
+        status: 'created',
+      },
+    })
+    return { unit }
+  }
+
+  /** Split a cargo unit into children (e.g. a container into pallets). */
+  async splitCargoUnit(unitId: string, parts: { weightKg?: number; volumeM3?: number; pieces?: number }[], user: User) {
+    const unit = await this.prisma.cargoUnit.findUnique({ where: { id: unitId }, include: { shipment: true } })
+    if (!unit) throw new NotFoundException('Cargo unit not found')
+    if (!unit.shipment?.ownerOrgId || !(await this.orgAccess.isMember(user, unit.shipment.ownerOrgId))) {
+      throw new ForbiddenException('No access to this cargo unit')
+    }
+    if (!parts.length) throw new BadRequestException('Need at least one part')
+    const children = await this.prisma.$transaction(async (tx) => {
+      const created = []
+      for (const part of parts) {
+        created.push(await tx.cargoUnit.create({
+          data: {
+            ref: `CU-${Date.now().toString(36).toUpperCase()}`,
+            kind: unit.kind,
+            weightKg: part.weightKg ?? null,
+            volumeM3: part.volumeM3 ?? null,
+            pieces: part.pieces ?? null,
+            shipmentId: unit.shipmentId,
+            legId: unit.legId,
+            parentId: unit.id,
+            status: 'split',
+          },
+        }))
+      }
+      await tx.cargoUnit.update({ where: { id: unit.id }, data: { status: 'split' } })
+      return created
+    })
+    return { children }
+  }
+
+  /** Merge a cargo unit into a parent (e.g. pallets onto a container). */
+  async mergeCargoUnit(unitId: string, parentId: string, user: User) {
+    const unit = await this.prisma.cargoUnit.findUnique({ where: { id: unitId }, include: { shipment: true } })
+    const parent = await this.prisma.cargoUnit.findUnique({ where: { id: parentId } })
+    if (!unit) throw new NotFoundException('Cargo unit not found')
+    if (!parent) throw new NotFoundException('Parent cargo unit not found')
+    if (unit.shipmentId !== parent.shipmentId) throw new BadRequestException('Units belong to different shipments')
+    if (!unit.shipment?.ownerOrgId || !(await this.orgAccess.isMember(user, unit.shipment.ownerOrgId))) {
+      throw new ForbiddenException('No access to this cargo unit')
+    }
+    const updated = await this.prisma.cargoUnit.update({
+      where: { id: unitId },
+      data: { parentId, status: 'consolidated' },
+    })
+    await this.prisma.cargoUnit.update({ where: { id: parentId }, data: { status: 'consolidated' } })
+    return { unit: updated }
+  }
+
+  /** Update a cargo unit's operational status/location. */
+  async updateCargoUnit(unitId: string, data: { status?: string; locationRef?: string }, user: User) {
+    const unit = await this.prisma.cargoUnit.findUnique({ where: { id: unitId }, include: { shipment: true } })
+    if (!unit) throw new NotFoundException('Cargo unit not found')
+    if (!unit.shipment?.ownerOrgId || !(await this.orgAccess.isMember(user, unit.shipment.ownerOrgId))) {
+      throw new ForbiddenException('No access to this cargo unit')
+    }
+    const updated = await this.prisma.cargoUnit.update({ where: { id: unitId }, data: { ...data, status: data.status ?? unit.status } })
+    return { unit: updated }
+  }
+
+  async listCargoUnits(shipmentId: string, user: User) {
+    await this.orgAccess.assertShipmentAccess(user, shipmentId)
+    const units = await this.prisma.cargoUnit.findMany({
+      where: { shipmentId },
+      include: { parent: true, children: true },
+      orderBy: { createdAt: 'asc' },
+    })
+    return { units }
+  }
+
   async listShipments(user: User, query?: { status?: string; mode?: string; skip?: number; take?: number }) {
     const orgIds = await this.orgAccess.memberOrgIds(user)
     const where: Record<string, unknown> = { ownerOrgId: { in: orgIds } }

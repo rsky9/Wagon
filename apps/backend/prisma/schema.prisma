@@ -849,6 +849,7 @@ model Shipment {
   settlements Settlement[]
   riskAssessments RiskAssessment[]
   consolidations Consolidation[]
+  cargoUnits CargoUnit[]
   activePlanId String?
   activePlan Plan? @relation("ActivePlan", fields: [activePlanId], references: [id])
   @@index([status])
@@ -882,8 +883,33 @@ model ShipmentLeg {
 
   events LogisticsEvent[]
   bookings CarrierBooking[]
+  cargoUnits CargoUnit[]
   @@index([shipmentId])
   @@unique([shipmentId, sequence])
+}
+
+/// A physical cargo unit (box/pallet/container) with lineage across split/merge.
+model CargoUnit {
+  id          String   @id @default(cuid())
+  ref         String
+  kind        String   @default("package") // package | pallet | container | teu | lcl
+  weightKg    Float?
+  volumeM3    Float?
+  pieces      Int?
+  equipment   String?
+  shipmentId  String?
+  shipment    Shipment? @relation(fields: [shipmentId], references: [id])
+  legId       String?
+  leg         ShipmentLeg? @relation(fields: [legId], references: [id])
+  parentId    String?   // split lineage: this unit came from a parent
+  parent      CargoUnit? @relation("CargoSplit", fields: [parentId], references: [id], onDelete: SetNull)
+  children    CargoUnit[] @relation("CargoSplit")
+  status      String   @default("created") // created | loaded | in_transit | delivered | consolidated | split
+  locationRef String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([shipmentId])
+  @@index([parentId])
 }
 
 enum ShipmentStatus {

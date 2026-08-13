@@ -81,6 +81,40 @@ export class FoundationController {
     return this.foundation.addLeg(id, body as never, user)
   }
 
+  @Post('legs/:legId/transition')
+  legTransition(@Param('legId') legId: string, @Body() body: { event: 'departed' | 'arrived' }, @CurrentUser() user: User) {
+    return this.foundation.legTransition(legId, body.event, user)
+  }
+
+  @Post('shipments/:id/cargo')
+  createCargoUnit(
+    @Param('id') id: string,
+    @Body() body: { legId?: string; kind?: string; weightKg?: number; volumeM3?: number; pieces?: number; equipment?: string; ref?: string },
+    @CurrentUser() user: User,
+  ) {
+    return this.foundation.createCargoUnit({ shipmentId: id, ...body }, user)
+  }
+
+  @Get('shipments/:id/cargo')
+  listCargoUnits(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.foundation.listCargoUnits(id, user)
+  }
+
+  @Post('cargo/:id/split')
+  splitCargoUnit(@Param('id') id: string, @Body() body: { parts: { weightKg?: number; volumeM3?: number; pieces?: number }[] }, @CurrentUser() user: User) {
+    return this.foundation.splitCargoUnit(id, body.parts, user)
+  }
+
+  @Post('cargo/:id/merge')
+  mergeCargoUnit(@Param('id') id: string, @Body() body: { parentId: string }, @CurrentUser() user: User) {
+    return this.foundation.mergeCargoUnit(id, body.parentId, user)
+  }
+
+  @Patch('cargo/:id')
+  updateCargoUnit(@Param('id') id: string, @Body() body: { status?: string; locationRef?: string }, @CurrentUser() user: User) {
+    return this.foundation.updateCargoUnit(id, body, user)
+  }
+
   // Events
   @Get('events')
   events(@Query('entityType') entityType: string | undefined, @Query('entityId') entityId: string | undefined, @Query('shipmentId') shipmentId: string | undefined, @CurrentUser() user: User) {

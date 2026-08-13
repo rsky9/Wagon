@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { Roles } from '../auth/guards/roles.decorator'
 import { CurrentUser } from '../auth/guards/current-user.decorator'
@@ -29,5 +29,10 @@ export class DriverController {
   @Get('earnings')
   earnings(@CurrentUser() user: User) {
     return this.driver.earnings(user)
+  }
+
+  @Post('trips/:tripId/pod')
+  uploadPod(@Param('tripId') tripId: string, @Body() body: { podUrl: string }, @CurrentUser() user: User) {
+    return this.driver.uploadPod(tripId, body.podUrl, user)
   }
 }
