@@ -274,6 +274,17 @@ export class TripsService {
     } else if (isDelivered) {
       await this.shipments.syncFromLoad(trip.loadId, 'delivered', 'DELIVERED', 'TRANSPORT', user.id, load?.dropAddr)
     }
+    // Per-stage canonical event: STAGE_<STAGE> for every execution step.
+    await this.shipments.emit({
+      eventType: 'TRANSPORT',
+      eventCode: `STAGE_${next.toUpperCase()}`,
+      entityType: 'trip',
+      entityId: trip.id,
+      shipmentId: await this.shipments.shipmentIdFor(trip.loadId),
+      actorId: user.id,
+      location: load?.pickupAddr,
+      payload: { tripId: trip.id, loadId: trip.loadId, stage: next },
+    })
 
     return { trip: updated }
   }

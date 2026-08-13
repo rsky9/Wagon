@@ -267,4 +267,9 @@ export class AdminController {
   aiRecommendations() {
     return this.admin.aiRecommendations()
   }
+
+  @Get('market/analytics')
+  marketAnalytics() {
+    return this.admin.marketAnalytics()
+  }
 }

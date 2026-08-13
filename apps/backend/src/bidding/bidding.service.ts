@@ -58,6 +58,12 @@ export class BiddingService {
       }
     }
     if (!input.amount || input.amount <= 0) throw new BadRequestException('Bid amount must be positive')
+    // Rate sanity: reject bids far below the reference fare to prevent
+    // predatory/absurd low bids that erode trust.
+    const reference = load.referenceRate ?? load.fareEstimate
+    if (reference && reference > 0 && input.amount < reference * 0.6) {
+      throw new BadRequestException(`Bid ₹${input.amount} is below 60% of the reference rate ₹${reference}`)
+    }
     const transporter = await this.transporterFor(user)
     if (!transporter) throw new BadRequestException('Complete transporter onboarding first')
     // Self-deal guard: a user with both capabilities must never haul their own load.

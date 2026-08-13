@@ -937,6 +937,37 @@ export class AdminService {
     return { ratings }
   }
 
+  /** Marketplace analytics: liquidity + top lanes + activity trend. */
+  async marketAnalytics() {
+    const [listings, requests, quotes, ratings, bookings] = await Promise.all([
+      this.prisma.marketListing.count(),
+      this.prisma.marketRequest.count(),
+      this.prisma.marketQuote.count(),
+      this.prisma.orgRating.count(),
+      this.prisma.carrierBooking.count(),
+    ])
+    // Top lanes by listing+request volume.
+    const lanes = await this.prisma.lane.findMany({
+      include: { _count: { select: { listings: true, requests: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    })
+    const topLanes = lanes
+      .map((l) => ({ origin: l.originRef, destination: l.destinationRef, mode: l.mode, volume: l._count.listings + l._count.requests }))
+      .sort((a, b) => b.volume - a.volume)
+      .slice(0, 8)
+    // Weekly activity trend.
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    const recentRequests = await this.prisma.marketRequest.count({ where: { createdAt: { gte: since } } })
+    const recentQuotes = await this.prisma.marketQuote.count({ where: { createdAt: { gte: since } } })
+    return {
+      totals: { listings, requests, quotes, ratings, bookings },
+      topLanes,
+      trend7d: { requests: recentRequests, quotes: recentQuotes },
+      liquidityRatio: requests > 0 ? Math.round((quotes / requests) * 100) : 0,
+    }
+  }
+
   /** Mirror an admin load-status change onto the canonical Shipment (parity with the projector). */
   private async syncShipmentFromLoad(loadId: string, status: string) {
     const shipment = await this.prisma.shipment.findFirst({ where: { ref: loadId } })
