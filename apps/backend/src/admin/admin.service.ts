@@ -910,6 +910,24 @@ export class AdminService {
     return { quotes }
   }
 
+  /** Admin moderation: remove a quote (fraud/abuse). */
+  async deleteQuote(quoteId: string, actor: User) {
+    const quote = await this.prisma.marketQuote.findUnique({ where: { id: quoteId } })
+    if (!quote) throw new NotFoundException('Quote not found')
+    await this.prisma.marketQuote.delete({ where: { id: quoteId } })
+    await this.audit.log({ actorId: actor.id, action: 'quote_delete', resource: quoteId, after: { requestId: quote.requestId } })
+    return { deleted: true }
+  }
+
+  /** Admin: recent AI recommendations (marketplace intelligence). */
+  async aiRecommendations() {
+    const recommendations = await this.prisma.aiRecommendation.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    })
+    return { recommendations }
+  }
+
   async marketRatings() {
     const ratings = await this.prisma.orgRating.findMany({
       include: { subjectOrg: { select: { id: true, name: true, kind: true } }, giverOrg: { select: { id: true, name: true } } },

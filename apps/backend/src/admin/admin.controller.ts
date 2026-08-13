@@ -253,8 +253,18 @@ export class AdminController {
     return this.admin.marketQuotes({ status })
   }
 
+  @Delete('market/quotes/:id')
+  deleteQuote(@Param('id') id: string, @CurrentUser() actor: User) {
+    return this.admin.deleteQuote(id, actor)
+  }
+
   @Get('market/ratings')
   marketRatings() {
     return this.admin.marketRatings()
+  }
+
+  @Get('market/ai')
+  aiRecommendations() {
+    return this.admin.aiRecommendations()
   }
 }

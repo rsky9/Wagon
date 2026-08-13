@@ -123,6 +123,26 @@ interface MarketStats {
   carrierServices: number;
 }
 
+interface MarketQuoteRow {
+  id: string;
+  amount: number | null;
+  currency: string;
+  status: string;
+  providerOrg: { name: string } | null;
+  request: { id: string; kind: string; status: string } | null;
+  createdAt: string;
+}
+
+interface AiRecRow {
+  id: string;
+  agent: string;
+  entityType: string;
+  summary: string;
+  score: number | null;
+  status: string;
+  createdAt: string;
+}
+
 type Tab = "orgs" | "shipments" | "plans" | "claims" | "webhooks" | "facilities" | "settlements" | "deliveries" | "market";
 
 const TABS: Array<{ key: Tab; label: string }> = [
@@ -170,6 +190,8 @@ export default function Enablement() {
   const [marketListings, setMarketListings] = useState<MarketListingRow[]>([]);
   const [marketRequests, setMarketRequests] = useState<MarketRequestRow[]>([]);
   const [marketStats, setMarketStats] = useState<MarketStats | null>(null);
+  const [marketQuotes, setMarketQuotes] = useState<MarketQuoteRow[]>([]);
+  const [aiRecs, setAiRecs] = useState<AiRecRow[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
 
   const run = async (label: string, fn: () => Promise<unknown>) => {
@@ -206,14 +228,18 @@ export default function Enablement() {
         const r = await api.get<{ deliveries: DeliveryRow[] }>("/admin/webhook-deliveries");
         setDeliveries(r.deliveries);
       } else if (tab === "market") {
-        const [l, req, st] = await Promise.all([
+        const [l, req, st, q, ai] = await Promise.all([
           api.get<{ listings: MarketListingRow[] }>("/admin/market/listings"),
           api.get<{ requests: MarketRequestRow[] }>("/admin/market/requests"),
           api.get<MarketStats>("/admin/market/stats"),
+          api.get<{ quotes: MarketQuoteRow[] }>("/admin/market/quotes"),
+          api.get<{ recommendations: AiRecRow[] }>("/admin/market/ai"),
         ]);
         setMarketListings(l.listings);
         setMarketRequests(req.requests);
         setMarketStats(st);
+        setMarketQuotes(q.quotes);
+        setAiRecs(ai.recommendations);
       } else {
         const r = await api.get<{ facilities: FacilityRow[] }>("/admin/facilities");
         setFacilities(r.facilities);
@@ -511,6 +537,49 @@ export default function Enablement() {
                       <Td><StatusBadge status={r.status} /></Td>
                       <Td>{r.requesterOrg?.name ?? "—"}</Td>
                       <Td>{r.quotes.length}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-slate-500 dark:text-slate-400">Quotes ({marketQuotes.length})</h3>
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 dark:bg-slate-800/60">
+                  <tr><Th>Amount</Th><Th>Status</Th><Th>Provider</Th><Th>Request</Th><Th>Actions</Th></tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {marketQuotes.map((q) => (
+                    <tr key={q.id}>
+                      <Td>{q.amount != null ? `${q.currency} ${q.amount.toLocaleString("en-IN")}` : "—"}</Td>
+                      <Td><StatusBadge status={q.status} /></Td>
+                      <Td>{q.providerOrg?.name ?? "—"}</Td>
+                      <Td>{q.request?.kind ?? "—"} · {q.request?.status ?? "—"}</Td>
+                      <Td>
+                        <ActionBtn label="Remove" tone="red" disabled={busy === `q:${q.id}`} onClick={() => run(`q:${q.id}`, () => api.request("DELETE", `/admin/market/quotes/${q.id}`))} />
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-slate-500 dark:text-slate-400">AI recommendations ({aiRecs.length})</h3>
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 dark:bg-slate-800/60">
+                  <tr><Th>Agent</Th><Th>Summary</Th><Th>Score</Th><Th>Status</Th></tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {aiRecs.map((a) => (
+                    <tr key={a.id}>
+                      <Td>{a.agent}</Td>
+                      <Td>{a.summary}</Td>
+                      <Td>{a.score != null ? a.score.toFixed(2) : "—"}</Td>
+                      <Td><StatusBadge status={a.status} /></Td>
                     </tr>
                   ))}
                 </tbody>
