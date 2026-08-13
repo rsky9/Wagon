@@ -25,6 +25,7 @@ const CATEGORY_TO_PREF: Record<string, keyof Omit<NotificationPreference, 'id' |
   docs: 'docExpiry',
   promo: 'promo',
   chat: 'trip',
+  market: 'market',
 }
 
 @Injectable()

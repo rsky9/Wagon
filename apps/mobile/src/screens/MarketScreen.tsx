@@ -84,6 +84,8 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
   const [carOrigin, setCarOrigin] = useState('')
   const [carDest, setCarDest] = useState('')
   const [carVessel, setCarVessel] = useState('')
+  const [carOriginSearch, setCarOriginSearch] = useState('')
+  const [carDestSearch, setCarDestSearch] = useState('')
   const [carSlots, setCarSlots] = useState('')
   const [carRate, setCarRate] = useState('')
 
@@ -99,7 +101,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
       api.get<{ listings: MarketListing[] }>(`/market/listings${qs}`),
       api.get<{ requests: MarketRequest[] }>('/market/requests'),
       api.get<{ requests: MineItem[] }>('/market/requests/mine').then((r) => setMine(r.requests)).catch(() => {}),
-      api.get<{ services: typeof carrierServices }>('/market/carrier-services').then((r) => setCarrierServices(r.services)).catch(() => {}),
+      api.get<{ services: typeof carrierServices }>(`/market/carrier-services${carOriginSearch || carDestSearch ? `?origin=${encodeURIComponent(carOriginSearch)}&destination=${encodeURIComponent(carDestSearch)}` : ''}`).then((r) => setCarrierServices(r.services)).catch(() => {}),
       api.get<{ listings: MarketListing[] }>('/market/listings/mine').then((r) => setMyListings(r.listings)).catch(() => {}),
       api.get<{ partners: typeof partners }>('/market/partners').then((r) => setPartners(r.partners)).catch(() => {}),
       api.get<{ recommendations: AiRec[] }>('/ai/recommendations/mine').then((r) => setAiRecs(r.recommendations)).catch(() => {}),
@@ -107,7 +109,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
     ]).then(([l, r]) => { setListings(l.listings); setRequests(r.requests) })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [filterKind, searchOrigin, searchDest])
+  }, [filterKind, searchOrigin, searchDest, carOriginSearch, carDestSearch])
   useEffect(() => { fetch() }, [fetch])
 
   const postListing = () => {
@@ -399,9 +401,15 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
           data={carrierServices}
           keyExtractor={(s) => s.id}
           ListHeaderComponent={
-            <Pressable style={[styles.actionBtn, { backgroundColor: '#8B5CF6', marginBottom: spacing.sm }]} onPress={recommendCarriers}>
-              <Text style={styles.actionText}>🤖 AI carrier picks</Text>
-            </Pressable>
+            <View style={{ gap: spacing.sm, marginBottom: spacing.sm }}>
+              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                <TextInput style={[styles.input, styles.half, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="From (port)" placeholderTextColor={theme.mutedForeground} value={carOriginSearch} onChangeText={setCarOriginSearch} />
+                <TextInput style={[styles.input, styles.half, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="To (port)" placeholderTextColor={theme.mutedForeground} value={carDestSearch} onChangeText={setCarDestSearch} />
+              </View>
+              <Pressable style={[styles.actionBtn, { backgroundColor: '#8B5CF6' }]} onPress={recommendCarriers}>
+                <Text style={styles.actionText}>🤖 AI carrier picks</Text>
+              </Pressable>
+            </View>
           }
           ListEmptyComponent={loading ? undefined : <EmptyState title="No carrier schedules" message="Carriers publish vessel/flight space here" icon="🚢" />}
           renderItem={({ item }) => (

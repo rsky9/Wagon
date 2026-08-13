@@ -687,6 +687,7 @@ model NotificationPreference {
   kyc         Boolean @default(true)
   docExpiry   Boolean @default(true)
   promo       Boolean @default(false)
+  market      Boolean @default(true)
   updatedAt   DateTime @updatedAt
 }
 

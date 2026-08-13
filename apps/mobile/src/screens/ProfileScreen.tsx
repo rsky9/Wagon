@@ -45,11 +45,22 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
   const { t } = useI18n()
   const { isDark, cycle } = useThemeMode()
   const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [trust, setTrust] = useState<{ rating: number | null; ratingCount: number; trips: number; completionRate: number | null; claims: number } | null>(null)
 
   useEffect(() => {
     api
       .get<{ profile: UserProfile }>('/auth/me')
       .then((res) => setProfile(res.profile))
+      .catch(() => {})
+    api
+      .get<{ organizations: { id: string }[] }>('/foundation/organizations')
+      .then((r) => {
+        if (r.organizations[0]) {
+          api.get<{ rating: number | null; ratingCount: number; trips: number; completionRate: number | null; claims: number }>(`/market/trust/${r.organizations[0].id}`)
+            .then((t) => setTrust(t))
+            .catch(() => {})
+        }
+      })
       .catch(() => {})
   }, [])
 
@@ -91,6 +102,24 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
             )}
           </View>
         </View>
+
+        {trust && (
+          <View style={[styles.trustPanel, { backgroundColor: 'rgba(249,115,22,0.08)', borderColor: '#F97316' }]}>
+            <Text style={[styles.trustTitle, { color: theme.foreground }]}>🏪 Your marketplace trust</Text>
+            <View style={styles.trustRow}>
+              <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>Rating</Text>
+              <Text style={{ color: theme.foreground, fontWeight: '800' }}>{trust.rating ? `★ ${trust.rating.toFixed(1)} (${trust.ratingCount})` : 'New'}</Text>
+            </View>
+            <View style={styles.trustRow}>
+              <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>Completion</Text>
+              <Text style={{ color: theme.foreground, fontWeight: '800' }}>{trust.completionRate != null ? `${trust.completionRate}%` : '—'}</Text>
+            </View>
+            <View style={styles.trustRow}>
+              <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>Trips</Text>
+              <Text style={{ color: theme.foreground, fontWeight: '800' }}>{trust.trips}</Text>
+            </View>
+          </View>
+        )}
 
         <Pressable style={[styles.row, { backgroundColor: theme.background, borderColor: theme.border }]} onPress={onOpenKyc}>
           <View style={styles.rowLeft}>
@@ -361,6 +390,9 @@ const styles = StyleSheet.create({
   name: { fontSize: 18, fontWeight: '700' },
   mobile: { fontSize: 14, marginTop: 1 },
   verified: { alignSelf: 'flex-start', borderRadius: radius.full, paddingHorizontal: spacing.sm, paddingVertical: 3, marginTop: 6 },
+  trustPanel: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, gap: spacing.sm, marginBottom: spacing.md },
+  trustTitle: { fontSize: 14, fontWeight: '800' },
+  trustRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
