@@ -52,6 +52,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
   const [partners, setPartners] = useState<Array<{ id: string; name: string; kind: string; baseUrl?: string | null; org?: { name: string; verified: boolean } | null }>>([])
   const [aiRecs, setAiRecs] = useState<AiRec[]>([])
   const [compareRequest, setCompareRequest] = useState<MarketRequest | null>(null)
+  const [myQuotes, setMyQuotes] = useState<Array<{ id: string; amount?: number | null; currency: string; etaHours?: number | null; status: string; request: { id: string; kind: string; originRef?: string | null; destinationRef?: string | null; requesterOrg?: { name: string } | null } }>>([])
 
   const canPublishCarrier = capabilities.includes('carrier')
 
@@ -102,6 +103,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
       api.get<{ listings: MarketListing[] }>('/market/listings/mine').then((r) => setMyListings(r.listings)).catch(() => {}),
       api.get<{ partners: typeof partners }>('/market/partners').then((r) => setPartners(r.partners)).catch(() => {}),
       api.get<{ recommendations: AiRec[] }>('/ai/recommendations/mine').then((r) => setAiRecs(r.recommendations)).catch(() => {}),
+      api.get<{ quotes: typeof myQuotes }>('/market/quotes/mine').then((r) => setMyQuotes(r.quotes)).catch(() => {}),
     ]).then(([l, r]) => { setListings(l.listings); setRequests(r.requests) })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -166,6 +168,22 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
   const acceptQuote = (q: MarketQuote) => {    setBusy(true)
     api.post(`/market/quotes/${q.id}/accept`)
       .then(() => { Alert.alert('Accepted', 'Request booked — settle the payment in Finance to release'); fetch() })
+      .catch((e) => Alert.alert('Error', e.message))
+      .finally(() => setBusy(false))
+  }
+
+  const rejectQuote = (q: MarketQuote) => {
+    setBusy(true)
+    api.post(`/market/quotes/${q.id}/reject`)
+      .then(() => { Alert.alert('Rejected', 'Quote rejected — others remain open'); fetch() })
+      .catch((e) => Alert.alert('Error', e.message))
+      .finally(() => setBusy(false))
+  }
+
+  const withdrawQuote = (quoteId: string) => {
+    setBusy(true)
+    api.post(`/market/quotes/${quoteId}/withdraw`)
+      .then(() => { Alert.alert('Withdrawn', 'Quote withdrawn'); fetch() })
       .catch((e) => Alert.alert('Error', e.message))
       .finally(() => setBusy(false))
   }
@@ -314,9 +332,14 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
                 <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>{q.status}</Text>
               </View>
               {q.status === 'submitted' && (
-                <Pressable style={[styles.smallBtn, { backgroundColor: theme.success }]} onPress={() => acceptQuote(q)}>
-                  <Text style={styles.actionText}>Accept</Text>
-                </Pressable>
+                <>
+                  <Pressable style={[styles.smallBtn, { backgroundColor: theme.success }]} onPress={() => acceptQuote(q)}>
+                    <Text style={styles.actionText}>Accept</Text>
+                  </Pressable>
+                  <Pressable style={[styles.smallBtn, { backgroundColor: theme.danger }]} onPress={() => rejectQuote(q)}>
+                    <Text style={styles.actionText}>Reject</Text>
+                  </Pressable>
+                </>
               )}
             </View>
           ))}
@@ -456,7 +479,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
       {tab === 'mine' && (
         <FlatList
           contentContainerStyle={styles.list}
-          data={[{ type: 'requests' as const }, { type: 'supply' as const }]}
+          data={[{ type: 'requests' as const }, { type: 'quotes' as const }, { type: 'supply' as const }]}
           keyExtractor={(i) => i.type}
           renderItem={({ item }) => item.type === 'requests' ? (
             <View style={styles.section}>
@@ -464,6 +487,28 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
               {mine.length === 0
                 ? <EmptyState title="No requests yet" message="Your requests and their quotes appear here" icon="📋" />
                 : mine.map((m) => renderRequest(m.request, true))}
+            </View>
+          ) : item.type === 'quotes' ? (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: theme.foreground }]}>My quotes ({myQuotes.length})</Text>
+              {myQuotes.length === 0
+                ? <EmptyState title="No quotes sent" message="Quotes you submit appear here" icon="🧾" />
+                : myQuotes.map((q) => (
+                  <View key={q.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    <View style={styles.cardTop}>
+                      <Text style={[styles.cardTitle, { color: theme.foreground }]}>{q.request.kind} · {q.amount != null ? `${q.currency} ${q.amount.toLocaleString('en-IN')}` : '—'}</Text>
+                      <Text style={[styles.chip, { color: q.status === 'submitted' ? theme.warning : theme.success, borderColor: q.status === 'submitted' ? theme.warning : theme.success }]}>{q.status}</Text>
+                    </View>
+                    <Text style={[styles.meta, { color: theme.mutedForeground }]}>
+                      {q.request.originRef ?? '—'} → {q.request.destinationRef ?? '—'} · {q.etaHours ?? '—'}h · {q.request.requesterOrg?.name ?? '—'}
+                    </Text>
+                    {q.status === 'submitted' && (
+                      <Pressable style={[styles.actionBtn, { backgroundColor: theme.danger }]} onPress={() => withdrawQuote(q.id)}>
+                        <Text style={styles.actionText}>Withdraw</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                ))}
             </View>
           ) : (
             <View style={styles.section}>

@@ -371,6 +371,8 @@ export class AdminService {
       before: { status: load.status },
       after: { status: updated.status, reason },
     })
+    // Keep the canonical Shipment in sync (mirrors ShipmentProjector.syncFromLoad).
+    await this.syncShipmentFromLoad(loadId, 'cancelled').catch(() => {})
     return { load: updated }
   }
 
@@ -388,6 +390,7 @@ export class AdminService {
       where: { id: trip.loadId },
       data: { status: 'delivered' },
     })
+    await this.syncShipmentFromLoad(trip.loadId, 'delivered').catch(() => {})
     await this.audit.log({
       actorId: actor.id,
       action: 'trip.force_complete',
@@ -914,5 +917,16 @@ export class AdminService {
       take: 100,
     })
     return { ratings }
+  }
+
+  /** Mirror an admin load-status change onto the canonical Shipment (parity with the projector). */
+  private async syncShipmentFromLoad(loadId: string, status: string) {
+    const shipment = await this.prisma.shipment.findFirst({ where: { ref: loadId } })
+    if (!shipment) return null
+    const map: Record<string, string> = { delivered: 'delivered', cancelled: 'cancelled', posted: 'planned', accepted: 'booked', in_transit: 'in_transit' }
+    const shipmentStatus = map[status] ?? shipment.status
+    await this.prisma.shipment.update({ where: { id: shipment.id }, data: { status: shipmentStatus as never } })
+    await this.prisma.shipmentLeg.updateMany({ where: { shipmentId: shipment.id, sequence: 1 }, data: { status: shipmentStatus as never } })
+    return shipment
   }
 }

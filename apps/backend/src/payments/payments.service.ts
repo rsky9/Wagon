@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException, Inject } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { NotificationsService } from '../notifications/notifications.service'
+import { OutboxRelay } from '../outbox/outbox-relay.service'
 import { PAYMENT_PROVIDER, PaymentProvider } from './payment-provider.service'
 import type { User } from '@prisma/client'
 
@@ -13,6 +14,7 @@ export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly outbox: OutboxRelay,
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
   ) {}
 
@@ -75,6 +77,17 @@ export class PaymentsService {
         category: 'payments',
       })
     }
+
+    // Canonical event: escrow captured.
+    await this.outbox.emit(await this.tx(), {
+      eventType: 'FINANCE',
+      eventCode: result.status === 'succeeded' ? 'ESCROW_CAPTURED' : 'ESCROW_FAILED',
+      entityType: 'trip',
+      entityId: trip.id,
+      shipmentId: await this.shipmentIdFor(trip.loadId),
+      actorId: user.id,
+      payload: { tripId, amount, providerRef: result.providerRef },
+    })
 
     return { payment, alreadyCaptured: false }
   }
@@ -165,6 +178,17 @@ export class PaymentsService {
         })
       }
     }
+
+    // Canonical event: payout released.
+    await this.outbox.emit(await this.tx(), {
+      eventType: 'FINANCE',
+      eventCode: 'PAYOUT_RELEASED',
+      entityType: 'trip',
+      entityId: tripId,
+      shipmentId: await this.shipmentIdFor(tripId),
+      actorId: user.id,
+      payload: { tripId, amount: payment.amount, providerRef: payment.providerRef },
+    })
 
     return { payment, alreadyPaid: false }
   }
@@ -299,5 +323,23 @@ export class PaymentsService {
 
   private async supplierId(user: User) {
     return (await this.prisma.supplier.findUnique({ where: { userId: user.id } }))?.id
+  }
+
+  /** Resolve the canonical shipment for a load/trip id. */
+  private async shipmentIdFor(ref: string) {
+    const s = await this.prisma.shipment.findFirst({ where: { ref } })
+    return s?.id ?? null
+  }
+
+  private async tx() {
+    const prisma = this.prisma
+    return {
+      logisticsEvent: {
+        create: (args: { data: Record<string, unknown> }) => prisma.logisticsEvent.create({ data: args.data as never }),
+      },
+      outboxMessage: {
+        create: (args: { data: Record<string, unknown> }) => prisma.outboxMessage.create({ data: args.data as never }),
+      },
+    }
   }
 }
