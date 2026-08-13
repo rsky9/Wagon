@@ -60,7 +60,6 @@ export class BiddingService {
     if (!input.amount || input.amount <= 0) throw new BadRequestException('Bid amount must be positive')
     const transporter = await this.transporterFor(user)
     if (!transporter) throw new BadRequestException('Complete transporter onboarding first')
-
     // Self-deal guard: a user with both capabilities must never haul their own load.
     const owner = await this.prisma.supplier.findUnique({
       where: { id: load.supplierId },
@@ -68,6 +67,11 @@ export class BiddingService {
     })
     if (owner && owner.userId === user.id) {
       throw new BadRequestException('You cannot bid on your own load')
+    }
+    // Trust gate: unverified transporters cannot bid (verified by admin).
+    const transporterUser = await this.prisma.user.findUnique({ where: { id: user.id }, select: { transporterVerified: true } })
+    if (!transporterUser?.transporterVerified) {
+      throw new BadRequestException('Complete KYC verification to start bidding')
     }
 
     const existing = await this.prisma.bid.findFirst({
@@ -355,6 +359,8 @@ export class BiddingService {
     const load = await this.loadFor(loadId)
     const transporter = await this.transporterFor(user)
     if (!transporter) throw new BadRequestException('Not a transporter')
+    const transporterUser = await this.prisma.user.findUnique({ where: { id: user.id }, select: { transporterVerified: true } })
+    if (!transporterUser?.transporterVerified) throw new BadRequestException('Complete KYC verification to confirm bookings')
     const bid = await this.prisma.bid.findUnique({ where: { id: bidId } })
     if (!bid || bid.loadId !== loadId) throw new NotFoundException('Bid not found')
     if (bid.transporterId !== transporter.id) throw new BadRequestException('Not your bid')

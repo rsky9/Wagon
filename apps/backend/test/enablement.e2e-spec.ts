@@ -86,6 +86,8 @@ describe('Enablement platform (e2e)', () => {
     supToken = await verify(SUP, await requestOtp(SUP))
     trToken = await verify(TR, await requestOtp(TR))
     admToken = await verify(ADM, await requestOtp(ADM))
+    // Ensure the demo transporter is KYC-verified so quote/bid gates pass.
+    await prisma.user.update({ where: { mobile: TR }, data: { transporterVerified: true, verified: true, kycStatus: 'approved' } })
   })
 
   afterAll(async () => {

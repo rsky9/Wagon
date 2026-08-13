@@ -90,6 +90,12 @@ describe('Wagon API (e2e)', () => {
       expect(supToken).toBeTruthy()
       expect(trToken).toBeTruthy()
       expect(admToken).toBeTruthy()
+      // Ensure the demo transporter passes the KYC-verified bid/accept gates.
+      await request(app.getHttpServer())
+        .post('/api/v1/admin/verify/' + (await request(app.getHttpServer()).get('/api/v1/admin/users?q=' + TR).set('Authorization', `Bearer ${admToken}`).expect(200)).body.users.find((u: { mobile: string }) => u.mobile === TR).id)
+        .set('Authorization', `Bearer ${admToken}`)
+        .send({ capability: 'transporter' })
+        .expect(201)
     })
 
     it('rejects an invalid OTP', async () => {

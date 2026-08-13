@@ -31,6 +31,10 @@ export class TripsService {
     if (!transporter) {
       throw new BadRequestException('Transporter profile not found — complete onboarding first')
     }
+    const transporterUser = await this.prisma.user.findUnique({ where: { id: user.id }, select: { transporterVerified: true } })
+    if (!transporterUser?.transporterVerified) {
+      throw new BadRequestException('Complete KYC verification to quote loads')
+    }
 
     // Self-deal guard: a user with both capabilities must never haul their own load.
     const owner = await this.prisma.supplier.findUnique({ where: { id: load.supplierId }, select: { userId: true } })
@@ -68,6 +72,10 @@ export class TripsService {
     const transporter = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
     if (!transporter) {
       throw new BadRequestException('Transporter profile not found — complete onboarding first')
+    }
+    const transporterUser = await this.prisma.user.findUnique({ where: { id: user.id }, select: { transporterVerified: true } })
+    if (!transporterUser?.transporterVerified) {
+      throw new BadRequestException('Complete KYC verification to accept loads')
     }
 
     // Self-deal guard: a user with both capabilities must never haul their own load.

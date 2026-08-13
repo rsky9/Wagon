@@ -258,6 +258,7 @@ model Truck {
   truckNo      String
   type         TruckType
   modelId      String
+  model        TruckModel @relation(fields: [modelId], references: [id])
   capacityId   String?
   driverId     String?
   driver       Driver?   @relation(fields: [driverId], references: [id])
@@ -286,6 +287,7 @@ model TruckModel {
   capacities Float[]
   status     Boolean     @default(true)
   rateCards  RateCard[]
+  trucks     Truck[]
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
   @@unique([type, model])

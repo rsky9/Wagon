@@ -78,6 +78,7 @@ async function main() {
       tier: 'kyc_full',
       kycStatus: 'approved',
       verified: true,
+      transporterVerified: true,
       transporter: {
         create: {
           pan: 'XYZDE1234F',

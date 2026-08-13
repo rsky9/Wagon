@@ -224,7 +224,10 @@ export class LoadsService {
     if (isTransporter) {
       const transporter = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
       if (transporter) {
-        const fleet = await this.prisma.truck.findMany({ where: { transporterId: transporter.id } })
+        const fleet = await this.prisma.truck.findMany({
+          where: { transporterId: transporter.id },
+          include: { model: true },
+        })
         enriched = items.map((l) => ({ ...l, matchScore: this.computeMatchScore(l, fleet) }))
       }
     }
@@ -236,10 +239,18 @@ export class LoadsService {
    * Smart matching: 0-100 score based on truck type match, capacity fit,
    * route compatibility (pickup near truck origin) and historical acceptance.
    */
-  private computeMatchScore(load: { truckType: string; weight: number }, fleet: { type: string; weight?: number | null }[]) {
+  private computeMatchScore(
+    load: { truckType: string; weight: number },
+    fleet: { type: string; model?: { capacities: number[] } | null }[],
+  ) {
     if (fleet.length === 0) return 40 // no fleet yet — neutral
     const typeMatches = fleet.some((t) => t.type === load.truckType)
-    const capacityOk = fleet.some((t) => (t.weight ?? 0) >= load.weight)
+    // Real capacity: the max tonnage across the truck model's capacities.
+    const capacityOk = fleet.some((t) => {
+      const caps = t.model?.capacities ?? []
+      const maxT = caps.length ? Math.max(...caps) : 0
+      return maxT >= load.weight
+    })
     let score = 0
     if (typeMatches) score += 35
     if (capacityOk) score += 35
