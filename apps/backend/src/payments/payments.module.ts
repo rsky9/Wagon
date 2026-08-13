@@ -5,6 +5,7 @@ import { PaymentsService } from './payments.service'
 import { MockPaymentProvider, PAYMENT_PROVIDER } from './payment-provider.service'
 import { RazorpayPaymentProvider } from './razorpay-payment-provider.service'
 import { NotificationsModule } from '../notifications/notifications.module'
+import { OutboxModule } from '../outbox/outbox.module'
 
 const PaymentProviderFactory = {
   provide: PAYMENT_PROVIDER,
@@ -19,7 +20,7 @@ const PaymentProviderFactory = {
 }
 
 @Module({
-  imports: [NotificationsModule],
+  imports: [NotificationsModule, OutboxModule],
   controllers: [PaymentsController],
   providers: [PaymentsService, PaymentProviderFactory],
   exports: [PaymentsService, PaymentProviderFactory, PAYMENT_PROVIDER],
