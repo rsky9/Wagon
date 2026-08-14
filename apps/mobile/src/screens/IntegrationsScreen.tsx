@@ -17,6 +17,7 @@ export function IntegrationsScreen({ onBack }: Props) {
   const [tab, setTab] = useState<Tab>('webhooks')
   const [webhooks, setWebhooks] = useState<WebhookSubscription[]>([])
   const [connectors, setConnectors] = useState<IntegrationConnector[]>([])
+  const [catalog, setCatalog] = useState<Array<{ kind: string; name: string; description: string; protocol: string }>>([])
   const [deliveries, setDeliveries] = useState<WebhookDelivery[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -31,6 +32,7 @@ export function IntegrationsScreen({ onBack }: Props) {
     Promise.all([
       api.get<{ webhooks: WebhookSubscription[] }>('/integrations/webhooks').then((r) => setWebhooks(r.webhooks)).catch(() => {}),
       api.get<{ connectors: IntegrationConnector[] }>('/integrations/connectors').then((r) => setConnectors(r.connectors)).catch(() => {}),
+      api.get<{ connectors: Array<{ kind: string; name: string; description: string; protocol: string }> }>('/integrations/catalog').then((r) => setCatalog(r.connectors)).catch(() => {}),
       api.get<{ deliveries: WebhookDelivery[] }>('/integrations/deliveries').then((r) => setDeliveries(r.deliveries)).catch(() => {}),
     ]).finally(() => setLoading(false))
   }, [])
@@ -76,6 +78,14 @@ export function IntegrationsScreen({ onBack }: Props) {
     setBusy(true)
     api.patch(`/integrations/connectors/${c.id}/status`, { status: c.status === 'active' ? 'disabled' : 'active' })
       .then(() => fetch())
+      .catch((e) => Alert.alert('Error', e.message))
+      .finally(() => setBusy(false))
+  }
+
+  const installConnector = (kind: string) => {
+    setBusy(true)
+    api.post('/integrations/connectors/install', { kind })
+      .then(() => { Alert.alert('Installed', `${kind} connector connected`); fetch() })
       .catch((e) => Alert.alert('Error', e.message))
       .finally(() => setBusy(false))
   }
@@ -128,7 +138,26 @@ export function IntegrationsScreen({ onBack }: Props) {
           contentContainerStyle={styles.list}
           data={connectors}
           keyExtractor={(c) => c.id}
-          ListEmptyComponent={loading ? undefined : <EmptyState title="No connectors" message="Connect your ERP/TMS/carrier systems" icon="🔌" />}
+          ListHeaderComponent={
+            <>
+              <Text style={[styles.sectionTitle, { color: theme.foreground }]}>Connector marketplace</Text>
+              <Text style={[styles.meta, { color: theme.mutedForeground }]}>Install a ready connector for your ERP/TMS/carrier stack.</Text>
+              {catalog.map((c) => (
+                <View key={c.kind} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                  <View style={styles.cardTop}>
+                    <Text style={[styles.cardTitle, { color: theme.foreground }]}>{c.name}</Text>
+                    <Text style={[styles.chip, { color: '#3B82F6', borderColor: '#3B82F6' }]}>{c.protocol}</Text>
+                  </View>
+                  <Text style={[styles.meta, { color: theme.mutedForeground }]}>{c.description}</Text>
+                  <Pressable style={[styles.smallBtn, { backgroundColor: '#F97316', alignSelf: 'flex-start', marginTop: spacing.sm }]} onPress={() => installConnector(c.kind)}>
+                    <Text style={styles.actionText}>Install</Text>
+                  </Pressable>
+                </View>
+              ))}
+              <Text style={[styles.sectionTitle, { color: theme.foreground, marginTop: spacing.lg }]}>Connected ({connectors.length})</Text>
+            </>
+          }
+          ListEmptyComponent={loading ? undefined : <EmptyState title="No connectors yet" message="Install one from the marketplace above" icon="🔌" />}
           renderItem={({ item }) => (
             <View key={item.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <View style={styles.cardTop}>
@@ -190,6 +219,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1 },
   title: { fontSize: 20, fontWeight: '800' },
+  sectionTitle: { fontSize: 14, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   tabs: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md },
   tabBtn: { flex: 1, borderRadius: radius.md, padding: spacing.sm, alignItems: 'center', backgroundColor: 'rgba(128,128,128,0.1)' },
   list: { padding: spacing.lg, gap: spacing.md },

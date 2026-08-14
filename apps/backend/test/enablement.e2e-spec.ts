@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing'
 import { INestApplication, ValidationPipe } from '@nestjs/common'
 import request from 'supertest'
 import helmet from 'helmet'
+import { createServer, Server } from 'node:http'
 import { AppModule } from '../src/app.module'
 import { REDIS } from '../src/redis/redis.module'
 import { PrismaService } from '../src/prisma/prisma.service'
@@ -301,6 +302,64 @@ describe('Enablement platform (e2e)', () => {
       await api(supToken).post(`/integrations/webhooks/${webhookId}/test`).expect(201)
       const rotated = await api(supToken).post(`/integrations/webhooks/${webhookId}/rotate-secret`).expect(201)
       expect(rotated.body.secret.length).toBe(64)
+    })
+
+    it('surfaces the connector marketplace and installs from catalog', async () => {
+      const cat = await api(supToken).get('/integrations/catalog').expect(200)
+      const kinds = cat.body.connectors.map((c: { kind: string }) => c.kind)
+      expect(kinds).toEqual(expect.arrayContaining(['tms', 'erp', 'carrier_api', 'tracking', 'customs']))
+      expect(Array.isArray(cat.body.events)).toBe(true)
+      // Installing an unknown kind is rejected.
+      await api(supToken).post('/integrations/connectors/install', { kind: 'blockchain' }).expect(400)
+      // Install the tracking connector from the catalog, then sync + disable.
+      const installed = await api(supToken).post('/integrations/connectors/install', { kind: 'tracking', config: { webhookUrl: 'https://telematics.example/push' } }).expect(201)
+      expect(installed.body.connector.kind).toBe('tracking')
+      expect(installed.body.connector.status).toBe('active')
+      const cid = installed.body.connector.id
+      const synced = await api(supToken).post(`/integrations/connectors/${cid}/sync`).expect(201)
+      expect(synced.body.syncedAt).toBeTruthy()
+      const disabled = await api(supToken).patch(`/integrations/connectors/${cid}/status`, { status: 'disabled' }).expect(200)
+      expect(disabled.body.connector.status).toBe('disabled')
+      // A plain manual connector still works.
+      const manual = await api(supToken).post('/integrations/connectors', { kind: 'erp', name: 'MyERP', baseUrl: 'https://erp.example.com' }).expect(201)
+      expect(manual.body.connector.name).toBe('MyERP')
+    })
+
+    it('delivers a webhook to a live HTTP receiver over the outbox relay', async () => {
+      // Local receiver to prove end-to-end fan-out (dev allows localhost).
+      const received: string[] = []
+      const receiver: Server = createServer((req, res) => {
+        let body = ''
+        req.on('data', (c) => (body += c))
+        req.on('end', () => {
+          received.push(body)
+          res.writeHead(200, { 'content-type': 'application/json' })
+          res.end(JSON.stringify({ ok: true }))
+        })
+      })
+      await new Promise<void>((resolve) => receiver.listen(0, '127.0.0.1', resolve))
+      const port = (receiver.address() as { port: number }).port
+      const url = `http://localhost:${port}/hook`
+
+      const wh = await api(supToken).post('/integrations/webhooks', { name: 'live', url, eventTypes: ['SHIPMENT_CREATED'] }).expect(201)
+      // Trigger the event via the outbox (same org: sup's primary org).
+      await api(supToken).post('/foundation/shipments', { commodity: 'HookE2E', weightKg: 500 }).expect(201)
+
+      // The relay publishes -> dispatcher fans out on a 1.5s loop.
+      let deliveries = []
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 500))
+        const list = await api(supToken).get(`/integrations/webhooks/${wh.body.webhook.id}/deliveries`).expect(200)
+        deliveries = list.body.deliveries
+        if (deliveries.some((d: { status: string }) => d.status === 'sent')) break
+      }
+      expect(deliveries.some((d: { status: string }) => d.status === 'sent')).toBe(true)
+      expect(received.length).toBeGreaterThan(0)
+      const parsed = JSON.parse(received[0]!)
+      expect(parsed.event).toBe('SHIPMENT_CREATED')
+      expect(parsed.data).toBeTruthy()
+      expect(parsed.timestamp).toBeTruthy()
+      receiver.close()
     })
   })
 

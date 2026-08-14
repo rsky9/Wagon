@@ -9,6 +9,75 @@ import type { User } from '@prisma/client'
 const CONNECTOR_KINDS = ['tms', 'erp', 'carrier_api', 'tracking', 'customs']
 const SSRF_BLOCKED = ['127.0.0.1', '::1', '0.0.0.0', '169.254.169.254', 'metadata.google.internal', '[::1]']
 
+/** Connector marketplace: discoverable connector definitions any org can install. */
+export interface ConnectorDefinition {
+  kind: string
+  name: string
+  description: string
+  protocol: string
+  capabilities: string[]
+  configSchema: string[]
+}
+
+export const CONNECTOR_CATALOG: ConnectorDefinition[] = [
+  {
+    kind: 'tms',
+    name: 'Transport Management System',
+    description: 'Exchange loads, trips and POD status with your TMS',
+    protocol: 'REST + webhooks',
+    capabilities: ['load.sync', 'trip.status', 'pod.receive'],
+    configSchema: ['baseUrl', 'apiKeyRef'],
+  },
+  {
+    kind: 'erp',
+    name: 'ERP / Finance',
+    description: 'Sync invoices, settlements and GST data to your ERP',
+    protocol: 'REST + webhooks',
+    capabilities: ['invoice.sync', 'settlement.sync', 'gst.report'],
+    configSchema: ['baseUrl', 'apiKeyRef'],
+  },
+  {
+    kind: 'carrier_api',
+    name: 'Carrier API',
+    description: 'Book and track with partner carrier APIs (ocean/air/rail)',
+    protocol: 'REST / EDI-X12',
+    capabilities: ['booking.create', 'tracking.poll', 'rate.fetch'],
+    configSchema: ['baseUrl', 'apiKeyRef', 'ediProfile'],
+  },
+  {
+    kind: 'tracking',
+    name: 'IoT / Telematics',
+    description: 'Receive GPS and telematics events from fleet devices',
+    protocol: 'webhook / MQTT bridge',
+    capabilities: ['gps.ingest', 'temp.sensor', 'device.events'],
+    configSchema: ['webhookUrl', 'tokenRef'],
+  },
+  {
+    kind: 'customs',
+    name: 'Customs / EDI',
+    description: 'File declarations and exchange documents with customs brokers',
+    protocol: 'SFTP / EDIFACT',
+    capabilities: ['declaration.file', 'document.exchange', 'status.webhook'],
+    configSchema: ['sftpHost', 'sftpUser', 'keyRef', 'brokerRef'],
+  },
+]
+
+/** The event catalog every webhook subscription can choose from. */
+export const WEBHOOK_EVENT_CATALOG: Array<{ code: string; label: string; source: string }> = [
+  { code: 'SHIPMENT_CREATED', label: 'Shipment created', source: 'foundation' },
+  { code: 'PLAN_PROPOSED', label: 'Plan proposed', source: 'planning' },
+  { code: 'PLAN_SELECTED', label: 'Plan selected', source: 'planning' },
+  { code: 'LEG_DEPARTED', label: 'Leg departed', source: 'foundation' },
+  { code: 'LEG_ARRIVED', label: 'Leg arrived', source: 'foundation' },
+  { code: 'LEG_FAILED', label: 'Leg failed', source: 'foundation' },
+  { code: 'LOAD_CREATED', label: 'Load created', source: 'loads' },
+  { code: 'BOOKING_CONFIRMED', label: 'Carrier booking confirmed', source: 'forwarding' },
+  { code: 'CLAIM_FILED', label: 'Claim filed', source: 'finance' },
+  { code: 'SETTLEMENT_PAID', label: 'Settlement paid', source: 'finance' },
+  { code: 'AI_RECOMMENDED', label: 'AI recommendation', source: 'ai' },
+  { code: 'AI_DECIDED', label: 'AI decision', source: 'ai' },
+]
+
 @Injectable()
 export class IntegrationsService {
   constructor(
@@ -48,6 +117,24 @@ export class IntegrationsService {
       where: { organizationId: orgId, userId: user.id, role: { in: ['owner', 'admin'] } },
     })
     if (!member) throw new ForbiddenException('Requires owner/admin role in this organization')
+  }
+
+  /** Connector marketplace: list discoverable connector definitions + webhook event catalog. */
+  catalog() {
+    return { connectors: CONNECTOR_CATALOG, events: WEBHOOK_EVENT_CATALOG }
+  }
+
+  /** Install a connector from the marketplace (kind must exist in the catalog). */
+  async installConnector(input: { kind: string; name?: string; baseUrl?: string; apiKeyRef?: string; config?: unknown }, user: User) {
+    const definition = CONNECTOR_CATALOG.find((c) => c.kind === input.kind)
+    if (!definition) throw new BadRequestException(`Connector kind "${input.kind}" not in the marketplace`)
+    return this.createConnector({
+      kind: input.kind,
+      name: input.name?.trim() || definition.name,
+      baseUrl: input.baseUrl,
+      apiKeyRef: input.apiKeyRef,
+      config: input.config,
+    }, user)
   }
 
   async createConnector(input: { kind: string; name: string; baseUrl?: string; apiKeyRef?: string; config?: unknown }, user: User) {

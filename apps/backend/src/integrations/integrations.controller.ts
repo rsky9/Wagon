@@ -9,6 +9,16 @@ import type { User } from '@prisma/client'
 export class IntegrationsController {
   constructor(private readonly integrations: IntegrationsService) {}
 
+  @Get('catalog')
+  catalog(@CurrentUser() user: User) {
+    return this.integrations.catalog()
+  }
+
+  @Post('connectors/install')
+  installConnector(@Body() body: Record<string, unknown>, @CurrentUser() user: User) {
+    return this.integrations.installConnector(body as never, user)
+  }
+
   @Post('connectors')
   createConnector(@Body() body: Record<string, unknown>, @CurrentUser() user: User) {
     return this.integrations.createConnector(body as never, user)
