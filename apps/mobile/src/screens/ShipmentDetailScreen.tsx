@@ -98,6 +98,19 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
     ])
   }
 
+  const advanceContainer = (unit: CargoUnit) => {
+    const evts: Array<{ label: string; event: string }> = [
+      { label: 'Gate in', event: 'gated_in' },
+      { label: 'Loaded (STUF)', event: 'loaded' },
+      { label: 'Discharged (STRP)', event: 'discharged' },
+      { label: 'Returned (GTOT)', event: 'returned' },
+    ]
+    Alert.alert(`Container · ${unit.status}`, 'Advance container lifecycle', [
+      ...evts.map((e) => ({ text: e.label, onPress: () => action('container', () => api.post(`/foundation/cargo/${unit.id}/container`, { event: e.event }), 'Container updated') })),
+      { text: 'Cancel', style: 'cancel' },
+    ])
+  }
+
   if (loading || !shipment) {
     return <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 80 }}>Loading…</Text>
@@ -177,6 +190,11 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
             {!u.parent && (
               <Pressable style={[styles.smallBtn, { backgroundColor: '#8B5CF6', alignSelf: 'flex-start', marginTop: spacing.sm }]} onPress={() => splitCargo(u)}>
                 <Text style={styles.smallBtnText}>Split</Text>
+              </Pressable>
+            )}
+            {(u.kind === 'container' || u.kind === 'teu') && (
+              <Pressable style={[styles.smallBtn, { backgroundColor: '#2563EB', alignSelf: 'flex-start', marginTop: spacing.sm }]} onPress={() => advanceContainer(u)}>
+                <Text style={styles.smallBtnText}>Container ⚙️</Text>
               </Pressable>
             )}
           </View>

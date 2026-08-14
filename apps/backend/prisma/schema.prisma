@@ -904,7 +904,7 @@ model CargoUnit {
   parentId    String?   // split lineage: this unit came from a parent
   parent      CargoUnit? @relation("CargoSplit", fields: [parentId], references: [id], onDelete: SetNull)
   children    CargoUnit[] @relation("CargoSplit")
-  status      String   @default("created") // created | loaded | in_transit | delivered | consolidated | split
+  status      String   @default("created") // created | gate_in | loaded | in_transit | discharged | returned | delivered | consolidated | split
   locationRef String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

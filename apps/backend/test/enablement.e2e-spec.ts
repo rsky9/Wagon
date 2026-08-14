@@ -566,5 +566,32 @@ describe('Enablement platform (e2e)', () => {
       expect(arrived.body.leg.status).toBe('arrived')
       expect(arrived.body.leg.arrivedAt).toBeTruthy()
     })
+
+    it('runs the container lifecycle (gate-in → loaded → discharged → returned)', async () => {
+      const ship = await api(supToken).post('/foundation/shipments', { commodity: 'CtnE2E', weightKg: 8000 }).expect(201)
+      const sid = ship.body.shipment.id
+      const unit = await api(supToken).post(`/foundation/shipments/${sid}/cargo`, { kind: 'container', equipment: '40HC', weightKg: 8000 }).expect(201)
+      const cid = unit.body.unit.id
+
+      const gated = await api(supToken).post(`/foundation/cargo/${cid}/container`, { event: 'gated_in' }).expect(201)
+      expect(gated.body.unit.status).toBe('gate_in')
+      const loaded = await api(supToken).post(`/foundation/cargo/${cid}/container`, { event: 'loaded' }).expect(201)
+      expect(loaded.body.unit.status).toBe('loaded')
+      // loaded -> discharged directly is allowed; skip in_transit for brevity.
+      const discharged = await api(supToken).post(`/foundation/cargo/${cid}/container`, { event: 'discharged' }).expect(201)
+      expect(discharged.body.unit.status).toBe('discharged')
+      const returned = await api(supToken).post(`/foundation/cargo/${cid}/container`, { event: 'returned' }).expect(201)
+      expect(returned.body.unit.status).toBe('returned')
+      // Terminal: no further transitions.
+      await api(supToken).post(`/foundation/cargo/${cid}/container`, { event: 'returned' }).expect(400)
+      // Non-container units reject the container lifecycle.
+      const pkg = await api(supToken).post(`/foundation/shipments/${sid}/cargo`, { kind: 'package', weightKg: 10 }).expect(201)
+      await api(supToken).post(`/foundation/cargo/${pkg.body.unit.id}/container`, { event: 'gated_in' }).expect(400)
+      // Events were emitted (DCSA codes).
+      const events = await api(supToken).get(`/foundation/events?entityType=shipment&entityId=${sid}`).expect(200)
+      const codes = events.body.events.map((e: { eventCode: string }) => e.eventCode)
+      expect(codes).toContain('GTIN')
+      expect(codes).toContain('GTOT')
+    })
   })
 })

@@ -115,6 +115,11 @@ export class FoundationController {
     return this.foundation.updateCargoUnit(id, body, user)
   }
 
+  @Post('cargo/:id/container')
+  transitionContainer(@Param('id') id: string, @Body() body: { event: 'gated_in' | 'loaded' | 'discharged' | 'returned' }, @CurrentUser() user: User) {
+    return this.foundation.transitionContainer(id, body.event, user)
+  }
+
   // Events
   @Get('events')
   events(@Query('entityType') entityType: string | undefined, @Query('entityId') entityId: string | undefined, @Query('shipmentId') shipmentId: string | undefined, @CurrentUser() user: User) {

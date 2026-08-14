@@ -438,6 +438,57 @@ export class FoundationService {
     return { unit: updated }
   }
 
+  /**
+   * Container lifecycle (DCSA-aligned): gate_in -> loaded (STUF) ->
+   * in_transit (DEPA) -> discharged (STRP/DISC) -> returned (GTOT).
+   * Only container-kind units; each transition emits a CONT_* event.
+   */
+  async transitionContainer(unitId: string, event: 'gated_in' | 'loaded' | 'discharged' | 'returned', user: User) {
+    const unit = await this.prisma.cargoUnit.findUnique({
+      where: { id: unitId },
+      include: { shipment: { include: { ownerOrg: true } }, leg: true },
+    })
+    if (!unit) throw new NotFoundException('Cargo unit not found')
+    if (unit.kind !== 'container' && unit.kind !== 'teu') throw new BadRequestException('Only container-kind units have a container lifecycle')
+    if (!unit.shipment?.ownerOrgId || !(await this.orgAccess.isMember(user, unit.shipment.ownerOrgId))) {
+      throw new ForbiddenException('No access to this cargo unit')
+    }
+    const CONTAINER_FLOW: Record<string, string[]> = {
+      created: ['gate_in', 'loaded'],
+      gate_in: ['loaded'],
+      loaded: ['in_transit', 'discharged'],
+      in_transit: ['discharged'],
+      discharged: ['returned'],
+      returned: [],
+    }
+    const targets = CONTAINER_FLOW[unit.status] ?? []
+    const next: Record<string, string> = { gated_in: 'gate_in', loaded: 'loaded', discharged: 'discharged', returned: 'returned' }
+    const target = next[event]
+    if (!target || !targets.includes(target)) {
+      throw new BadRequestException(`Cannot ${event} a container in status ${unit.status}`)
+    }
+    const ts = new Date()
+    const data: Record<string, unknown> = { status: target, locationRef: unit.locationRef ?? unit.leg?.dropAddr ?? unit.shipment.destinationId ?? null }
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const changed = await tx.cargoUnit.update({ where: { id: unitId }, data: data as never })
+      const codes: Record<string, string> = { gate_in: 'GTIN', loaded: 'STUF', discharged: 'STRP', returned: 'GTOT' }
+      await this.outbox.emit(tx as never, {
+        eventType: 'EQUIPMENT',
+        eventCode: codes[target] ?? 'CONT_UPDATE',
+        entityType: 'shipment',
+        entityId: unit.shipmentId ?? '',
+        orgId: unit.shipment?.ownerOrgId ?? null,
+        shipmentId: unit.shipmentId,
+        legId: unit.legId,
+        actorId: user.id,
+        location: unit.leg?.dropAddr ?? undefined,
+        payload: { cargoUnit: unit.ref, unitStatus: target, at: ts.toISOString(), equipment: unit.equipment },
+      })
+      return changed
+    })
+    return { unit: updated }
+  }
+
   async listCargoUnits(shipmentId: string, user: User) {
     await this.orgAccess.assertShipmentAccess(user, shipmentId)
     const units = await this.prisma.cargoUnit.findMany({
