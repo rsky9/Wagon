@@ -207,6 +207,57 @@ export class FinanceService {
     return { policies }
   }
 
+  /** Expire an active policy (insurer or shipment owner). */
+  async expirePolicy(policyId: string, user: User) {
+    const policy = await this.prisma.insurancePolicy.findUnique({ where: { id: policyId }, include: { shipment: true } })
+    if (!policy) throw new NotFoundException('Policy not found')
+    const orgIds = await this.orgAccess.memberOrgIds(user)
+    const isInsurer = policy.insurerId ? orgIds.includes(policy.insurerId) : false
+    const isOwner = policy.shipment.ownerOrgId ? orgIds.includes(policy.shipment.ownerOrgId) : false
+    if (!isInsurer && !isOwner) throw new ForbiddenException('Not a party to this policy')
+    if (policy.status !== 'active') throw new BadRequestException(`Policy is already ${policy.status}`)
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const changed = await tx.insurancePolicy.update({ where: { id: policyId }, data: { status: 'expired' } })
+      await this.outbox.emit(tx as never, {
+        eventType: 'FINANCE',
+        eventCode: 'POLICY_EXPIRED',
+        entityType: 'shipment',
+        entityId: policy.shipmentId,
+        orgId: policy.shipment.ownerOrgId ?? policy.insurerId ?? null,
+        shipmentId: policy.shipmentId,
+        actorId: user.id,
+        payload: { policyRef: policy.policyRef },
+      })
+      return changed
+    })
+    return { policy: updated }
+  }
+
+  /** Claim coverage on an active policy (the shipment owner). */
+  async markPolicyClaimed(policyId: string, user: User) {
+    const policy = await this.prisma.insurancePolicy.findUnique({ where: { id: policyId }, include: { shipment: true } })
+    if (!policy) throw new NotFoundException('Policy not found')
+    if (!policy.shipment.ownerOrgId || !(await this.orgAccess.isMember(user, policy.shipment.ownerOrgId))) {
+      throw new ForbiddenException('Only the shipment owner can claim the policy')
+    }
+    if (policy.status !== 'active') throw new BadRequestException(`Only active policies can be claimed (current: ${policy.status})`)
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const changed = await tx.insurancePolicy.update({ where: { id: policyId }, data: { status: 'claimed' } })
+      await this.outbox.emit(tx as never, {
+        eventType: 'FINANCE',
+        eventCode: 'POLICY_CLAIMED',
+        entityType: 'shipment',
+        entityId: policy.shipmentId,
+        orgId: policy.shipment.ownerOrgId ?? null,
+        shipmentId: policy.shipmentId,
+        actorId: user.id,
+        payload: { policyRef: policy.policyRef },
+      })
+      return changed
+    })
+    return { policy: updated }
+  }
+
   // ---------- Settlements ----------
 
   async createSettlement(input: { shipmentId: string; payerId?: string; payeeId?: string; type: string; amount?: number; currency?: string }, user: User) {

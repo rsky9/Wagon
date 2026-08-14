@@ -227,6 +227,30 @@ describe('Enablement platform (e2e)', () => {
       expect(risk.body.assessment.band).toBeTruthy()
       expect(risk.body.assessment.score).toBeGreaterThan(0)
     })
+
+    it('runs the insurance policy lifecycle (issue → claim → expiry gates)', async () => {
+      // A carrier/other org underwrites a policy for the shipment owner (sup).
+      await api(supToken).post('/foundation/organizations', { name: 'E2E Insurer', kind: 'other' }).expect(201)
+      const policy = await api(supToken).post('/finance/policies', { shipmentId, policyRef: 'POL-E2E-1', premium: 5000, coverage: 200000 }).expect(201)
+      expect(policy.body.policy.status).toBe('active')
+      const pid = policy.body.policy.id
+
+      // The owner claims coverage; claiming twice is rejected.
+      const claimed = await api(supToken).post(`/finance/policies/${pid}/claim`).expect(201)
+      expect(claimed.body.policy.status).toBe('claimed')
+      await api(supToken).post(`/finance/policies/${pid}/claim`).expect(400)
+
+      // A fresh policy can be expired (by owner or insurer).
+      const p2 = await api(supToken).post('/finance/policies', { shipmentId, policyRef: 'POL-E2E-2', premium: 2000, coverage: 50000 }).expect(201)
+      const expired = await api(supToken).post(`/finance/policies/${p2.body.policy.id}/expire`).expect(201)
+      expect(expired.body.policy.status).toBe('expired')
+      await api(supToken).post(`/finance/policies/${p2.body.policy.id}/expire`).expect(400)
+      // A non-party (transporter) cannot touch the policy.
+      await api(trToken).post(`/finance/policies/${p2.body.policy.id}/expire`).expect(403)
+      // Cross-tenant policy list is empty.
+      const list = await api(trToken).get('/finance/policies').expect(200)
+      expect(list.body.policies.length).toBe(0)
+    })
   })
 
   describe('AI', () => {

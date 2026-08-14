@@ -39,6 +39,16 @@ export class FinanceController {
     return this.finance.listPolicies(user)
   }
 
+  @Post('policies/:id/expire')
+  expirePolicy(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.finance.expirePolicy(id, user)
+  }
+
+  @Post('policies/:id/claim')
+  markPolicyClaimed(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.finance.markPolicyClaimed(id, user)
+  }
+
   @Post('settlements')
   createSettlement(@Body() body: Record<string, unknown>, @CurrentUser() user: User) {
     return this.finance.createSettlement(body as never, user)
