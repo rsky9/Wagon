@@ -48,4 +48,9 @@ export class StorageController {
   cancel(@Param('id') id: string, @Body() body: { reason: string }, @CurrentUser() user: User) {
     return this.storage.cancel(id, body.reason, user)
   }
+
+  @Post('operations/:id/evidence')
+  recordEvidence(@Param('id') id: string, @Body() body: { note?: string; quantity?: number; bin?: string; dock?: string; photoKey?: string }, @CurrentUser() user: User) {
+    return this.storage.recordEvidence(id, body, user)
+  }
 }

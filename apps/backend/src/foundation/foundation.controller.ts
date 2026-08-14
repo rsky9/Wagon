@@ -82,8 +82,8 @@ export class FoundationController {
   }
 
   @Post('legs/:legId/transition')
-  legTransition(@Param('legId') legId: string, @Body() body: { event: 'departed' | 'arrived' }, @CurrentUser() user: User) {
-    return this.foundation.legTransition(legId, body.event, user)
+  legTransition(@Param('legId') legId: string, @Body() body: { event: 'departed' | 'arrived' | 'failed'; reason?: string }, @CurrentUser() user: User) {
+    return this.foundation.legTransition(legId, body.event, body.reason, user)
   }
 
   @Post('shipments/:id/cargo')

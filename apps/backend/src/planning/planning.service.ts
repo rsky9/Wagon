@@ -247,6 +247,43 @@ export class PlanningService {
     return { plan: newPlan, reroutedLeg: rerouted[failedLegIndex] }
   }
 
+  /**
+   * Auto re-plan when a physical leg fails: find the shipment's selected plan,
+   * map the failed leg's route to a plan leg, and emit a re_plan with a
+   * fallback mode. Keeps the original plan selected — the orderer still chooses.
+   */
+  async autoRePlanOnLegFailure(shipmentId: string, failedLegId: string, reason: string, user: User) {
+    const shipment = await this.prisma.shipment.findUnique({
+      where: { id: shipmentId },
+      include: { activePlan: true, legs: { orderBy: { sequence: 'asc' } } },
+    })
+    if (!shipment) throw new NotFoundException('Shipment not found')
+    const selected = shipment.activePlan
+    if (!selected || selected.status !== 'selected') return { plan: null, note: 'No selected plan to re-plan' }
+    if (selected.failedLegIndex != null) return { plan: null, note: 'Plan already re-planned' }
+
+    const failed = shipment.legs.find((l) => l.id === failedLegId)
+    if (!failed) throw new NotFoundException('Failed leg not found on shipment')
+    // Map the physical leg (by its route) onto the plan's leg array.
+    const planLegs = selected.legs as unknown as PlanLeg[]
+    const index = planLegs.findIndex(
+      (l) =>
+        (l.origin ?? '').toLowerCase() === (failed.pickupAddr ?? '').toLowerCase() &&
+        (l.destination ?? '').toLowerCase() === (failed.dropAddr ?? '').toLowerCase(),
+    )
+    if (index < 0) return { plan: null, note: 'Failed leg not found in selected plan' }
+
+    const failedLeg = planLegs[index]!
+    const fallback = {
+      ...failedLeg,
+      mode: failedLeg.mode === 'road' ? 'rail' : 'road',
+      cost: (failedLeg.cost ?? 0) > 0 ? Math.round((failedLeg.cost ?? 0) * 1.15) : undefined,
+      etaHours: (failedLeg.etaHours ?? 0) > 0 ? Math.round(((failedLeg.etaHours ?? 0) * 1.2) * 10) / 10 : undefined,
+      carrier: `fallback after ${reason}`,
+    }
+    return this.rePlan(selected.id, index, fallback, user)
+  }
+
   async detail(planId: string, user: User) {
     const { plan } = await this.requirePlanAccess(user, planId)
     const detail = await this.prisma.plan.findUnique({ where: { id: plan.id }, include: { shipment: true } })

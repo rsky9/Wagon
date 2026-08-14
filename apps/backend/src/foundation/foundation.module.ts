@@ -4,9 +4,10 @@ import { FoundationService } from './foundation.service'
 import { OutboxModule } from '../outbox/outbox.module'
 import { OrgAccessModule } from '../org-access/org-access.module'
 import { MarketModule } from '../market/market.module'
+import { PlanningModule } from '../planning/planning.module'
 
 @Module({
-  imports: [OutboxModule, OrgAccessModule, MarketModule],
+  imports: [OutboxModule, OrgAccessModule, MarketModule, PlanningModule],
   controllers: [FoundationController],
   providers: [FoundationService],
   exports: [FoundationService],

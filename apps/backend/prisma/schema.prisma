@@ -1035,11 +1035,14 @@ model WarehouseOperation {
   appointmentAt DateTime?
   gateInAt    DateTime?
   receivedAt  DateTime?
+  putAwayAt   DateTime?
   storedAt    DateTime?
   pickedAt    DateTime?
   stagedAt    DateTime?
   loadedAt    DateTime?
   gateOutAt   DateTime?
+  // Per-stage evidence: array of { stage, at, note, quantity?, bin?, dock?, photoKey?, operatorId }
+  evidence    Json?
   operatorId  String?
   operator    Organization? @relation(fields: [operatorId], references: [id])
   createdAt   DateTime @default(now())

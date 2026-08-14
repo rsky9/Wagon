@@ -13,6 +13,19 @@ import type { User } from '@prisma/client'
 
 const VALID_KINDS = ['warehouse', 'cold', 'bonded', 'cfs', 'icd', 'yard', 'cross_dock', 'transload']
 
+const STAGE_LABELS: Record<string, string> = {
+  appointment: 'appointment',
+  gate_in: 'gate-in',
+  receive: 'receive',
+  put_away: 'put-away',
+  stored: 'stored',
+  pick: 'pick',
+  stage: 'stage',
+  load: 'load',
+  gate_out: 'gate-out',
+  done: 'done',
+}
+
 const STATUS_FLOW: Record<string, string[]> = {
   appointment: ['gate_in'],
   gate_in: ['receive'],
@@ -164,13 +177,17 @@ export class StorageService {
     const data: Record<string, unknown> = { status: next }
     if (next === 'gate_in') data.gateInAt = ts
     if (next === 'receive') data.receivedAt = ts
-    if (next === 'put_away') data.storedAt = ts
+    if (next === 'put_away') data.putAwayAt = ts
+    if (next === 'stored') data.storedAt = ts
     if (next === 'pick') data.pickedAt = ts
     if (next === 'stage') data.stagedAt = ts
     if (next === 'load') data.loadedAt = ts
     if (next === 'gate_out') data.gateOutAt = ts
     const updated = await this.prisma.$transaction(async (tx) => {
-      const changed = await tx.warehouseOperation.update({ where: { id: opId }, data: data as never })
+      const changed = await tx.warehouseOperation.update({
+        where: { id: opId },
+        data: { ...data, evidence: [...((op.evidence as unknown as unknown[]) ?? []), { stage: next, at: ts.toISOString(), operatorId: user.id }] } as never,
+      })
       await this.outbox.emit(tx as never, {
         eventType: 'TRANSPORT',
         eventCode: next.toUpperCase().replace('_', ''),
@@ -179,7 +196,8 @@ export class StorageService {
         orgId: operator.id,
         shipmentId: op.shipmentId,
         actorId: user.id,
-        payload: { warehouseRef: op.ref },
+        location: op.facility.address,
+        payload: { warehouseRef: op.ref, stage: next, stageLabel: STAGE_LABELS[next] ?? next, at: ts.toISOString() },
       })
       return changed
     })
@@ -187,6 +205,28 @@ export class StorageService {
     if (next === 'done') {
       await this.market.autoRateFromWarehouseOp(updated, user).catch(() => {})
     }
+    return { operation: updated }
+  }
+
+  /** Attach operator evidence (note, quantity, bin/dock, photoKey) to the current stage. */
+  async recordEvidence(opId: string, input: { note?: string; quantity?: number; bin?: string; dock?: string; photoKey?: string }, user: User) {
+    const op = await this.prisma.warehouseOperation.findUnique({ where: { id: opId } })
+    if (!op) throw new NotFoundException('Operation not found')
+    const operator = await this.operatorOrg(user)
+    if (op.operatorId && op.operatorId !== operator.id) throw new ForbiddenException('Not the operator of this operation')
+    if (op.status === 'done' || op.status === 'cancelled') throw new BadRequestException(`Cannot record evidence on a ${op.status} operation`)
+    if (!input.note?.trim() && input.quantity == null) throw new BadRequestException('Evidence needs a note or quantity')
+    const evidence = [...((op.evidence as unknown as unknown[]) ?? []), {
+      stage: op.status,
+      at: new Date().toISOString(),
+      operatorId: user.id,
+      note: input.note?.trim(),
+      quantity: input.quantity,
+      bin: input.bin,
+      dock: input.dock,
+      photoKey: input.photoKey,
+    }]
+    const updated = await this.prisma.warehouseOperation.update({ where: { id: opId }, data: { evidence: evidence as never } })
     return { operation: updated }
   }
 

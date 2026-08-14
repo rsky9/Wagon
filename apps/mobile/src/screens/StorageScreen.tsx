@@ -61,6 +61,17 @@ export function StorageScreen({ onBack }: Props) {
     ])
   }
 
+  const recordEvidence = (opId: string) => {
+    Alert.prompt('Record evidence', 'Note (e.g. "48 pallets, bin A12")', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Save', onPress: (note?: string) => {
+        if (!note?.trim()) { Alert.alert('Note required'); return }
+        api.post(`/storage/operations/${opId}/evidence`, { note: note.trim() })
+          .then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
+      } },
+    ])
+  }
+
   const postTransportNeed = () => {
     Alert.prompt('Post transport need', 'Origin (city)', [
       { text: 'Cancel', style: 'cancel' },
@@ -138,11 +149,19 @@ export function StorageScreen({ onBack }: Props) {
                       <Text style={styles.advanceBtnText}>Advance →</Text>
                     </Pressable>
                     {op.status !== 'done' && op.status !== 'cancelled' && (
+                      <Pressable style={[styles.advanceBtn, styles.flexBtn, { backgroundColor: theme.mutedForeground }]} onPress={() => recordEvidence(op.id)}>
+                        <Text style={styles.advanceBtnText}>Evidence</Text>
+                      </Pressable>
+                    )}
+                    {op.status !== 'done' && op.status !== 'cancelled' && (
                       <Pressable style={[styles.advanceBtn, styles.flexBtn, { backgroundColor: theme.danger }]} onPress={() => cancelOp(op.id)}>
                         <Text style={styles.advanceBtnText}>Cancel</Text>
                       </Pressable>
                     )}
                   </View>
+                  {Array.isArray(op.evidence) && op.evidence.length > 0 && (
+                    <Text style={[styles.meta, { color: theme.mutedForeground }]}>📋 {op.evidence.length} evidence record(s)</Text>
+                  )}
                 </View>
               )))}
           </View>

@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { OutboxRelay } from '../outbox/outbox-relay.service'
 import { OrgAccessService } from '../org-access/org-access.service'
 import { MarketService } from '../market/market.service'
+import { PlanningService } from '../planning/planning.service'
 import type { User } from '@prisma/client'
 
 const VALID_KINDS = ['shipper', 'transporter', 'forwarder', 'warehouse', 'carrier', 'broker', 'other']
@@ -34,6 +35,7 @@ export class FoundationService {
     private readonly orgAccess: OrgAccessService,
     private readonly market: MarketService,
     @Inject(OutboxRelay) private readonly outbox: OutboxRelay,
+    @Inject(PlanningService) private readonly planning: PlanningService,
   ) {}
 
   // ---------- Organizations ----------
@@ -300,7 +302,8 @@ export class FoundationService {
     return { leg }
   }
 
-  /** Mark a leg departed or arrived (execution lifecycle on the canonical leg). */  async legTransition(legId: string, event: 'departed' | 'arrived', user: User) {
+  /** Mark a leg departed, arrived or failed (execution lifecycle on the canonical leg). */
+  async legTransition(legId: string, event: 'departed' | 'arrived' | 'failed', reason: string | undefined, user: User) {
     const leg = await this.prisma.shipmentLeg.findUnique({
       where: { id: legId },
       include: { shipment: true },
@@ -309,29 +312,42 @@ export class FoundationService {
     if (!leg.shipment.ownerOrgId || !(await this.orgAccess.isMember(user, leg.shipment.ownerOrgId))) {
       throw new ForbiddenException('No access to this leg')
     }
+    if (event === 'failed' && !reason?.trim()) throw new BadRequestException('Failure reason required')
+    if (leg.status === 'arrived' && event !== 'failed') throw new BadRequestException('Leg has already arrived')
     const ts = new Date()
     const data: Record<string, unknown> = {
-      status: event === 'departed' ? 'in_transit' : 'arrived',
+      status: event === 'departed' ? 'in_transit' : event === 'arrived' ? 'arrived' : 'failed',
     }
     if (event === 'departed') data.departedAt = ts
     if (event === 'arrived') data.arrivedAt = ts
     const updated = await this.prisma.$transaction(async (tx) => {
       const changed = await tx.shipmentLeg.update({ where: { id: legId }, data: data as never })
       await this.outbox.emit(tx as never, {
-        eventType: 'TRANSPORT',
-        eventCode: event === 'departed' ? 'LEG_DEPARTED' : 'LEG_ARRIVED',
+        eventType: 'EXCEPTION',
+        eventCode: event === 'failed' ? 'LEG_FAILED' : event === 'departed' ? 'LEG_DEPARTED' : 'LEG_ARRIVED',
         entityType: 'leg',
         entityId: legId,
         orgId: leg.shipment.ownerOrgId ?? null,
         shipmentId: leg.shipmentId,
         legId,
         actorId: user.id,
-        location: event === 'departed' ? leg.pickupAddr : leg.dropAddr,
-        payload: { mode: leg.mode, sequence: leg.sequence, at: ts.toISOString() },
+        location: event === 'failed' ? leg.pickupAddr ?? leg.dropAddr : event === 'departed' ? leg.pickupAddr : leg.dropAddr,
+        payload: {
+          mode: leg.mode,
+          sequence: leg.sequence,
+          at: ts.toISOString(),
+          ...(event === 'failed' ? { reason } : {}),
+        },
       })
       return changed
     })
-    return { leg: updated }
+    // Auto re-plan: a failed leg on the active plan should immediately surface an
+    // alternative. Original stays selected — the orderer decides.
+    let rePlan: unknown = undefined
+    if (event === 'failed') {
+      rePlan = await this.planning.autoRePlanOnLegFailure(leg.shipmentId, legId, reason ?? 'leg failed', user).catch(() => null)
+    }
+    return { leg: updated, rePlan }
   }
 
   /** Create a cargo unit on a shipment (or a leg). */

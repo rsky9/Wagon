@@ -177,6 +177,30 @@ describe('Enablement platform (e2e)', () => {
       }).expect(400)
       await api(supToken).post('/planning/plans', { shipmentId, legs: [{ mode: 'road', origin: 'A', destination: 'B', cost: 20000 }], cost: 5000 }).expect(400)
     })
+
+    it('auto re-plans when a physical leg of the selected plan fails', async () => {
+      // p1 (selected above) = road Mumbai→Mundra + ocean Mundra→Singapore.
+      // Its legs were materialized as ShipmentLeg rows by select(); find the road leg.
+      const shipDetail = await api(supToken).get(`/foundation/shipments/${shipmentId}`).expect(200)
+      const roadLeg = shipDetail.body.shipment.legs.find((l: { mode: string }) => l.mode === 'road')
+      expect(roadLeg).toBeTruthy()
+
+      const failed = await api(supToken).post(`/foundation/legs/${roadLeg.id}/transition`, { event: 'failed', reason: 'vehicle breakdown' }).expect(201)
+      expect(failed.body.leg.status).toBe('failed')
+      expect(failed.body.rePlan).toBeTruthy()
+      expect(failed.body.rePlan.plan.source).toBe('re_plan')
+      expect(failed.body.rePlan.plan.status).toBe('proposed')
+      // The re-plan replaces the road leg with a fallback (rail) at the same index.
+      const replanLegs = failed.body.rePlan.plan.legs as Array<{ mode: string; origin: string }>
+      expect(replanLegs[0].mode).toBe('rail')
+      expect(replanLegs[0].origin).toBe('Mumbai')
+
+      // The original selected plan is flagged with the failed leg index.
+      const orig = await api(supToken).get(`/planning/plans/${planId}`).expect(200)
+      expect(orig.body.plan.failedLegIndex).toBe(0)
+      // A failed leg without reason is rejected.
+      await api(supToken).post(`/foundation/legs/${roadLeg.id}/transition`, { event: 'failed' }).expect(400)
+    })
   })
 
   describe('Finance', () => {
@@ -255,6 +279,40 @@ describe('Enablement platform (e2e)', () => {
       expect(advanced.body.operation.status).toBe('gate_in')
       await api(trToken).post(`/storage/operations/${op.body.operation.id}/advance`).expect(403)
       await api(supToken).patch(`/storage/operations/${op.body.operation.id}/cancel`, { reason: 'test' }).expect(200)
+    })
+
+    it('runs the full warehouse chain to done with per-stage evidence', async () => {
+      const op = await api(supToken).post(`/storage/facilities/${facilityId}/operations`, { shipmentId }).expect(201)
+      const opId = op.body.operation.id
+      expect(op.body.operation.appointmentAt).toBeTruthy()
+
+      const stages = [
+        'gate_in', 'receive', 'put_away', 'stored', 'pick', 'stage', 'load', 'gate_out', 'done',
+      ]
+      let current: Record<string, any> = op.body.operation
+      for (const stage of stages) {
+        const res = await api(supToken).post(`/storage/operations/${opId}/advance`).expect(201)
+        current = res.body.operation
+        expect(current.status).toBe(stage)
+      }
+      // Timestamps are stamped on the correct transitions.
+      expect(current.gateInAt).toBeTruthy()
+      expect(current.receivedAt).toBeTruthy()
+      expect(current.putAwayAt).toBeTruthy()
+      expect(current.storedAt).toBeTruthy()
+      expect(current.pickedAt).toBeTruthy()
+      expect(current.stagedAt).toBeTruthy()
+      expect(current.loadedAt).toBeTruthy()
+      expect(current.gateOutAt).toBeTruthy()
+      // No further transition after done.
+      await api(supToken).post(`/storage/operations/${opId}/advance`).expect(400)
+
+      // Evidence can be recorded mid-flow but not on a completed op.
+      const mid = await api(supToken).post(`/storage/facilities/${facilityId}/operations`, { shipmentId }).expect(201)
+      const ev = await api(supToken).post(`/storage/operations/${mid.body.operation.id}/evidence`, { note: '48 pallets, bin A12', quantity: 48, bin: 'A12' }).expect(201)
+      expect(Array.isArray(ev.body.operation.evidence)).toBe(true)
+      expect(ev.body.operation.evidence[0].quantity).toBe(48)
+      await api(supToken).post(`/storage/operations/${opId}/evidence`, { note: 'too late' }).expect(400)
     })
   })
 

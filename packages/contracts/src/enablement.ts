@@ -187,6 +187,15 @@ export interface WarehouseOperation {
   status: string
   operatorId?: string | null
   appointmentAt?: string | null
+  gateInAt?: string | null
+  receivedAt?: string | null
+  putAwayAt?: string | null
+  storedAt?: string | null
+  pickedAt?: string | null
+  stagedAt?: string | null
+  loadedAt?: string | null
+  gateOutAt?: string | null
+  evidence?: Array<{ stage: string; at: string; operatorId?: string | null; note?: string | null; quantity?: number | null; bin?: string | null; dock?: string | null; photoKey?: string | null }> | null
   createdAt: string
 }
 
