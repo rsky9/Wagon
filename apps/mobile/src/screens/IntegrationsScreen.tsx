@@ -138,7 +138,7 @@ export function IntegrationsScreen({ onBack }: Props) {
           contentContainerStyle={styles.list}
           data={connectors}
           keyExtractor={(c) => c.id}
-          ListHeaderComponent={
+          ListHeaderComponent={() => (
             <>
               <Text style={[styles.sectionTitle, { color: theme.foreground }]}>Connector marketplace</Text>
               <Text style={[styles.meta, { color: theme.mutedForeground }]}>Install a ready connector for your ERP/TMS/carrier stack.</Text>
@@ -156,7 +156,7 @@ export function IntegrationsScreen({ onBack }: Props) {
               ))}
               <Text style={[styles.sectionTitle, { color: theme.foreground, marginTop: spacing.lg }]}>Connected ({connectors.length})</Text>
             </>
-          }
+          )}
           ListEmptyComponent={loading ? undefined : <EmptyState title="No connectors yet" message="Install one from the marketplace above" icon="🔌" />}
           renderItem={({ item }) => (
             <View key={item.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
