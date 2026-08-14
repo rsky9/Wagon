@@ -3,11 +3,21 @@ import { PrismaService } from '../prisma/prisma.service'
 import { PlanningService, PlanLeg } from '../planning/planning.service'
 import { OrgAccessService } from '../org-access/org-access.service'
 import { MarketService } from '../market/market.service'
+import { OutboxRelay } from '../outbox/outbox-relay.service'
 import type { User } from '@prisma/client'
 
 const MAX_OPTIONS = 50
 const VALID_MODES = ['road', 'rail', 'ocean', 'air', 'inland_water', 'multimodal']
 const VALID_PREFS = ['cheapest', 'fastest', 'balanced']
+
+const MODE_RISK: Record<string, number> = {
+  ocean: 0.18,
+  air: 0.12,
+  road: 0.05,
+  rail: 0.05,
+  inland_water: 0.1,
+  multimodal: 0.12,
+}
 
 export interface PlanOption extends PlanLeg {
   name?: string
@@ -27,7 +37,26 @@ export class AiService {
     private readonly orgAccess: OrgAccessService,
     private readonly market: MarketService,
     @Inject(PlanningService) private readonly planning: PlanningService,
+    @Inject(OutboxRelay) private readonly outbox: OutboxRelay,
   ) {}
+
+  /** Persist a recommendation + emit an AI_RECOMMENDED outbox event atomically. */
+  private async persist(entity: { type: string; id: string; orgId?: string | null }, data: Record<string, unknown>, actorId: string) {
+    const created = await this.prisma.$transaction(async (tx) => {
+      const rec = await tx.aiRecommendation.create({ data: data as never })
+      await this.outbox.emit(tx as never, {
+        eventType: 'AI',
+        eventCode: 'AI_RECOMMENDED',
+        entityType: entity.type,
+        entityId: entity.id,
+        orgId: entity.orgId ?? null,
+        actorId,
+        payload: { agent: data.agent, recommendationId: rec.id, summary: data.summary, score: data.score },
+      })
+      return rec
+    })
+    return created
+  }
 
   /** Validate options and constraints; clamp scores to [0,1]. */
   private validateInput(options: PlanOption[], constraints?: PlanConstraints) {
@@ -80,18 +109,20 @@ export class AiService {
       return true
     })
     if (!eligible.length) {
-      const recommendation = await this.prisma.aiRecommendation.create({
-        data: {
+      const recommendation = await this.persist(
+        { type: 'shipment', id: input.shipmentId, orgId: shipment.ownerOrgId },
+        {
           agent: 'plan',
           entityType: 'shipment',
           entityId: input.shipmentId,
           summary: 'No route satisfies constraints',
-          output: [] as never,
+          output: { matches: [] } as never,
           constraints: constraints as never,
-          guardrails: { reason: 'all options filtered by constraints' } as never,
+          guardrails: { reason: 'all options filtered by constraints', neverAutoExecutes: true } as never,
           createdBy: user.id,
         },
-      })
+        user.id,
+      )
       return { recommendation, plan: null, guardrails: recommendation.guardrails }
     }
 
@@ -116,24 +147,29 @@ export class AiService {
     )
 
     const summary = `Recommended ${best.mode} (${best.name ?? 'route'}) — ₹${top.cost}, ${top.eta}h`
-    const recommendation = await this.prisma.aiRecommendation.create({
-      data: {
+    const recommendation = await this.persist(
+      { type: 'shipment', id: input.shipmentId, orgId: shipment.ownerOrgId },
+      {
         agent: 'plan',
         entityType: 'shipment',
         entityId: input.shipmentId,
         summary,
         score: top.score,
-        output: ranked.map((r) => ({ mode: r.option.mode, cost: r.cost, eta: r.eta, score: r.score })) as never,
+        output: {
+          planId: plan.plan.id,
+          ranked: ranked.map((r) => ({ mode: r.option.mode, cost: r.cost, eta: r.eta, score: r.score })),
+        } as never,
         constraints: constraints as never,
         rationale: {
           preference: constraints.preference ?? 'balanced',
           filteredOut: input.options.length - eligible.length,
           whyBest: `highest ${constraints.preference ?? 'balanced'} score ${top.score.toFixed(2)}`,
         } as never,
-        guardrails: { neverAutoExecutes: true, humanMustSelect: true } as never,
+        guardrails: { neverAutoExecutes: true, humanMustSelect: true, disposeOnAccept: 'select_plan' } as never,
         createdBy: user.id,
       },
-    })
+      user.id,
+    )
     return { recommendation, plan: plan.plan, ranked: ranked.map((r) => ({ mode: r.option.mode, cost: r.cost, eta: r.eta, score: r.score })) }
   }
 
@@ -189,11 +225,35 @@ export class AiService {
         throw new ForbiddenException('Not your recommendation')
       }
     }
-    const updated = await this.prisma.aiRecommendation.update({
-      where: { id },
-      data: { status, guardrails: { ...(rec.guardrails as object | null), decidedBy: user.id, decidedAt: new Date().toISOString() } as never },
+
+    // Deterministic disposal: accepting a plan-agent recommendation selects the
+    // recommended plan (it was already validated + proposed). Human approved, code disposes.
+    let disposed: unknown = null
+    if (status === 'accepted' && rec.agent === 'plan') {
+      const out = rec.output as unknown as { planId?: string }
+      const guardrails = (rec.guardrails as Record<string, unknown> | null) ?? {}
+      if (out.planId && guardrails.disposeOnAccept === 'select_plan') {
+        disposed = await this.planning.select(out.planId, user)
+      }
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const changed = await tx.aiRecommendation.update({
+        where: { id },
+        data: { status, guardrails: { ...(rec.guardrails as object | null), decidedBy: user.id, decidedAt: new Date().toISOString() } as never },
+      })
+      await this.outbox.emit(tx as never, {
+        eventType: 'AI',
+        eventCode: 'AI_DECIDED',
+        entityType: rec.entityType,
+        entityId: rec.entityId,
+        orgId: null,
+        actorId: user.id,
+        payload: { recommendationId: rec.id, agent: rec.agent, status, disposed: disposed ? true : false },
+      })
+      return changed
     })
-    return { recommendation: updated }
+    return { recommendation: updated, disposed }
   }
 
   /**
@@ -266,6 +326,47 @@ export class AiService {
       },
     })
     return { recommendation, services: scored }
+  }
+
+  /**
+   * Risk agent: score the shipment's execution risk from mode, cargo value,
+   * weight and active-claim history. Deterministic, banded, informational only.
+   */
+  async assessRisk(shipmentId: string, user: User) {
+    const shipment = await this.orgAccess.assertShipmentAccess(user, shipmentId)
+    const legs = await this.prisma.shipmentLeg.findMany({ where: { shipmentId }, orderBy: { sequence: 'asc' } })
+    const activeClaims = await this.prisma.claim.count({ where: { shipmentId, status: { in: ['filed', 'assessed'] } } })
+
+    const modes = legs.length ? legs.map((l) => l.mode) : [shipment.mode || 'road']
+    const maxModeRisk = Math.max(...modes.map((m) => MODE_RISK[m] ?? 0.08))
+    const valueFactor = (shipment.value ?? 0) > 2_000_000 ? 0.2 : (shipment.value ?? 0) > 500_000 ? 0.1 : 0
+    const weightFactor = (shipment.weightKg ?? 0) > 20_000 ? 0.05 : 0
+    const claimFactor = Math.min(0.3, activeClaims * 0.1)
+    const score = this.clampScore(0.2 + maxModeRisk + valueFactor + weightFactor + claimFactor)
+    const band = score < 0.35 ? 'low' : score < 0.6 ? 'medium' : 'high'
+
+    const recommendation = await this.persist(
+      { type: 'shipment', id: shipmentId, orgId: shipment.ownerOrgId },
+      {
+        agent: 'risk',
+        entityType: 'shipment',
+        entityId: shipmentId,
+        summary: `Shipment risk ${band} (score ${score.toFixed(2)})`,
+        score,
+        output: { score, band, modes, activeClaims, riskScore: score } as never,
+        constraints: { shipmentId } as never,
+        rationale: {
+          mode: maxModeRisk,
+          value: valueFactor,
+          weight: weightFactor,
+          claims: claimFactor,
+        } as never,
+        guardrails: { informational: true, humanDecides: true, neverAutoExecutes: true } as never,
+        createdBy: user.id,
+      },
+      user.id,
+    )
+    return { recommendation, score, band, factors: { maxModeRisk, valueFactor, weightFactor, claimFactor } }
   }
 
   /**

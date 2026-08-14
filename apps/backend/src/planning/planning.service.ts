@@ -142,8 +142,9 @@ export class PlanningService {
         data: { activePlanId: plan.id, status: keepStatus, mode: planLegs[0]?.mode ?? 'multimodal' },
       })
       // Materialize the selected plan's legs as ShipmentLeg rows so the plan
-      // becomes executable operations (modes, route, cost, ETA).
-      await p.shipmentLeg.deleteMany({ where: { shipmentId: plan.shipmentId, status: 'planned' } })
+      // becomes executable operations (modes, route, cost, ETA). Clear prior
+      // planned AND failed legs (a failed leg is replaced by the new plan).
+      await p.shipmentLeg.deleteMany({ where: { shipmentId: plan.shipmentId, status: { in: ['planned', 'failed'] } } })
       for (let i = 0; i < planLegs.length; i++) {
         const leg = planLegs[i]!
         await p.shipmentLeg.create({

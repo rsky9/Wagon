@@ -241,6 +241,30 @@ describe('Enablement platform (e2e)', () => {
       const accepted = await api(supToken).patch(`/ai/recommendations/${rec.body.recommendation.id}/status`, { status: 'accepted' }).expect(200)
       expect(accepted.body.recommendation.status).toBe('accepted')
     })
+
+    it('accepting a plan recommendation disposes deterministically (auto-select)', async () => {
+      const rec = await api(supToken).post('/ai/plan', {
+        shipmentId,
+        options: [{ mode: 'air', origin: 'Mumbai', destination: 'Singapore', cost: 280000, etaHours: 12 }],
+      }).expect(201)
+      const planId = rec.body.recommendation.output.planId
+      expect(planId).toBeTruthy()
+      // Accept → deterministic code selects the recommended plan.
+      const accepted = await api(supToken).patch(`/ai/recommendations/${rec.body.recommendation.id}/status`, { status: 'accepted' }).expect(200)
+      expect(accepted.body.disposed).toBeTruthy()
+      const plan = await api(supToken).get(`/planning/plans/${planId}`).expect(200)
+      expect(plan.body.plan.status).toBe('selected')
+    })
+
+    it('runs the risk agent with a band and emits AI events', async () => {
+      const risk = await api(supToken).post(`/ai/risk/${shipmentId}`).expect(201)
+      expect(risk.body.score).toBeGreaterThan(0)
+      expect(['low', 'medium', 'high']).toContain(risk.body.band)
+      const rec = await api(supToken).get('/ai/recommendations?entityType=shipment&entityId=' + shipmentId + '&agent=risk').expect(200)
+      expect(rec.body.recommendations.some((r: { agent: string }) => r.agent === 'risk')).toBe(true)
+      const events = await api(supToken).get(`/foundation/events?entityType=shipment&entityId=${shipmentId}`).expect(200)
+      expect(events.body.events.some((e: { eventCode: string }) => e.eventCode === 'AI_RECOMMENDED')).toBe(true)
+    })
   })
 
   describe('Integrations', () => {
@@ -483,9 +507,9 @@ describe('Enablement platform (e2e)', () => {
 
     it('bridges transport request to classic load + quote withdraw/reject lifecycle', async () => {
       // Direct transport request also creates a Load in the classic feed.
-      const before = (await api(supToken).get('/loads').expect(200)).body.items.length
+      const before = (await api(supToken).get('/loads?pageSize=50').expect(200)).body.total
       await api(supToken).post('/market/requests', { kind: 'transport', originRef: 'E2ECity', destinationRef: 'E2EDrop', capacityNeeded: 3000 }).expect(201)
-      const after = (await api(supToken).get('/loads').expect(200)).body.items.length
+      const after = (await api(supToken).get('/loads?pageSize=50').expect(200)).body.total
       expect(after).toBeGreaterThan(before)
       // Quote lifecycle: provider withdraws -> request reverts; requester rejects.
       const req = await api(supToken).post('/market/requests', { kind: 'warehouse', city: 'E2ECity', capacityNeeded: 200, budget: 2000 }).expect(201)

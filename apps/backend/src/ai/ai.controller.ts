@@ -32,6 +32,11 @@ export class AiController {
     return this.ai.recommendCarrier(body, user)
   }
 
+  @Post('risk/:shipmentId')
+  assessRisk(@Param('shipmentId') shipmentId: string, @CurrentUser() user: User) {
+    return this.ai.assessRisk(shipmentId, user)
+  }
+
   @Post('invite/:loadId/:transporterId')
   inviteTransporter(@Param('loadId') loadId: string, @Param('transporterId') transporterId: string, @CurrentUser() user: User) {
     return this.ai.inviteTransporter(loadId, transporterId, user)
