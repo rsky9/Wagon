@@ -253,6 +253,31 @@ The marketplace evolved from a listing board into a capability graph + plan engi
 5. **Programmatic marketplace** — connectors get a machine credential (`apiKeyHash`, raw key shown once); `x-api-key`-guarded `/programmatic/market/*` lets an ERP/TMS post demand, decompose, and browse supply with no human app.
 6. **Risk/insurance as a tradable capability** — `POST /finance/plans/:id/cover-quote` prices a transparent risk-based premium per plan (mode + eta + declared value); `cover-accept` issues a real policy under a partner org.
 
+### 10.2 Delivered: operational hardening & trust (this branch)
+
+A full audit of the auth/verification, operational core, and mobile flows surfaced and fixed:
+
+**Step-up verification (re-OTP before money/identity moves):**
+- `POST /auth/actions/:action/request|verify` mints a short-lived, action-scoped token after a fresh OTP to the registered mobile (single-use, 5-attempt limit, throttled).
+- `ActionVerifiedGuard` enforces it. Gated: **payout release**, **account deletion** (escrow + booking confirm ready to gate).
+- **Payout now requires POD** (was releasing money with no proof of delivery).
+- **Pickup-OTP bypass closed** — the legacy status path now enforces pickup OTP before in-transit (matches the stage machine).
+- POD captures the real storage key + `POD_CAPTURED` event.
+
+**Session security:**
+- Refresh-token **rotation** with a `RefreshToken` table (hashed, per-session), reuse = theft signal, **device binding** (cross-device use revokes the family), `/auth/logout` revokes the device session.
+- Mobile sends a stable per-install deviceId; logout revokes server-side.
+
+**Role-aware Home:**
+- `/home/summary` now returns money (transporter pending/collected/wallet; supplier escrowPaid/wallet) + alerts (unread notifications, KYC pending, open exceptions, pending bookings, expiring truck docs).
+- Home surfaces a notifications bell with unread badge, a money strip per role, and real "Needs your attention" alerts.
+
+**Mobile flow fixes:**
+- Drivers get the full tab experience (Home/Marketplace/Trips/Finance/Account) instead of a 3-screen stack.
+- Notification deep-links route to any stack screen (no more silent no-ops).
+- Supplier "Responses" screen wired into My Loads (was unreachable).
+- Trips: single stage-based execution path.
+
 ---
 
 ## Research sources
