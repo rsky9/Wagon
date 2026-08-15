@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common'
 import { Throttle } from '@nestjs/throttler'
 import { AuthService } from './auth.service'
 import { TokenService } from './token.service'
@@ -30,8 +30,13 @@ export class AuthController {
   }
 
   @Post('refresh')
-  refresh(@Body() body: { refreshToken: string }) {
-    return this.tokens.refresh(body.refreshToken)
+  refresh(@Body() body: { refreshToken: string; deviceId?: string }, @Req() req: { headers: Record<string, string> }) {
+    return this.tokens.refresh(body.refreshToken, body.deviceId, req.headers['user-agent'])
+  }
+
+  @Post('logout')
+  logout(@Body() body: { refreshToken: string }) {
+    return this.tokens.revokeDevice(body.refreshToken)
   }
 
   @Get('me')

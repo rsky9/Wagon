@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { setAccessToken, setTokens } from './config'
+import { setAccessToken, setTokens, getRefreshToken, getDeviceId } from './config'
 import { api } from './config'
 import { registerForPushNotifications } from './push'
 
@@ -96,7 +96,8 @@ export const authActions = {
   verifyOtp: async (mobile: string, code: string) => {
     setState({ loading: true, error: null })
     try {
-      const res = await api.post<Session>('/auth/verify', { mobile, code })
+      const deviceId = await getDeviceId()
+      const res = await api.post<Session>('/auth/verify', { mobile, code, deviceId })
       persist(res)
       void registerForPushNotifications()
     } catch (e) {
@@ -107,6 +108,11 @@ export const authActions = {
   },
 
   logout: () => {
+    // Best-effort server-side revoke of this device's refresh session.
+    const refresh = getRefreshToken()
+    if (refresh) {
+      api.post('/auth/logout', { refreshToken: refresh }).catch(() => {})
+    }
     setAccessToken(null)
     setTokens(null, null)
     setState({ session: null, otpRequested: false, devCode: null, error: null })

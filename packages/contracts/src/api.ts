@@ -25,7 +25,7 @@ export interface ApiResponse<T> {
 export type SendOtpRequest = { mobile: string; channel?: 'sms' | 'whatsapp' }
 export type SendOtpResponse = { requestId: string; expiresIn: number }
 
-export type VerifyOtpRequest = { mobile: string; code: string; requestId: string }
+export type VerifyOtpRequest = { mobile: string; code: string; requestId: string; deviceId?: string; userAgent?: string }
 export type VerifyOtpResponse = {
   accessToken: string
   refreshToken: string

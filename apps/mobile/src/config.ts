@@ -28,8 +28,23 @@ export function setTokens(access: string | null, refresh: string | null) {
   refreshToken = refresh
 }
 
-function getRefreshToken() {
+export function getRefreshToken() {
   return refreshToken
+}
+
+const DEVICE_KEY = 'wagon_device_id'
+
+/** Stable per-install device identifier (binds refresh sessions to this device). */
+export async function getDeviceId(): Promise<string> {
+  try {
+    const existing = await AsyncStorage.getItem(DEVICE_KEY)
+    if (existing) return existing
+    const id = `dev_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`
+    await AsyncStorage.setItem(DEVICE_KEY, id)
+    return id
+  } catch {
+    return `dev_${Math.random().toString(36).slice(2)}`
+  }
 }
 
 /** Single-flight refresh so parallel 401s share one refresh call. */
@@ -44,7 +59,7 @@ async function refreshAccessToken(): Promise<boolean> {
         const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken: refresh }),
+          body: JSON.stringify({ refreshToken: refresh, deviceId: await getDeviceId() }),
         })
         if (!res.ok) {
           await AsyncStorage.removeItem(SESSION_KEY).catch(() => {})

@@ -71,7 +71,7 @@ export class AuthService {
     // Consume the OTP — single-use.
     await this.redis.del(key)
     const { user, isNewUser } = await this.upsertUserByMobile(input.mobile)
-    const { accessToken, refreshToken } = await this.tokens.issue(user)
+    const { accessToken, refreshToken } = await this.tokens.issue(user, input.deviceId, input.userAgent)
     return { accessToken, refreshToken, profile: user, isNewUser }
   }
 

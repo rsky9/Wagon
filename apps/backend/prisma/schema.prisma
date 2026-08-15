@@ -151,7 +151,24 @@ model User {
   disputesRaised Dispute[] @relation("RaisedBy")
   exceptionsReported TripException[]
   memberships  OrganizationMember[]
+  refreshTokens RefreshToken[]
   @@index([role])
+}
+
+/// Rotating refresh-token session: each refresh rotates the token, revoking the
+/// previous one, and binds the session to a device identifier.
+model RefreshToken {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash    String   @unique // sha256 of the refresh token (never store raw)
+  deviceId     String?
+  userAgent    String?
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  replacedById String?  @unique
+  createdAt    DateTime @default(now())
+  @@index([userId])
 }
 
 model Supplier {
