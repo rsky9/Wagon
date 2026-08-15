@@ -6,7 +6,7 @@ import { StatusChip, EmptyState, type StatusTone } from '@wagon/components'
 import { api } from '../config'
 import type { Load } from '@wagon/contracts'
 import { useI18n } from '@wagon/i18n'
-
+import { alertPrompt } from '../components/Prompt'
 interface Props {
   onBack: () => void
   onSelect: (load: Load) => void
@@ -32,7 +32,7 @@ export function SearchScreen({ onBack, onSelect, initialQuery }: Props) {
 
   const saveSearch = () => {
     if (!query.trim()) { Alert.alert(t('ui.nothingToSave'), 'Type a search first'); return }
-    Alert.prompt(t('ui.saveThisSearch'), 'Name it for quick access', [{ text: 'Cancel', style: 'cancel' }, { text: 'Save', onPress: (name?: string) => {
+    alertPrompt(t('ui.saveThisSearch'), 'Name it for quick access', [{ text: 'Cancel', style: 'cancel' }, { text: 'Save', onPress: (name?: string) => {
       api.post('/favorites/search', { name: name?.trim() || query.trim(), query: { q: query.trim() } })
         .then(() => Alert.alert(t('ui.saved'), 'Search saved — find it under Account → Saved'))
         .catch(() => Alert.alert(t('ui.error'), 'Failed to save'))

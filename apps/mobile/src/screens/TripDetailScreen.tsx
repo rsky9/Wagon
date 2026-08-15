@@ -14,7 +14,7 @@ import { StatusChip, Button, StatusStepper, type StatusTone } from '@wagon/compo
 import { api } from '../config'
 import type { Load } from '@wagon/contracts'
 import { useI18n } from '@wagon/i18n'
-
+import { alertPrompt } from '../components/Prompt'
 interface TripInfo {
   id: string
   status: string
@@ -127,7 +127,7 @@ export function TripDetailScreen({ loadId, onBack, onTrack, onOpenShipment }: Pr
   }
 
   const verifyOtp = (kind: 'pickup' | 'delivery') => {
-    Alert.prompt(`Enter ${kind} OTP`, `Ask the transporter for the ${kind} code`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Verify', onPress: (code?: string) => {
+    alertPrompt(`Enter ${kind} OTP`, `Ask the transporter for the ${kind} code`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Verify', onPress: (code?: string) => {
       api.post(`/trips/${trip.id}/otp/${kind}/verify`, { code: code ?? '' })
         .then(() => { Alert.alert(t('ui.verified'), `${kind} confirmed`); setTrip({ ...trip }) })
         .catch((e) => Alert.alert(t('ui.invalidAmount'), e instanceof Error ? e.message : 'Wrong code'))

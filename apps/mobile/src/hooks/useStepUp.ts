@@ -3,6 +3,7 @@ import { Alert, Platform } from 'react-native'
 import * as LocalAuthentication from 'expo-local-authentication'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { api } from '../config'
+import { prompt } from '../components/Prompt'
 
 export interface StepUpResult {
   actionToken: string | null
@@ -58,16 +59,12 @@ export function useStepUp(): StepUpResult {
 
       // Factor 2 (always): a fresh OTP to the registered mobile.
       const req = await api.post<{ devCode?: string }>(`/auth/actions/${action}/request`)
-      const code = await new Promise<string | null>((resolve) => {
-        Alert.prompt(
-          'Confirm it\u2019s you',
-          `Enter the verification code sent to your registered mobile (${action.replace(/_/g, ' ')}).`,
-          [
-            { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
-            { text: 'Verify', onPress: (value?: string) => resolve(value?.trim() ?? null) },
-          ],
-          'plain-text',
-        )
+      const code = await prompt({
+        title: 'Confirm it\u2019s you',
+        message: `Enter the verification code sent to your registered mobile (${action.replace(/_/g, ' ')}).`,
+        placeholder: '4-digit code',
+        confirmText: 'Verify',
+        keyboardType: 'numeric',
       })
       if (!code) return null
       const verified = await api.post<{ actionToken: string }>(`/auth/actions/${action}/verify`, { code })

@@ -70,6 +70,7 @@ import { IntegrationsScreen } from '../screens/IntegrationsScreen'
 import { SplashScreen, LanguageSelection, RoleSelection, CapabilitySelection } from '@wagon/components'
 import { AppLogo } from '../components/AppLogo'
 import { UnifiedTabs } from './UnifiedTabs'
+import { PromptHost } from '../components/Prompt'
 import { api } from '../config'
 import { setUpNotificationHandlers } from '../push'
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
@@ -744,6 +745,7 @@ export function MobileNavigator() {
                 <Stack.Screen name="Integrations" component={IntegrationsRoute} />
               </Stack.Navigator>
             </NavigationContainer>
+            <PromptHost />
           </ThemeContext.Provider>
         )}
       </SafeAreaProvider>

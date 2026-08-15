@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius } from '@wagon/design'
 import { api } from '../config'
 import type { Shipment, ShipmentLeg, Plan, ForwardOrder, CargoUnit } from '@wagon/contracts'
-
+import { alertPrompt } from '../components/Prompt'
 interface Detail extends Shipment {
   legs: ShipmentLeg[]
   plans: Plan[]
@@ -100,7 +100,7 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
   }
 
   const failLeg = (legId: string) => {
-    Alert.prompt('Fail leg', 'Reason (e.g. breakdown, customs hold)', [
+    alertPrompt('Fail leg', 'Reason (e.g. breakdown, customs hold)', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Fail + re-plan', onPress: (reason?: string) => {
         if (!reason?.trim()) { Alert.alert('Reason required'); return }
@@ -122,7 +122,7 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
   }
 
   const addCargo = () => {
-    Alert.prompt('Add cargo unit', 'Weight (kg)', [
+    alertPrompt('Add cargo unit', 'Weight (kg)', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Add', onPress: (w?: string) => {
         action('cargo', () => api.post(`/foundation/shipments/${shipmentId}/cargo`, { kind: 'package', weightKg: w ? Number(w) : undefined }), 'Cargo unit added')
@@ -131,7 +131,7 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
   }
 
   const splitCargo = (unit: CargoUnit) => {
-    Alert.prompt('Split cargo unit', 'Two parts (kg, e.g. 1000,2000)', [
+    alertPrompt('Split cargo unit', 'Two parts (kg, e.g. 1000,2000)', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Split', onPress: (parts?: string) => {
         const nums = (parts ?? '').split(',').map((p) => ({ weightKg: Number(p.trim()) })).filter((p) => p.weightKg > 0)

@@ -5,7 +5,7 @@ import { useTheme, spacing, radius } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
 import { api } from '../config'
 import type { Facility, WarehouseOperation } from '@wagon/contracts'
-
+import { alertPrompt } from '../components/Prompt'
 interface Props {
   onBack: () => void
 }
@@ -42,7 +42,7 @@ export function StorageScreen({ onBack }: Props) {
   }
 
   const startOperation = (facilityId: string) => {
-    Alert.prompt('Start operation', 'Shipment id (optional)', [
+    alertPrompt('Start operation', 'Shipment id (optional)', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Start', onPress: (shipmentId?: string) => {
         api.post(`/storage/facilities/${facilityId}/operations`, { shipmentId: shipmentId?.trim() || undefined })
@@ -52,7 +52,7 @@ export function StorageScreen({ onBack }: Props) {
   }
 
   const cancelOp = (opId: string) => {
-    Alert.prompt('Cancel operation', 'Reason', [
+    alertPrompt('Cancel operation', 'Reason', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Cancel operation', style: 'destructive', onPress: (reason?: string) => {
         api.patch(`/storage/operations/${opId}/cancel`, { reason: reason ?? 'cancelled' })
@@ -62,7 +62,7 @@ export function StorageScreen({ onBack }: Props) {
   }
 
   const recordEvidence = (opId: string) => {
-    Alert.prompt('Record evidence', 'Note (e.g. "48 pallets, bin A12")', [
+    alertPrompt('Record evidence', 'Note (e.g. "48 pallets, bin A12")', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Save', onPress: (note?: string) => {
         if (!note?.trim()) { Alert.alert('Note required'); return }
@@ -73,10 +73,10 @@ export function StorageScreen({ onBack }: Props) {
   }
 
   const postTransportNeed = () => {
-    Alert.prompt('Post transport need', 'Origin (city)', [
+    alertPrompt('Post transport need', 'Origin (city)', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Next', onPress: (origin?: string) => {
-        Alert.prompt('Destination (city)', 'Destination for the transport need', [
+        alertPrompt('Destination (city)', 'Destination for the transport need', [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Post', onPress: (dest?: string) => {
             api.post('/market/requests', { kind: 'transport', originRef: origin?.trim(), destinationRef: dest?.trim() })

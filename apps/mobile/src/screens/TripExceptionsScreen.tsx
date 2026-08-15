@@ -5,7 +5,7 @@ import { useTheme, spacing, radius } from '@wagon/design'
 import { Button, EmptyState, StatusChip, type StatusTone } from '@wagon/components'
 import { api } from '../config'
 import { useI18n } from '@wagon/i18n'
-
+import { alertPrompt } from '../components/Prompt'
 interface Exception {
   id: string
   kind: string
@@ -48,7 +48,7 @@ export function TripExceptionsScreen({ tripId, onBack }: Props) {
   useEffect(() => { fetch() }, [fetch])
 
   const report = (kind: string) => {
-    Alert.prompt(t('ui.describeIssue'), `Report ${kind.replace('_', ' ')}`, [{ text: 'Cancel', style: 'cancel' }, {
+    alertPrompt(t('ui.describeIssue'), `Report ${kind.replace('_', ' ')}`, [{ text: 'Cancel', style: 'cancel' }, {
       text: 'Report', onPress: (title?: string) => {
         if (!title?.trim()) { Alert.alert(t('ui.required'), 'Describe the issue'); return }
         setReporting(true)

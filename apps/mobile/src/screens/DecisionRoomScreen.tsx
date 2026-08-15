@@ -5,7 +5,7 @@ import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { EmptyState, StatusChip } from '@wagon/components'
 import { api } from '../config'
 import { useI18n } from '@wagon/i18n'
-
+import { alertPrompt } from '../components/Prompt'
 interface DecisionBid {
   id: string
   amount: number
@@ -67,7 +67,7 @@ export function DecisionRoomScreen({ loadId, onBack, onConfirmed, onNegotiate }:
   }
 
   const counter = (bidId: string, current: number) => {
-    Alert.prompt('Counteroffer', 'Enter your amount', [{ text: 'Cancel', style: 'cancel' }, { text: 'Send', onPress: (amount?: string) => {
+    alertPrompt('Counteroffer', 'Enter your amount', [{ text: 'Cancel', style: 'cancel' }, { text: 'Send', onPress: (amount?: string) => {
       const n = Number(amount ?? 0)
       if (!n || n <= 0) { Alert.alert(t('ui.invalidAmount'), 'Enter a positive amount'); return }
       api.post(`/bidding/bid/${bidId}/counter`, { amount: n }).then(() => fetch()).catch(() => Alert.alert(t('ui.error'), 'Failed to send'))

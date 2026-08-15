@@ -6,7 +6,7 @@ import { EmptyState } from '@wagon/components'
 import { api } from '../config'
 import { TrustBadge, LiveStateBadge, SectionHeader, MarketCard } from '../components/ui'
 import type { MarketListing, MarketRequest, MarketQuote } from '@wagon/contracts'
-
+import { alertPrompt } from '../components/Prompt'
 interface Props {
   onBack: () => void
   capabilities?: string[]
@@ -250,10 +250,10 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
   }
 
   const recommendCarriers = () => {
-    Alert.prompt('AI carrier pick', 'Origin (port/city)', [
+    alertPrompt('AI carrier pick', 'Origin (port/city)', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Next', onPress: (origin?: string) => {
-        Alert.prompt('Destination (port/city)', 'Where to?', [
+        alertPrompt('Destination (port/city)', 'Where to?', [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Recommend', onPress: (dest?: string) => {
             setBusy(true)
@@ -285,7 +285,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
   }
 
   const rateOrg = (l: MarketListing) => {
-    Alert.prompt('Rate this provider', `Score 1-5 for ${l.providerOrg?.name ?? 'provider'} (${KIND_LABEL[l.kind] ?? l.kind})`, [
+    alertPrompt('Rate this provider', `Score 1-5 for ${l.providerOrg?.name ?? 'provider'} (${KIND_LABEL[l.kind] ?? l.kind})`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Rate', onPress: (score?: string) => {
         const axis = ({ truck_capacity: 'transporter', warehouse_space: 'warehouse', carrier_service: 'carrier', forwarder_service: 'forwarder' } as Record<string, string>)[l.kind] ?? 'supplier'

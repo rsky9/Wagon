@@ -16,7 +16,7 @@ import { useAuth } from '../auth'
 import { useStepUp } from '../hooks/useStepUp'
 import type { Load } from '@wagon/contracts'
 import { useI18n } from '@wagon/i18n'
-
+import { alertPrompt } from '../components/Prompt'
 interface Props {
   load: Load
   onBack: () => void
@@ -72,7 +72,7 @@ export function LoadDetailScreen({ load, onBack, onAccepted, onOpenBid }: Props)
 
   const openBid = () => {
     if (onOpenBid) { onOpenBid(); return }
-    Alert.prompt(t('ui.submitBidQ'), `Enter your freight amount (reference: ${formatINR(load.fareEstimate)})`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Bid', onPress: (amount?: string) => {
+    alertPrompt(t('ui.submitBidQ'), `Enter your freight amount (reference: ${formatINR(load.fareEstimate)})`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Bid', onPress: (amount?: string) => {
       const n = Number(amount ?? 0)
       if (!n || n <= 0) { Alert.alert(t('ui.invalidAmount'), 'Enter a positive amount'); return }
       setLoading(true)

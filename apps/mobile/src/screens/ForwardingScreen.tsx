@@ -5,7 +5,7 @@ import { useTheme, spacing, radius } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
 import { api } from '../config'
 import type { ForwardOrder, Consolidation, Shipment } from '@wagon/contracts'
-
+import { alertPrompt } from '../components/Prompt'
 interface Props {
   onBack: () => void
   onOpenShipments: () => void
@@ -49,7 +49,7 @@ export function ForwardingScreen({ onBack, onOpenShipments }: Props) {
   }
 
   const setMargin = (orderId: string) => {
-    Alert.prompt('Set margin', 'Sell amount', [
+    alertPrompt('Set margin', 'Sell amount', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Set', onPress: (sell?: string) => {
         api.post(`/forwarding/orders/${orderId}/margin`, { buyAmount: orders.find((o) => o.id === orderId)?.buyAmount ?? 0, sellAmount: Number(sell) })
@@ -77,7 +77,7 @@ export function ForwardingScreen({ onBack, onOpenShipments }: Props) {
     api.get<{ services: Array<{ id: string; carrierOrg: { name: string } | null; vessel?: string | null; flight?: string | null; originRef?: string | null; destinationRef?: string | null; rate?: number | null; currency: string; availableSlots: number }> }>('/market/carrier-services')
       .then((res) => {
         if (res.services.length === 0) {
-          Alert.prompt('Book consolidation', 'Carrier org id', [
+          alertPrompt('Book consolidation', 'Carrier org id', [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Book', onPress: (cid?: string) => {
               api.post(`/forwarding/consolidations/${id}/book`, { carrierId: cid?.trim() })
@@ -90,7 +90,7 @@ export function ForwardingScreen({ onBack, onOpenShipments }: Props) {
         Alert.alert('Pick a carrier service', labels.join('\n'), [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Use carrier id', onPress: () => {
-            Alert.prompt('Book consolidation', 'Carrier org id', [
+            alertPrompt('Book consolidation', 'Carrier org id', [
               { text: 'Cancel', style: 'cancel' },
               { text: 'Book', onPress: (cid?: string) => {
                 api.post(`/forwarding/consolidations/${id}/book`, { carrierId: cid?.trim() })

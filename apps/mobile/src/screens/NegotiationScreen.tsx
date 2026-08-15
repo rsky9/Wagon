@@ -5,7 +5,7 @@ import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { Button, EmptyState, StatusChip, type StatusTone } from '@wagon/components'
 import { api } from '../config'
 import { useI18n } from '@wagon/i18n'
-
+import { alertPrompt } from '../components/Prompt'
 interface Offer {
   id: string
   fromRole: string
@@ -55,7 +55,7 @@ export function NegotiationScreen({ loadId, onBack }: Props) {
 
   const respond = (offer: Offer, action: 'accept' | 'reject' | 'counter') => {
     if (action === 'counter') {
-      Alert.prompt('Counteroffer', 'Enter amount, then conditions after a | (e.g. 39000 | pickup before 8:30 AM)', [{ text: 'Cancel', style: 'cancel' }, { text: 'Send', onPress: (raw?: string) => {
+      alertPrompt('Counteroffer', 'Enter amount, then conditions after a | (e.g. 39000 | pickup before 8:30 AM)', [{ text: 'Cancel', style: 'cancel' }, { text: 'Send', onPress: (raw?: string) => {
         const [amtPart, condPart] = (raw ?? '').split('|')
         const n = Number(amtPart?.trim() ?? 0)
         if (!n || n <= 0) { Alert.alert(t('ui.invalidAmount'), 'Enter a positive amount'); return }
