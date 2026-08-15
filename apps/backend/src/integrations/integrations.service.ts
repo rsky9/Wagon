@@ -1,5 +1,5 @@
-import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common'
-import { randomBytes } from 'node:crypto'
+import { Injectable, BadRequestException, NotFoundException, ForbiddenException, UnauthorizedException } from '@nestjs/common'
+import { createHash, randomBytes } from 'node:crypto'
 import { ConfigService } from '@nestjs/config'
 import { PrismaService } from '../prisma/prisma.service'
 import { OrgAccessService } from '../org-access/org-access.service'
@@ -8,6 +8,11 @@ import type { User } from '@prisma/client'
 
 const CONNECTOR_KINDS = ['tms', 'erp', 'carrier_api', 'tracking', 'customs']
 const SSRF_BLOCKED = ['127.0.0.1', '::1', '0.0.0.0', '169.254.169.254', 'metadata.google.internal', '[::1]']
+
+/** HMAC-style sha256 hex for machine credential verification (not reversible). */
+export function sha256(input: string) {
+  return createHash('sha256').update(input).digest('hex')
+}
 
 /** Connector marketplace: discoverable connector definitions any org can install. */
 export interface ConnectorDefinition {
@@ -137,11 +142,18 @@ export class IntegrationsService {
     }, user)
   }
 
-  async createConnector(input: { kind: string; name: string; baseUrl?: string; apiKeyRef?: string; config?: unknown }, user: User) {
+  async createConnector(input: { kind: string; name: string; baseUrl?: string; apiKeyRef?: string; config?: unknown; generateKey?: boolean }, user: User) {
     const org = await this.orgAccess.primaryOrg(user)
     await this.assertOrgAdmin(user, org.id)
     if (!CONNECTOR_KINDS.includes(input.kind)) throw new BadRequestException('Invalid connector kind')
     if (!input.name?.trim()) throw new BadRequestException('Connector name required')
+    // Optional machine credential for the programmatic marketplace.
+    let apiKeyHash: string | undefined
+    let apiKey: string | undefined
+    if (input.generateKey) {
+      apiKey = `wgn_${randomBytes(24).toString('base64url')}`
+      apiKeyHash = sha256(apiKey)
+    }
     const connector = await this.prisma.integrationConnector.create({
       data: {
         orgId: org.id,
@@ -149,11 +161,22 @@ export class IntegrationsService {
         name: input.name.trim(),
         baseUrl: input.baseUrl,
         apiKeyRef: input.apiKeyRef,
+        apiKeyHash,
         config: input.config as never,
         status: 'active',
       },
     })
-    return { connector }
+    // Never leak the hash; return the raw key exactly once.
+    const { apiKeyHash: _hash, ...safe } = connector
+    return { connector: safe, ...(apiKey ? { apiKey, note: 'Store this key — it is shown only once. Authenticate programmatic calls with x-api-key.' } : {}) }
+  }
+
+  /** Resolve an active connector by its machine credential (programmatic calls). */
+  async verifyApiKey(apiKey: string): Promise<{ connectorId: string; orgId: string }> {
+    if (!apiKey) throw new UnauthorizedException('Missing x-api-key')
+    const connector = await this.prisma.integrationConnector.findUnique({ where: { apiKeyHash: sha256(apiKey) } })
+    if (!connector || connector.status !== 'active') throw new UnauthorizedException('Invalid or disabled API key')
+    return { connectorId: connector.id, orgId: connector.orgId }
   }
 
   async listConnectors(user: User) {

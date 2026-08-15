@@ -1110,6 +1110,9 @@ model IntegrationConnector {
   name       String
   baseUrl    String?
   apiKeyRef  String?  // reference to a stored secret; never store the key itself
+  // HMAC hash of the machine credential for the programmatic marketplace.
+  // The raw key is shown once at creation. Requests authenticate with x-api-key.
+  apiKeyHash String?  @unique
   config     Json?
   status     String   @default("active") // active | disabled
   lastSyncAt DateTime?

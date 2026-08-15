@@ -759,5 +759,36 @@ describe('Enablement platform (e2e)', () => {
       expect(legs[0].cost).toBe(19000)
       expect(legs[0].carrier).toBeTruthy()
     })
+
+    it('lets an ERP/TMS post demand programmatically via connector API key', async () => {
+      // The supplier creates a connector with a machine credential.
+      const conn = await api(supToken).post('/integrations/connectors', { kind: 'erp', name: 'Proc ERP', generateKey: true }).expect(201)
+      const apiKey = conn.body.apiKey
+      expect(apiKey).toMatch(/^wgn_/)
+      // The raw key is shown once; the hash is never exposed.
+      expect('apiKeyHash' in conn.body.connector).toBe(false)
+
+      // An external system posts demand with x-api-key (no user JWT).
+      const prog = (path: string, body?: unknown) =>
+        request(app.getHttpServer()).post(`/api/v1/programmatic/market${path}`).set('x-api-key', apiKey).send(body)
+
+      const posted = await prog('/requests', { kind: 'transport', originRef: 'ProgCity', destinationRef: 'ProgDrop', capacityNeeded: 4000, budget: 90000 }).expect(201)
+      expect(posted.body.request.kind).toBe('transport')
+      expect(posted.body.request.sourceType).toBe('programmatic')
+      // It appears in the org's own requests and in the open feed.
+      const mine = await api(supToken).get('/market/requests/mine').expect(200)
+      expect(mine.body.requests.some((r: { id: string }) => r.id === posted.body.request.id)).toBe(true)
+
+      // Programmatic decomposition with supply published for the lane.
+      await api(trToken).post('/market/listings', { kind: 'truck_capacity', originRef: 'ProgCity', destinationRef: 'ProgDrop', capacityAvailable: 5000, price: 30000 }).expect(201)
+      const dec = await prog(`/requests/${posted.body.request.id}/decompose`, {
+        legs: [{ origin: 'ProgCity', destination: 'ProgDrop', kind: 'transport' }],
+      }).expect(201)
+      expect(dec.body.unsatisfiable).toBe(false)
+      expect(dec.body.plan).toBeTruthy()
+
+      // A bad key is rejected.
+      await prog('/requests', { kind: 'transport' }).set('x-api-key', 'wgn_bogus').expect(401)
+    })
   })
 })

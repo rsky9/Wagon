@@ -47,6 +47,7 @@ import { AiModule } from './ai/ai.module'
 import { GlobalModule } from './global/global.module'
 import { OrgAccessModule } from './org-access/org-access.module'
 import { MarketModule } from './market/market.module'
+import { ProgrammaticMarketModule } from './market/programmatic/programmatic-market.module'
 
 @Module({
   imports: [
@@ -103,6 +104,7 @@ import { MarketModule } from './market/market.module'
     GlobalModule,
     OrgAccessModule,
     MarketModule,
+    ProgrammaticMarketModule,
   ],
   controllers: [AppController],
   providers: [
