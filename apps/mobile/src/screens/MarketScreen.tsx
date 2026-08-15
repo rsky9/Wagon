@@ -457,7 +457,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
           return (
             <Pressable key={k} style={[styles.catCard, active && styles.catActive, { backgroundColor: active ? '#F97316' : theme.card, borderColor: active ? '#F97316' : theme.border }]} onPress={() => setTab(k)}>
               <View style={[styles.catIcon, { backgroundColor: active ? 'rgba(255,255,255,0.25)' : 'rgba(249,115,22,0.12)' }]}>
-                <Text style={{ fontSize: 26 }}>{icon}</Text>
+                <Text style={{ fontSize: 22 }}>{icon}</Text>
               </View>
               <Text style={[styles.catLabel, { color: active ? '#fff' : theme.foreground }]} numberOfLines={1}>{label}</Text>
               <Text style={{ color: active ? 'rgba(255,255,255,0.85)' : theme.mutedForeground, fontSize: 12, fontWeight: '700' }}>
@@ -816,10 +816,10 @@ const styles = StyleSheet.create({
   publishBtn: { flex: 1, borderRadius: radius.lg, paddingVertical: spacing.md, alignItems: 'center' },
   publishBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
   catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-  catCard: { width: '31%', flexGrow: 1, borderRadius: radius.lg, borderWidth: 1, padding: spacing.md, gap: spacing.sm, alignItems: 'center' },
+  catCard: { width: '31%', flexGrow: 1, borderRadius: radius.lg, borderWidth: 1, padding: spacing.sm, gap: spacing.xs, alignItems: 'center' },
   catActive: { borderColor: '#F97316' },
-  catIcon: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
-  catLabel: { fontSize: 14, fontWeight: '800', textAlign: 'center' },
+  catIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  catLabel: { fontSize: 13, fontWeight: '800', textAlign: 'center' },
   filters: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, flexWrap: 'wrap' },
   filterChip: { borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderWidth: 1, borderColor: 'rgba(128,128,128,0.4)' },
   filterActive: { backgroundColor: '#F97316', borderColor: '#F97316' },
