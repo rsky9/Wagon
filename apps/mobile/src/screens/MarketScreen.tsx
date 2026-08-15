@@ -443,8 +443,8 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
         </Pressable>
       </View>
 
-      {/* Category bar */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} style={{ flexGrow: 0 }}>
+      {/* Category grid: 3 cards per row */}
+      <View style={styles.catGrid}>
         {([
           ['listings', 'Supply', '🏪'],
           ['requests', 'Demand', '📢'],
@@ -455,16 +455,18 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
         ] as [Tab, string, string][]).map(([k, label, icon]) => {
           const active = tab === k
           return (
-            <Pressable key={k} style={[styles.tabBtn, active && styles.tabActive]} onPress={() => setTab(k)}>
-              <Text style={{ fontSize: 15, opacity: active ? 1 : 0.7 }}>{icon}</Text>
-              <Text style={[styles.tabLabel, { color: active ? '#fff' : theme.foreground }]}>{label}</Text>
-              <View style={[styles.tabCount, { backgroundColor: active ? 'rgba(255,255,255,0.25)' : theme.muted }]}>
-                <Text style={{ color: active ? '#fff' : theme.mutedForeground, fontSize: 11, fontWeight: '800' }}>{counts[k] ?? 0}</Text>
+            <Pressable key={k} style={[styles.catCard, active && styles.catActive, { backgroundColor: active ? '#F97316' : theme.card, borderColor: active ? '#F97316' : theme.border }]} onPress={() => setTab(k)}>
+              <View style={[styles.catIcon, { backgroundColor: active ? 'rgba(255,255,255,0.25)' : 'rgba(249,115,22,0.12)' }]}>
+                <Text style={{ fontSize: 26 }}>{icon}</Text>
               </View>
+              <Text style={[styles.catLabel, { color: active ? '#fff' : theme.foreground }]} numberOfLines={1}>{label}</Text>
+              <Text style={{ color: active ? 'rgba(255,255,255,0.85)' : theme.mutedForeground, fontSize: 12, fontWeight: '700' }}>
+                {counts[k] ?? 0} {label === 'My market' ? 'items' : 'live'}
+              </Text>
             </Pressable>
           )
         })}
-      </ScrollView>
+      </View>
 
       {tab === 'listings' && (
         <>
@@ -813,11 +815,11 @@ const styles = StyleSheet.create({
   publishStrip: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1 },
   publishBtn: { flex: 1, borderRadius: radius.lg, paddingVertical: spacing.md, alignItems: 'center' },
   publishBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
-  tabs: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-  tabBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderRadius: radius.full, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: 'rgba(128,128,128,0.1)', borderWidth: 1, borderColor: 'rgba(128,128,128,0.2)' },
-  tabActive: { backgroundColor: '#F97316', borderColor: '#F97316' },
-  tabLabel: { fontSize: 13, fontWeight: '800' },
-  tabCount: { borderRadius: radius.full, paddingHorizontal: 7, paddingVertical: 1, minWidth: 20, alignItems: 'center' },
+  catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  catCard: { width: '31%', flexGrow: 1, borderRadius: radius.lg, borderWidth: 1, padding: spacing.md, gap: spacing.sm, alignItems: 'center' },
+  catActive: { borderColor: '#F97316' },
+  catIcon: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
+  catLabel: { fontSize: 14, fontWeight: '800', textAlign: 'center' },
   filters: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, flexWrap: 'wrap' },
   filterChip: { borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderWidth: 1, borderColor: 'rgba(128,128,128,0.4)' },
   filterActive: { backgroundColor: '#F97316', borderColor: '#F97316' },
