@@ -20,7 +20,9 @@ export function setUpNotificationHandlers(navigate: NavigateFn): void {
   if (handlersReady) return
   handlersReady = true
   Notifications.addNotificationResponseReceivedListener((response) => {
-    const url = response.notification.request.content.data?.url
+    const data = response.notification.request.content.data ?? {}
+    // The backend deep-links via `data.route` (a stack route or wagon:// URL).
+    const url = (data.route ?? data.url ?? '') as string
     if (typeof url === 'string' && url && navigateToUrl) {
       navigateToUrl(url)
     }

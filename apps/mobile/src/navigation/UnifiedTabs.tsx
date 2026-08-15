@@ -11,6 +11,7 @@ import { useLoadFilters } from '../filters'
 import { AppLogo } from '../components/AppLogo'
 import { RupeeIcon } from '../components/RupeeIcon'
 import { HomeCockpitScreen } from '../screens/HomeCockpitScreen'
+import { DriverHomeScreen } from '../screens/DriverHomeScreen'
 import { LoadFeedScreen } from '../screens/LoadFeedScreen'
 import { MarketScreen } from '../screens/MarketScreen'
 import { MyLoads } from '../screens/MyLoadsScreen'
@@ -103,6 +104,12 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
 
 function HomeTab({ navigation }: any) {
   const root = navigation.getParent()
+  const { session } = useAuth()
+  const caps = session?.profile.capabilities?.length ? session.profile.capabilities : [session?.profile.role ?? '']
+  const isDriverOnly = caps.includes('driver') && !caps.some((c) => c === 'supplier' || c === 'transporter')
+  if (isDriverOnly) {
+    return <DriverHomeScreen onOpenTrip={(tripId) => root?.navigate('TripExecute', { tripId })} />
+  }
   return (
     <HomeCockpitScreen
       onOpenLoad={(load) => root?.navigate('LoadDetail', { load })}

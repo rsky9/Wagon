@@ -79,7 +79,7 @@ import type { Load, LanguageCode } from '@wagon/contracts'
 export type RootStackParamList = {
   UnifiedTabs: undefined
   DriverHome: undefined
-  LoadDetail: { load: Load }
+  LoadDetail: { load: Load; id?: string }
   TripDetail: { loadId: string }
   Track: { tripId: string }
   Kyc: undefined
@@ -168,7 +168,11 @@ function navigateToUrl(nav: any, url: string, item?: { data?: { loadId?: string;
   }
   const m = url.match(/^wagon:\/\/(load|trip)\/(.+)$/)
   if (m && m[2]) {
-    nav.navigate('TripDetail', { loadId: m[2] })
+    if (m[1] === 'load') {
+      nav.navigate('LoadDetail', { id: m[2] } as never)
+    } else {
+      nav.navigate('TripDetail', { loadId: m[2] })
+    }
   } else if (url.endsWith('loads')) {
     nav.navigate('UnifiedTabs', { screen: 'Marketplace' } as never)
   } else if (url.endsWith('trips')) {
@@ -207,10 +211,26 @@ function LoadDetailRoute({ route, navigation }: NativeStackScreenProps<RootStack
   const load = route.params?.load
   const deepId = (route.params as { id?: string })?.id
   if (!load && deepId) {
-    return <TripDetailScreen loadId={deepId} onBack={() => navigation.goBack()} onTrack={(tripId) => navigation.navigate('Track', { tripId })} />
+    // Deep link by id: fetch the full load, then render the real detail screen.
+    return <LoadByIdScreen loadId={deepId} onBack={() => navigation.goBack()} onAccepted={() => navigation.navigate('UnifiedTabs', { screen: 'Trips' } as never)} onOpenBid={() => undefined} />
   }
   if (!load) return null
   return <LoadDetailScreen load={load} onBack={() => navigation.goBack()} onAccepted={() => navigation.navigate('UnifiedTabs', { screen: 'Trips' } as never)} onOpenBid={() => navigation.navigate('BidForm', { load })} />
+}
+
+function LoadByIdScreen({ loadId, onBack, onAccepted, onOpenBid }: { loadId: string; onBack: () => void; onAccepted: () => void; onOpenBid: () => void }) {
+  const [load, setLoad] = useState<Load | null>(null)
+  useEffect(() => {
+    api.get<{ load: Load }>(`/loads/${loadId}`).then((r) => setLoad(r.load)).catch(() => setLoad(null))
+  }, [loadId])
+  if (!load) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' }}>
+        <Text style={{ color: '#64748B', fontSize: 15 }}>{load === null ? 'Loading load…' : 'Load not found'}</Text>
+      </View>
+    )
+  }
+  return <LoadDetailScreen load={load} onBack={onBack} onAccepted={onAccepted} onOpenBid={onOpenBid} />
 }
 
 function TripDetailRoute({ route, navigation }: NativeStackScreenProps<RootStackParamList, 'TripDetail'>) {
