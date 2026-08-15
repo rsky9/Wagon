@@ -477,7 +477,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
               </Pressable>
             ))}
           </View>
-          <View style={{ flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md }}>
+          <View style={styles.searchRow}>
             <TextInput style={[styles.input, styles.half, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="From (city)" placeholderTextColor={theme.mutedForeground} value={searchOrigin} onChangeText={setSearchOrigin} />
             <TextInput style={[styles.input, styles.half, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="To (city)" placeholderTextColor={theme.mutedForeground} value={searchDest} onChangeText={setSearchDest} />
           </View>
@@ -660,54 +660,58 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
       {/* Publish listing modal */}
       <Modal visible={showListing} transparent animationType="slide">
         <View style={styles.modalWrap}>
-          <ScrollView style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.modalTitle, { color: theme.foreground }]}>Publish supply</Text>
-            <View style={styles.filters}>
-              {Object.keys(KIND_LABEL).map((k) => (
-                <Pressable key={k} style={[styles.filterChip, listKind === k && styles.filterActive]} onPress={() => setListKind(k)}>
-                  <Text style={{ color: listKind === k ? '#fff' : theme.foreground, fontSize: 12, fontWeight: '700' }}>{KIND_LABEL[k]}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Origin (city)" placeholderTextColor={theme.mutedForeground} value={listOrigin} onChangeText={setListOrigin} />
-            <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Destination (city)" placeholderTextColor={theme.mutedForeground} value={listDest} onChangeText={setListDest} />
-            <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Or city (e.g. Pune)" placeholderTextColor={theme.mutedForeground} value={listCity} onChangeText={setListCity} />
-            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-              <TextInput style={[styles.input, styles.half, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Capacity" placeholderTextColor={theme.mutedForeground} keyboardType="numeric" value={listCap} onChangeText={setListCap} />
-              <TextInput style={[styles.input, styles.half, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Price (₹)" placeholderTextColor={theme.mutedForeground} keyboardType="numeric" value={listPrice} onChangeText={setListPrice} />
-            </View>
-            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-              <Pressable style={[styles.modalBtn, { backgroundColor: theme.muted }]} onPress={() => setShowListing(false)}><Text style={{ color: theme.foreground, fontWeight: '700' }}>Cancel</Text></Pressable>
-              <Pressable style={[styles.modalBtn, { backgroundColor: '#F97316' }]} onPress={postListing} disabled={busy}><Text style={{ color: '#fff', fontWeight: '800' }}>{busy ? 'Publishing…' : 'Publish'}</Text></Pressable>
-            </View>
-          </ScrollView>
+          <View style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <ScrollView contentContainerStyle={styles.modalContent}>
+              <Text style={[styles.modalTitle, { color: theme.foreground }]}>Publish supply</Text>
+              <View style={styles.filters}>
+                {Object.keys(KIND_LABEL).map((k) => (
+                  <Pressable key={k} style={[styles.filterChip, listKind === k && styles.filterActive]} onPress={() => setListKind(k)}>
+                    <Text style={{ color: listKind === k ? '#fff' : theme.foreground, fontSize: 12, fontWeight: '700' }}>{KIND_LABEL[k]}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Origin (city)" placeholderTextColor={theme.mutedForeground} value={listOrigin} onChangeText={setListOrigin} />
+              <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Destination (city)" placeholderTextColor={theme.mutedForeground} value={listDest} onChangeText={setListDest} />
+              <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Or city (e.g. Pune)" placeholderTextColor={theme.mutedForeground} value={listCity} onChangeText={setListCity} />
+              <View style={{ flexDirection: 'row', gap: spacing.md }}>
+                <TextInput style={[styles.input, styles.half, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Capacity" placeholderTextColor={theme.mutedForeground} keyboardType="numeric" value={listCap} onChangeText={setListCap} />
+                <TextInput style={[styles.input, styles.half, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Price (₹)" placeholderTextColor={theme.mutedForeground} keyboardType="numeric" value={listPrice} onChangeText={setListPrice} />
+              </View>
+              <View style={{ flexDirection: 'row', gap: spacing.md }}>
+                <Pressable style={[styles.modalBtn, { backgroundColor: theme.muted }]} onPress={() => setShowListing(false)}><Text style={{ color: theme.foreground, fontWeight: '700' }}>Cancel</Text></Pressable>
+                <Pressable style={[styles.modalBtn, { backgroundColor: '#F97316' }]} onPress={postListing} disabled={busy}><Text style={{ color: '#fff', fontWeight: '800' }}>{busy ? 'Publishing…' : 'Publish'}</Text></Pressable>
+              </View>
+            </ScrollView>
+          </View>
         </View>
       </Modal>
 
       {/* Post request modal */}
       <Modal visible={showRequest} transparent animationType="slide">
         <View style={styles.modalWrap}>
-          <ScrollView style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.modalTitle, { color: theme.foreground }]}>Post a need</Text>
-            <View style={styles.filters}>
-              {REQ_KINDS.map((k) => (
-                <Pressable key={k} style={[styles.filterChip, reqKind === k && styles.filterActive]} onPress={() => setReqKind(k)}>
-                  <Text style={{ color: reqKind === k ? '#fff' : theme.foreground, fontSize: 12, fontWeight: '700' }}>{k}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Origin (city)" placeholderTextColor={theme.mutedForeground} value={reqOrigin} onChangeText={setReqOrigin} />
-            <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Destination (city)" placeholderTextColor={theme.mutedForeground} value={reqDest} onChangeText={setReqDest} />
-            <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Or city (e.g. Pune)" placeholderTextColor={theme.mutedForeground} value={reqCity} onChangeText={setReqCity} />
-            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-              <TextInput style={[styles.input, styles.half, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Capacity (kg)" placeholderTextColor={theme.mutedForeground} keyboardType="numeric" value={reqCap} onChangeText={setReqCap} />
-              <TextInput style={[styles.input, styles.half, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Budget (₹)" placeholderTextColor={theme.mutedForeground} keyboardType="numeric" value={reqBudget} onChangeText={setReqBudget} />
-            </View>
-            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-              <Pressable style={[styles.modalBtn, { backgroundColor: theme.muted }]} onPress={() => setShowRequest(false)}><Text style={{ color: theme.foreground, fontWeight: '700' }}>Cancel</Text></Pressable>
-              <Pressable style={[styles.modalBtn, { backgroundColor: '#F97316' }]} onPress={postRequest} disabled={busy}><Text style={{ color: '#fff', fontWeight: '800' }}>{busy ? 'Posting…' : 'Post'}</Text></Pressable>
-            </View>
-          </ScrollView>
+          <View style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <ScrollView contentContainerStyle={styles.modalContent}>
+              <Text style={[styles.modalTitle, { color: theme.foreground }]}>Post a need</Text>
+              <View style={styles.filters}>
+                {REQ_KINDS.map((k) => (
+                  <Pressable key={k} style={[styles.filterChip, reqKind === k && styles.filterActive]} onPress={() => setReqKind(k)}>
+                    <Text style={{ color: reqKind === k ? '#fff' : theme.foreground, fontSize: 12, fontWeight: '700' }}>{k}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Origin (city)" placeholderTextColor={theme.mutedForeground} value={reqOrigin} onChangeText={setReqOrigin} />
+              <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Destination (city)" placeholderTextColor={theme.mutedForeground} value={reqDest} onChangeText={setReqDest} />
+              <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Or city (e.g. Pune)" placeholderTextColor={theme.mutedForeground} value={reqCity} onChangeText={setReqCity} />
+              <View style={{ flexDirection: 'row', gap: spacing.md }}>
+                <TextInput style={[styles.input, styles.half, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Capacity (kg)" placeholderTextColor={theme.mutedForeground} keyboardType="numeric" value={reqCap} onChangeText={setReqCap} />
+                <TextInput style={[styles.input, styles.half, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Budget (₹)" placeholderTextColor={theme.mutedForeground} keyboardType="numeric" value={reqBudget} onChangeText={setReqBudget} />
+              </View>
+              <View style={{ flexDirection: 'row', gap: spacing.md }}>
+                <Pressable style={[styles.modalBtn, { backgroundColor: theme.muted }]} onPress={() => setShowRequest(false)}><Text style={{ color: theme.foreground, fontWeight: '700' }}>Cancel</Text></Pressable>
+                <Pressable style={[styles.modalBtn, { backgroundColor: '#F97316' }]} onPress={postRequest} disabled={busy}><Text style={{ color: '#fff', fontWeight: '800' }}>{busy ? 'Posting…' : 'Post'}</Text></Pressable>
+              </View>
+            </ScrollView>
+          </View>
         </View>
       </Modal>
 
@@ -820,9 +824,10 @@ const styles = StyleSheet.create({
   catActive: { borderColor: '#F97316' },
   catIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   catLabel: { fontSize: 13, fontWeight: '800', textAlign: 'center' },
-  filters: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, flexWrap: 'wrap' },
-  filterChip: { borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderWidth: 1, borderColor: 'rgba(128,128,128,0.4)' },
+  filters: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.lg, flexWrap: 'wrap', marginBottom: spacing.md },
+  filterChip: { borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderWidth: 1, borderColor: 'rgba(128,128,128,0.4)', marginBottom: spacing.xs },
   filterActive: { backgroundColor: '#F97316', borderColor: '#F97316' },
+  searchRow: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.lg, marginBottom: spacing.md },
   list: { padding: spacing.lg, gap: spacing.lg },
   cardMid: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: spacing.xs },
   providerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xs },
@@ -837,7 +842,8 @@ const styles = StyleSheet.create({
   smallBtn: { borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   quoteRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderTopWidth: 1, paddingTop: spacing.sm },
   modalWrap: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modal: { borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, borderTopWidth: 1, padding: spacing.xl, gap: spacing.sm, maxHeight: '88%' },
+  modal: { borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, borderTopWidth: 1, padding: spacing.xl, gap: spacing.md, maxHeight: '80%' },
+  modalContent: { gap: spacing.md },
   modalTitle: { fontSize: 18, fontWeight: '800' },
   input: { borderRadius: radius.md, borderWidth: 1, padding: spacing.md, fontSize: 14 },
   half: { flex: 1 },
