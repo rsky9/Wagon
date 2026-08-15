@@ -134,43 +134,43 @@ export function IntegrationsScreen({ onBack }: Props) {
       )}
 
       {tab === 'connectors' && (
-        <FlatList
-          contentContainerStyle={styles.list}
-          data={connectors}
-          keyExtractor={(c) => c.id}
-          ListHeaderComponent={() => (
-            <>
-              <Text style={[styles.sectionTitle, { color: theme.foreground }]}>Connector marketplace</Text>
-              <Text style={[styles.meta, { color: theme.mutedForeground }]}>Install a ready connector for your ERP/TMS/carrier stack.</Text>
-              {catalog.map((c) => (
-                <View key={c.kind} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                  <View style={styles.cardTop}>
-                    <Text style={[styles.cardTitle, { color: theme.foreground }]}>{c.name}</Text>
-                    <Text style={[styles.chip, { color: '#3B82F6', borderColor: '#3B82F6' }]}>{c.protocol}</Text>
-                  </View>
-                  <Text style={[styles.meta, { color: theme.mutedForeground }]}>{c.description}</Text>
-                  <Pressable style={[styles.smallBtn, { backgroundColor: '#F97316', alignSelf: 'flex-start', marginTop: spacing.sm }]} onPress={() => installConnector(c.kind)}>
-                    <Text style={styles.actionText}>Install</Text>
-                  </Pressable>
+        <ScrollView contentContainerStyle={styles.list}>
+          <Text style={[styles.sectionTitle, { color: theme.foreground }]}>Connector marketplace</Text>
+          <Text style={[styles.meta, { color: theme.mutedForeground }]}>Install a ready connector for your ERP/TMS/carrier stack.</Text>
+          {catalog.length === 0 && loading ? (
+            <Text style={{ color: theme.mutedForeground, textAlign: 'center', paddingVertical: 20 }}>Loading catalog…</Text>
+          ) : (
+            catalog.map((c) => (
+              <View key={c.kind} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <View style={styles.cardTop}>
+                  <Text style={[styles.cardTitle, { color: theme.foreground }]}>{c.name}</Text>
+                  <Text style={[styles.chip, { color: '#3B82F6', borderColor: '#3B82F6' }]}>{c.protocol}</Text>
                 </View>
-              ))}
-              <Text style={[styles.sectionTitle, { color: theme.foreground, marginTop: spacing.lg }]}>Connected ({connectors.length})</Text>
-            </>
-          )}
-          ListEmptyComponent={loading ? undefined : <EmptyState title="No connectors yet" message="Install one from the marketplace above" icon="🔌" />}
-          renderItem={({ item }) => (
-            <View key={item.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <View style={styles.cardTop}>
-                <Text style={[styles.cardTitle, { color: theme.foreground }]}>{item.name} · {item.kind}</Text>
-                <Text style={[styles.chip, { color: item.status === 'active' ? theme.success : theme.warning, borderColor: item.status === 'active' ? theme.success : theme.warning }]}>{item.status}</Text>
+                <Text style={[styles.meta, { color: theme.mutedForeground }]}>{c.description}</Text>
+                <Pressable style={[styles.smallBtn, { backgroundColor: '#F97316', alignSelf: 'flex-start', marginTop: spacing.sm }]} onPress={() => installConnector(c.kind)}>
+                  <Text style={styles.actionText}>Install</Text>
+                </Pressable>
               </View>
-              <Text style={[styles.meta, { color: theme.mutedForeground }]}>{item.baseUrl ?? '—'}</Text>
-              <Pressable style={[styles.smallBtn, { backgroundColor: item.status === 'active' ? theme.danger : theme.success, alignSelf: 'flex-start', marginTop: spacing.sm }]} onPress={() => toggleConnector(item)}>
-                <Text style={styles.actionText}>{item.status === 'active' ? 'Disable' : 'Enable'}</Text>
-              </Pressable>
-            </View>
+            ))
           )}
-        />
+          <Text style={[styles.sectionTitle, { color: theme.foreground, marginTop: spacing.lg }]}>Connected ({connectors.length})</Text>
+          {connectors.length === 0 && !loading ? (
+            <EmptyState title="No connectors yet" message="Install one from the marketplace above" icon="🔌" />
+          ) : (
+            connectors.map((item) => (
+              <View key={item.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <View style={styles.cardTop}>
+                  <Text style={[styles.cardTitle, { color: theme.foreground }]}>{item.name} · {item.kind}</Text>
+                  <Text style={[styles.chip, { color: item.status === 'active' ? theme.success : theme.warning, borderColor: item.status === 'active' ? theme.success : theme.warning }]}>{item.status}</Text>
+                </View>
+                <Text style={[styles.meta, { color: theme.mutedForeground }]}>{item.baseUrl ?? '—'}</Text>
+                <Pressable style={[styles.smallBtn, { backgroundColor: item.status === 'active' ? theme.danger : theme.success, alignSelf: 'flex-start', marginTop: spacing.sm }]} onPress={() => toggleConnector(item)}>
+                  <Text style={styles.actionText}>{item.status === 'active' ? 'Disable' : 'Enable'}</Text>
+                </Pressable>
+              </View>
+            ))
+          )}
+        </ScrollView>
       )}
 
       {tab === 'deliveries' && (

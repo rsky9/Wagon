@@ -12,8 +12,11 @@ export class ApiError extends Error {
 export interface ApiClientOptions {
   baseUrl: string
   getToken?: () => string | null
-  /** Called on 401 responses (e.g. expired session). */
-  onUnauthorized?: () => void
+  /**
+   * Called on 401 responses. Return true to signal the token was refreshed so
+   * the request is retried once with the new token; false/undefined to give up.
+   */
+  onUnauthorized?: () => Promise<boolean> | boolean | void
 }
 
 export function createApiClient({ baseUrl, getToken, onUnauthorized }: ApiClientOptions) {
@@ -31,6 +34,37 @@ export function createApiClient({ baseUrl, getToken, onUnauthorized }: ApiClient
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
     })
+
+    if (res.status === 401 && onUnauthorized) {
+      const refreshed = await onUnauthorized()
+      if (refreshed) {
+        // Retry once with the rotated access token.
+        const retryHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+        const newToken = getToken?.()
+        if (newToken) retryHeaders.Authorization = `Bearer ${newToken}`
+        const retry = await fetch(`${baseUrl}${path}`, {
+          method,
+          headers: retryHeaders,
+          body: body === undefined ? undefined : JSON.stringify(body),
+        })
+        if (retry.ok) {
+          if (retry.status === 204) return undefined as T
+          return (await retry.json()) as T
+        }
+        if (retry.status === 401) {
+          throw new ApiError(401, 'Session expired')
+        }
+        let retryMessage = `Request failed (${retry.status})`
+        try {
+          const data = await retry.json()
+          if (Array.isArray(data.message)) retryMessage = data.message.join(', ')
+          else if (typeof data.message === 'string') retryMessage = data.message
+        } catch {
+          // non-JSON error body
+        }
+        throw new ApiError(retry.status, retryMessage)
+      }
+    }
 
     if (res.status === 401) {
       onUnauthorized?.()

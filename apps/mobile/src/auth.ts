@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { setAccessToken } from './config'
+import { setAccessToken, setTokens } from './config'
 import { api } from './config'
 import { registerForPushNotifications } from './push'
 
@@ -66,7 +66,7 @@ function restoreSession() {
     .then((raw) => {
       if (raw) {
         const saved = JSON.parse(raw) as Session
-        setAccessToken(saved.accessToken)
+        setTokens(saved.accessToken, saved.refreshToken)
         setState({ session: saved })
       }
     })
@@ -75,7 +75,7 @@ function restoreSession() {
 }
 
 const persist = (s: Session) => {
-  setAccessToken(s.accessToken)
+  setTokens(s.accessToken, s.refreshToken)
   setState({ session: s })
   AsyncStorage.setItem(SESSION_KEY, JSON.stringify(s)).catch(() => {})
 }
@@ -108,6 +108,7 @@ export const authActions = {
 
   logout: () => {
     setAccessToken(null)
+    setTokens(null, null)
     setState({ session: null, otpRequested: false, devCode: null, error: null })
     AsyncStorage.removeItem(SESSION_KEY).catch(() => {})
   },
