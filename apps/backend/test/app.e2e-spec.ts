@@ -239,6 +239,23 @@ describe('Wagon API (e2e)', () => {
     })
 
     it('moves trip to in-transit and records tracking points', async () => {
+      // Pickup OTP must be verified before going in-transit (no bypass).
+      await request(app.getHttpServer())
+        .patch(`/api/v1/trips/${tripId}/status`)
+        .set('Authorization', `Bearer ${trToken}`)
+        .send({ status: 'in_transit' })
+        .expect(400)
+
+      const gen = await request(app.getHttpServer())
+        .post(`/api/v1/trips/${tripId}/otp/pickup`)
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(201)
+      await request(app.getHttpServer())
+        .post(`/api/v1/trips/${tripId}/otp/pickup/verify`)
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ code: gen.body.devCode })
+        .expect(201)
+
       await request(app.getHttpServer())
         .patch(`/api/v1/trips/${tripId}/status`)
         .set('Authorization', `Bearer ${trToken}`)
@@ -294,19 +311,58 @@ describe('Wagon API (e2e)', () => {
         .expect(400)
     })
 
-    it('transporter uploads POD and receives payout', async () => {
+    it('transporter uploads POD and receives payout after step-up verification', async () => {
+      // POD now requires a real storage key.
       await request(app.getHttpServer())
         .post(`/api/v1/payments/pod/${tripId}`)
         .set('Authorization', `Bearer ${trToken}`)
+        .send({ key: 'pod/e2e/123.png' })
         .expect(201)
+
+      // Money release requires a step-up OTP (action token) — without it, 401.
+      await request(app.getHttpServer())
+        .post('/api/v1/payments/release')
+        .set('Authorization', `Bearer ${trToken}`)
+        .send({ tripId })
+        .expect(401)
+
+      // Step up: request + verify a re-OTP for release_payout, then release.
+      const step = await request(app.getHttpServer())
+        .post('/api/v1/auth/actions/release_payout/request')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(201)
+      const verified = await request(app.getHttpServer())
+        .post('/api/v1/auth/actions/release_payout/verify')
+        .set('Authorization', `Bearer ${trToken}`)
+        .send({ code: step.body.devCode })
+        .expect(201)
+      expect(verified.body.actionToken).toBeTruthy()
 
       const res = await request(app.getHttpServer())
         .post('/api/v1/payments/release')
         .set('Authorization', `Bearer ${trToken}`)
+        .set('x-action-token', verified.body.actionToken)
         .send({ tripId })
         .expect(201)
       expect(res.body.payment.type).toBe('payout')
       expect(res.body.payment.status).toBe('succeeded')
+
+      // An action token minted for a different action is rejected.
+      const other = await request(app.getHttpServer())
+        .post('/api/v1/auth/actions/confirm_booking/request')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(201)
+      const otherVerified = await request(app.getHttpServer())
+        .post('/api/v1/auth/actions/confirm_booking/verify')
+        .set('Authorization', `Bearer ${trToken}`)
+        .send({ code: other.body.devCode })
+        .expect(201)
+      await request(app.getHttpServer())
+        .post('/api/v1/payments/release')
+        .set('Authorization', `Bearer ${trToken}`)
+        .set('x-action-token', otherVerified.body.actionToken)
+        .send({ tripId })
+        .expect(401)
     })
 
     it('transporter passbook nets to −TDS after payout', async () => {

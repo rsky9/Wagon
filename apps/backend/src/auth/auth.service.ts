@@ -152,6 +152,55 @@ export class AuthService {
     return { deleted: true }
   }
 
+  // ---------- Step-up verification for sensitive actions ----------
+  //
+  // High-value operations (releasing money, deleting an account, confirming a
+  // booking) require the actor to re-confirm who they are: a fresh OTP to their
+  // registered mobile. This guards against session hijacking / device theft.
+
+  private readonly ACTION_OTP_TTL_SEC = 2 * 60
+  private readonly actionKey = (action: string, userId: string) => `action:${action}:${userId}`
+
+  async requestActionOtp(action: string, user: User) {
+    if (!this.validActions.includes(action)) throw new BadRequestException('Unknown action')
+    const code = this.generateCode()
+    const codeHash = await hash(code, 10)
+    const record: OtpRecord = { codeHash, attempts: 0 }
+    await this.redis.set(this.actionKey(action, user.id), JSON.stringify(record), 'EX', this.ACTION_OTP_TTL_SEC)
+    // Send to the registered mobile (the user is already authenticated).
+    await this.provider.send({ mobile: user.mobile, channel: 'sms' }, code)
+    return {
+      expiresIn: this.ACTION_OTP_TTL_SEC * 1000,
+      // Mock-only: production never returns the code.
+      devCode: this.config.get('NODE_ENV') === 'production' ? undefined : code,
+      note: 'Re-verification required before this action can proceed',
+    }
+  }
+
+  async verifyActionOtp(action: string, code: string, user: User) {
+    const key = this.actionKey(action, user.id)
+    const raw = await this.redis.get(key)
+    if (!raw) throw new BadRequestException('No verification requested for this action')
+    const record = JSON.parse(raw) as OtpRecord
+    const nextAttempts = record.attempts + 1
+    if (nextAttempts > 5) {
+      await this.redis.del(key)
+      throw new BadRequestException('Too many attempts')
+    }
+    const valid = await compare(code, record.codeHash)
+    if (!valid) {
+      record.attempts = nextAttempts
+      await this.redis.set(key, JSON.stringify(record), 'EX', this.ACTION_OTP_TTL_SEC)
+      throw new BadRequestException('Invalid verification code')
+    }
+    await this.redis.del(key)
+    // Short-lived, action-scoped, user-bound signed token (5 min).
+    const token = await this.tokens.signActionToken(user, action)
+    return { actionToken: token, action, expiresIn: 5 * 60 * 1000 }
+  }
+
+  private readonly validActions = ['release_payout', 'confirm_booking', 'delete_account', 'capture_escrow']
+
   private async upsertUserByMobile(mobile: string) {
     const existing = await this.prisma.user.findUnique({ where: { mobile } })
     if (existing) {

@@ -145,6 +145,11 @@ export class TripsService {
     if (status === 'delivered' && !trip.deliveryOtpVerifiedAt) {
       throw new BadRequestException('Delivery OTP must be verified before marking delivered')
     }
+    // Pickup requires the pickup OTP to be verified before going in-transit
+    // (closes the bypass where the legacy status path skipped pickup checks).
+    if (status === 'in_transit' && !trip.pickupOtpVerifiedAt) {
+      throw new BadRequestException('Pickup OTP must be verified before starting transit')
+    }
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const t = await tx.trip.update({

@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { Roles } from '../auth/guards/roles.decorator'
+import { ActionVerifiedGuard } from '../auth/guards/action-verified.guard'
 import { CurrentUser } from '../auth/guards/current-user.decorator'
 import { PaymentsService } from './payments.service'
 import type { User } from '@prisma/client'
@@ -18,6 +19,7 @@ export class PaymentsController {
 
   @Post('release')
   @Roles('transporter')
+  @UseGuards(ActionVerifiedGuard('release_payout'))
   release(@Body() body: { tripId: string }, @CurrentUser() user: User) {
     return this.payments.releasePayout(body.tripId, user)
   }
@@ -39,7 +41,7 @@ export class PaymentsController {
 
   @Post('pod/:tripId')
   @Roles('transporter')
-  uploadPod(@Param('tripId') tripId: string, @CurrentUser() user: User) {
-    return this.payments.uploadPod(tripId, user)
+  uploadPod(@Param('tripId') tripId: string, @Body() body: { key: string }, @CurrentUser() user: User) {
+    return this.payments.uploadPod(tripId, body.key, user)
   }
 }

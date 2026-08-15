@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common'
 import { Throttle } from '@nestjs/throttler'
 import { AuthService } from './auth.service'
 import { TokenService } from './token.service'
 import { JwtAuthGuard } from './guards/jwt-auth.guard'
+import { ActionVerifiedGuard } from './guards/action-verified.guard'
 import { CurrentUser } from './guards/current-user.decorator'
 import type { SendOtpRequest, VerifyOtpRequest } from '@wagon/contracts'
 import type { User, UserRole } from '@prisma/client'
@@ -65,8 +66,23 @@ export class AuthController {
   }
 
   @Post('delete')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, ActionVerifiedGuard('delete_account'))
   deleteAccount(@CurrentUser() user: User) {
     return this.auth.deleteAccount(user)
+  }
+
+  // Step-up verification for sensitive actions (re-OTP to the registered mobile).
+  @Throttle({ default: { limit: 5, ttl: 600_000 } })
+  @Post('actions/:action/request')
+  @UseGuards(JwtAuthGuard)
+  requestActionOtp(@Param('action') action: string, @CurrentUser() user: User) {
+    return this.auth.requestActionOtp(action, user)
+  }
+
+  @Throttle({ default: { limit: 10, ttl: 600_000 } })
+  @Post('actions/:action/verify')
+  @UseGuards(JwtAuthGuard)
+  verifyActionOtp(@Param('action') action: string, @Body() body: { code: string }, @CurrentUser() user: User) {
+    return this.auth.verifyActionOtp(action, body.code, user)
   }
 }

@@ -24,8 +24,9 @@ export function createApiClient({ baseUrl, getToken, onUnauthorized }: ApiClient
     method: string,
     path: string,
     body?: unknown,
+    extraHeaders?: Record<string, string>,
   ): Promise<T> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(extraHeaders ?? {}) }
     const token = getToken?.()
     if (token) headers.Authorization = `Bearer ${token}`
 
@@ -96,8 +97,8 @@ export function createApiClient({ baseUrl, getToken, onUnauthorized }: ApiClient
   return {
     request,
     get: <T>(path: string) => request<T>('GET', path),
-    post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
-    patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
+    post: <T>(path: string, body?: unknown, headers?: Record<string, string>) => request<T>('POST', path, body, headers),
+    patch: <T>(path: string, body?: unknown, headers?: Record<string, string>) => request<T>('PATCH', path, body, headers),
   }
 }
 

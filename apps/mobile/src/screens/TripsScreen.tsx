@@ -16,6 +16,7 @@ import { useI18n } from '@wagon/i18n'
 import { uploadToPresignedUrl } from '@wagon/api-client'
 import * as DocumentPicker from 'expo-document-picker'
 import { LocationShare } from '../components/LocationShare'
+import { useStepUp } from '../hooks/useStepUp'
 import type { Load } from '@wagon/contracts'
 
 interface TripInfo {
@@ -47,6 +48,7 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
   // is only valid for users with the transporter capability; suppliers and
   // others should only track their trips, not run them.
   const canHaul = capabilities.includes('transporter')
+  const { stepUp } = useStepUp()
   const [trips, setTrips] = useState<TripInfo[]>([])
   const [pending, setPending] = useState<Array<{ id: string; load: Load }>>([])
   const [loading, setLoading] = useState(true)
@@ -126,7 +128,7 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
       const asset = picked.assets[0]
 
       setBusy(trip.id)
-      const presigned = await api.post<{ uploadUrl: string }>(`/kyc/pod/${trip.id}`, {
+      const presigned = await api.post<{ uploadUrl: string; key: string }>(`/kyc/pod/${trip.id}`, {
         mimeType: asset.mimeType ?? 'application/octet-stream',
         size: asset.size ?? 0,
       })
@@ -135,6 +137,8 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
         name: asset.name ?? 'pod.pdf',
         type: asset.mimeType ?? 'application/pdf',
       })
+      // Confirm the upload so the trip's POD is recorded (payout gate).
+      await api.post(`/payments/pod/${trip.id}`, { key: presigned.key })
       Alert.alert(t('ui.podUploaded'), 'Proof of delivery recorded')
       fetchTrips()
     } catch (e) {
@@ -145,9 +149,11 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
   }
 
   const requestPayout = async (trip: TripInfo) => {
+    const token = await stepUp('release_payout')
+    if (!token) return
     setBusy(trip.id)
     try {
-      const res = await api.post<{ alreadyPaid?: boolean }>('/payments/release', { tripId: trip.id })
+      const res = await api.post<{ alreadyPaid?: boolean }>('/payments/release', { tripId: trip.id }, { 'x-action-token': token })
       Alert.alert('Payout', res.alreadyPaid ? 'Already paid out' : 'Payout processed')
       fetchTrips()
     } catch (e) {

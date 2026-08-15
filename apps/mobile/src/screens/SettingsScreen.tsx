@@ -6,6 +6,7 @@ import { SUPPORTED_LANGUAGES, useI18n } from '@wagon/i18n'
 import { api } from '../config'
 import { useAuth } from '../auth'
 import { useThemeMode } from '../theme'
+import { useStepUp } from '../hooks/useStepUp'
 
 interface Props {
   onBack: () => void
@@ -18,6 +19,7 @@ export function SettingsScreen({ onBack, onChangeRole }: Props) {
   const theme = useTheme()
   const { t, lang, setLang } = useI18n()
   const { logout } = useAuth()
+  const { stepUp } = useStepUp()
   const [section, setSection] = useState<Section>('main')
 
   if (section === 'account') {
@@ -69,8 +71,10 @@ export function SettingsScreen({ onBack, onChangeRole }: Props) {
                   {
                     text: t('ui.deleteAccountConfirm'),
                     style: 'destructive',
-                    onPress: () => {
-                      api.post('/auth/delete').then(() => {
+                    onPress: async () => {
+                      const token = await stepUp('delete_account')
+                      if (!token) return
+                      api.post('/auth/delete', undefined, { 'x-action-token': token }).then(() => {
                         Alert.alert(t('ui.deleted'), 'Your account has been permanently deleted.', [{ text: 'OK', onPress: logout }])
                       }).catch(() => Alert.alert(t('ui.error'), 'Could not delete account. Contact support.'))
                     },

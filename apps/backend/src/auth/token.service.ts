@@ -9,6 +9,10 @@ export interface AccessTokenPayload {
   role: User['role']
 }
 
+export interface ActionTokenPayload extends AccessTokenPayload {
+  action: string
+}
+
 @Injectable()
 export class TokenService {
   constructor(
@@ -64,5 +68,26 @@ export class TokenService {
       throw new UnauthorizedException('User not found or inactive')
     }
     return user
+  }
+
+  /** Short-lived, action-scoped token minted after step-up OTP verification. */
+  async signActionToken(user: User, action: string) {
+    const payload: ActionTokenPayload = { sub: user.id, role: user.role, action }
+    return this.jwt.signAsync(payload, {
+      secret: this.config.get('JWT_ACCESS_SECRET'),
+      expiresIn: '5m',
+    })
+  }
+
+  async verifyActionToken(token: string, action: string): Promise<AccessTokenPayload> {
+    try {
+      const payload = await this.jwt.verifyAsync<ActionTokenPayload>(token, {
+        secret: this.config.get('JWT_ACCESS_SECRET'),
+      })
+      if (payload.action !== action) throw new UnauthorizedException('Token is for a different action')
+      return payload
+    } catch {
+      throw new UnauthorizedException('Action verification expired or invalid')
+    }
   }
 }

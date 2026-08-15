@@ -118,6 +118,10 @@ export class PaymentsService {
     if (trip.status !== 'delivered') {
       throw new BadRequestException('Payout requires trip to be delivered')
     }
+    // Proof of delivery is mandatory before money moves — no POD, no payout.
+    if (!trip.podUrl) {
+      throw new BadRequestException('Proof of delivery (POD) must be uploaded before payout')
+    }
 
     const escrow = await this.prisma.payment.findFirst({
       where: { tripId, type: 'escrow', status: 'succeeded' },
@@ -262,7 +266,7 @@ export class PaymentsService {
     }
   }
 
-  async uploadPod(tripId: string, user: User) {
+  async uploadPod(tripId: string, key: string, user: User) {
     const trip = await this.prisma.trip.findUnique({ where: { id: tripId } })
     if (!trip) {
       throw new NotFoundException('Trip not found')
@@ -274,9 +278,22 @@ export class PaymentsService {
     if (trip.status !== 'delivered') {
       throw new BadRequestException('POD upload requires trip delivered')
     }
-    // Mock: no real file storage yet; record a placeholder reference.
-    const podUrl = `mock://pod/${tripId}`
-    return this.prisma.trip.update({ where: { id: tripId }, data: { podUrl } })
+    if (!key?.trim()) {
+      throw new BadRequestException('POD storage key is required')
+    }
+    const podUrl = key.startsWith('http') ? key : `s3://${key}`
+    const updated = await this.prisma.trip.update({ where: { id: tripId }, data: { podUrl } })
+    // Canonical evidence event: delivery proof captured.
+    await this.outbox.emit(await this.tx(), {
+      eventType: 'EXECUTION',
+      eventCode: 'POD_CAPTURED',
+      entityType: 'trip',
+      entityId: tripId,
+      shipmentId: await this.shipmentIdFor(tripId),
+      actorId: user.id,
+      payload: { tripId, podUrl, at: new Date().toISOString() },
+    })
+    return { trip: updated }
   }
 
   /** Invoice for a delivered trip with TDS/GST breakdown. Uses the agreed booking rate. */
