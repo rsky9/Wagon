@@ -1,8 +1,9 @@
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View, ScrollView, Pressable, Linking, Alert } from 'react-native'
 import { useTheme, spacing, radius } from '@wagon/design'
 import { SUPPORTED_LANGUAGES, useI18n } from '@wagon/i18n'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { api } from '../config'
 import { useAuth } from '../auth'
 import { useThemeMode } from '../theme'
@@ -21,6 +22,16 @@ export function SettingsScreen({ onBack, onChangeRole }: Props) {
   const { logout } = useAuth()
   const { stepUp } = useStepUp()
   const [section, setSection] = useState<Section>('main')
+  const [biometricOn, setBiometricOn] = useState(false)
+
+  // Persist the biometric step-up preference.
+  const toggleBiometric = (next: boolean) => {
+    setBiometricOn(next)
+    AsyncStorage.setItem('wagon_biometric', next ? 'on' : 'off').catch(() => {})
+  }
+  useEffect(() => {
+    AsyncStorage.getItem('wagon_biometric').then((v) => setBiometricOn(v === 'on')).catch(() => {})
+  }, [])
 
   if (section === 'account') {
     return (
@@ -123,12 +134,13 @@ export function SettingsScreen({ onBack, onChangeRole }: Props) {
           <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Text style={[styles.cardTitle, { color: theme.foreground }]}>{t('settings.accountSecurity')}</Text>
             <Text style={[styles.cardText, { color: theme.mutedForeground }]}>
-              We use OTP-based login with no passwords. Your session is encrypted on-device.
+              We use OTP-based login with no passwords. Sensitive actions (payments, accepting loads, booking) ask you to re-confirm your identity.
             </Text>
           </View>
-          <SecurityRow icon="📱" label="Biometric lock" desc="Unlock the app with fingerprint / face" theme={theme} />
+          <SecurityRow icon="📱" label="Biometric lock" desc="Fingerprint / face before sensitive actions" theme={theme} toggle={biometricOn} onToggle={() => toggleBiometric(!biometricOn)} />
           <SecurityRow icon="🛡️" label="KYC verification" desc="Full verification unlocks payments" theme={theme} />
           <SecurityRow icon="🔐" label="Escrow protection" desc="Payments held until delivery confirmed" theme={theme} />
+          <SecurityRow icon="🧾" label="Step-up verification" desc="Re-OTP before payouts, load acceptance & booking" theme={theme} />
         </ScrollView>
       </SafeAreaView>
     )
@@ -265,14 +277,17 @@ function PrivacyRow({ title, desc, on, theme }: { title: string; desc: string; o
   )
 }
 
-function SecurityRow({ icon, label, desc, theme }: { icon: string; label: string; desc: string; theme: ReturnType<typeof useTheme> }) {
+function SecurityRow({ icon, label, desc, theme, toggle, onToggle }: { icon: string; label: string; desc: string; theme: ReturnType<typeof useTheme>; toggle?: boolean; onToggle?: () => void }) {
   return (
-    <Pressable style={[styles.row, { backgroundColor: theme.card, borderColor: theme.border }]}>
+    <Pressable style={[styles.row, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={onToggle}>
       <Text style={{ fontSize: 18 }}>{icon}</Text>
       <View style={{ flex: 1, marginLeft: spacing.md }}>
         <Text style={[styles.rowTitle, { color: theme.foreground }]}>{label}</Text>
         <Text style={[styles.rowSub, { color: theme.mutedForeground }]}>{desc}</Text>
       </View>
+      {toggle !== undefined && (
+        <Text style={{ color: toggle ? theme.success : theme.mutedForeground, fontWeight: '800' }}>{toggle ? 'ON' : 'OFF'}</Text>
+      )}
     </Pressable>
   )
 }
