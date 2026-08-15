@@ -151,6 +151,10 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
       needsAttention.push({ icon: '📄', text: `${d.truckNo}: ${d.doc} expires in ${d.daysLeft}d`, onPress: onOpenMarketplace })
     }
   }
+  // Setup nudges: a transporter with no fleet can't accept loads yet.
+  if (showTransporter && data?.transporter && data.transporter.fleetSize === 0) {
+    needsAttention.push({ icon: '🚚', text: 'Add your first truck to start accepting loads', onPress: onOpenMarketplace })
+  }
   if (forYou && forYou.demandForMe.length > 0) {
     const d = forYou.demandForMe[0]!
     needsAttention.push({ icon: KIND_ICON[d.kind] ?? '📢', text: `${forYou.demandForMe.length} open ${d.kind} demand you can quote`, onPress: onOpenMarket ?? onOpenMarketplace })
