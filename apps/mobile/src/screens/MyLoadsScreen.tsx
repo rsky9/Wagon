@@ -22,6 +22,7 @@ interface Props {
   onSelectLoad: (loadId: string) => void
   onOpenKyc: () => void
   onOpenDecisionRoom: (loadId: string) => void
+  onOpenResponses?: () => void
   /** Render without the app header (used when embedded in a parent with its own header). */
   embedded?: boolean
 }
@@ -37,7 +38,7 @@ const TONE: Record<string, StatusTone> = {
   cancelled: 'danger',
 }
 
-export function MyLoads({ onPostLoad, onLogout, onSelectLoad, onOpenKyc, onOpenDecisionRoom, embedded = false }: Props) {
+export function MyLoads({ onPostLoad, onLogout, onSelectLoad, onOpenKyc, onOpenDecisionRoom, onOpenResponses, embedded = false }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
   const [loads, setLoads] = useState<Load[]>([])
@@ -89,6 +90,9 @@ export function MyLoads({ onPostLoad, onLogout, onSelectLoad, onOpenKyc, onOpenD
     }
     if (load.status === 'posted' || load.status === 'interested') {
       actions.push({ text: 'Decision Room', onPress: () => onOpenDecisionRoom(load.id) })
+      if (onOpenResponses) {
+        actions.push({ text: 'Responses', onPress: onOpenResponses })
+      }
     }
     if (load.status === 'delivered') {
       actions.push({ text: 'Complete', onPress: () => { api.patch(`/loads/${load.id}/complete`).then(fetchLoads).catch(() => {}) } })

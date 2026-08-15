@@ -282,12 +282,6 @@ function TripCard({
         {canHaul && (
           <>
             <Button label="Execute trip →" onPress={() => onOpenExecution(trip.id)} size="md" variant="secondary" />
-            {trip.status === 'accepted' && (
-              <Button label="Start trip" onPress={() => onAdvance(trip, 'in_transit')} loading={busy} size="md" />
-            )}
-            {trip.status === 'in_transit' && (
-              <Button label="Mark delivered" onPress={() => onAdvance(trip, 'delivered')} loading={busy} size="md" />
-            )}
             {trip.status === 'delivered' && !trip.podUrl && (
               <Button label="Upload POD" onPress={() => onUploadPod(trip)} loading={busy} size="md" />
             )}

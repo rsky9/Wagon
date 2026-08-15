@@ -161,6 +161,7 @@ function MarketplaceTab({ navigation }: any) {
             onSelectLoad={(loadId) => root?.navigate('TripDetail', { loadId })}
             onOpenKyc={() => root?.navigate('Kyc')}
             onOpenDecisionRoom={(loadId) => root?.navigate('DecisionRoom', { loadId })}
+            onOpenResponses={() => root?.navigate('Responses')}
             embedded
           />
         )}
@@ -191,6 +192,7 @@ function MarketplaceTab({ navigation }: any) {
         onSelectLoad={(loadId) => root?.navigate('TripDetail', { loadId })}
         onOpenKyc={() => root?.navigate('Kyc')}
         onOpenDecisionRoom={(loadId) => root?.navigate('DecisionRoom', { loadId })}
+        onOpenResponses={() => root?.navigate('Responses')}
       />
     )
   }

@@ -140,8 +140,32 @@ const navigationRef = createNavigationContainerRef<RootStackParamList>()
  * `trip/{id}` both go to TripDetail by id (safe path — LoadDetail needs a
  * full load object). Best-effort: unknown/missing params fall back safely.
  */
-function navigateToUrl(nav: any, url: string) {
+function navigateToUrl(nav: any, url: string, item?: { data?: { loadId?: string; tripId?: string; shipmentId?: string; requestId?: string } }) {
   if (!url) return
+  // Raw stack route names (notification data.route) navigate directly.
+  const STACK_ROUTES = new Set([
+    'Kyc', 'Passbook', 'Bank', 'MyBids', 'Favorites', 'Disputes', 'RaiseDispute',
+    'Notifications', 'MyTrucks', 'AddTruck', 'Drivers', 'RateCard', 'Settings',
+    'Search', 'Filters', 'Finance', 'Reviews', 'Tickets', 'Emergency', 'Chat',
+    'ChatList', 'Fleet', 'NotifPrefs', 'Invoices', 'LoadHistory', 'Quests',
+    'RoleChange', 'PostLoadWizard', 'DecisionRoom', 'BidForm', 'Negotiation',
+    'TripExceptions', 'Responses', 'Bookings', 'ReturnLoads', 'Track',
+    'ShipmentDetail', 'Forwarding', 'Planning', 'EnablementFinance', 'Storage',
+    'Global', 'Market', 'Integrations', 'EnablementHub', 'Shipments',
+  ])
+  if (STACK_ROUTES.has(url)) {
+    const params: Record<string, unknown> = {}
+    if (url === 'TripDetail' && item?.data?.loadId) params.loadId = item.data.loadId
+    if (url === 'Track' && item?.data?.tripId) params.tripId = item.data.tripId
+    if (url === 'ShipmentDetail' && item?.data?.shipmentId) params.shipmentId = item.data.shipmentId
+    if (url === 'LoadDetail' && item?.data?.loadId) {
+      // LoadDetail needs a full load object; fall back to TripDetail by id.
+      nav.navigate('TripDetail', { loadId: item.data.loadId })
+      return
+    }
+    nav.navigate(url, Object.keys(params).length ? params : undefined)
+    return
+  }
   const m = url.match(/^wagon:\/\/(load|trip)\/(.+)$/)
   if (m && m[2]) {
     nav.navigate('TripDetail', { loadId: m[2] })
@@ -244,8 +268,8 @@ function NotificationsRoute({ navigation }: any) {
   return (
     <NotificationsScreen
       onBack={() => navigation.goBack()}
-      onNavigate={(route) => {
-        navigateToUrl(navigation, route)
+      onNavigate={(route, item) => {
+        navigateToUrl(navigation, route, item)
       }}
     />
   )
@@ -637,7 +661,7 @@ export function MobileNavigator() {
               <StatusBar style={isDark ? 'light' : 'dark'} />
               <Stack.Navigator
                 screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}
-                initialRouteName={auth.session?.profile.capabilities?.includes('driver') && !auth.session?.profile.capabilities?.some((c: string) => c === 'supplier' || c === 'transporter') ? 'DriverHome' : 'UnifiedTabs'}
+                initialRouteName="UnifiedTabs"
               >
                 <Stack.Screen name="UnifiedTabs" component={UnifiedTabs} />
                 <Stack.Screen name="DriverHome" component={DriverHomeRoute} />
