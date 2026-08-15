@@ -278,6 +278,23 @@ A full audit of the auth/verification, operational core, and mobile flows surfac
 - Supplier "Responses" screen wired into My Loads (was unreachable).
 - Trips: single stage-based execution path.
 
+### 10.3 Delivered: data-integrity hardening (this branch)
+
+A second deep audit of money/state-machine integrity + mobile flows surfaced and fixed:
+
+**Money & state integrity**
+- Closed the cancelled-trip → delivered hole; unique `Trip.loadId` + race-safe accept.
+- **Escrow equals the agreed rate** (no ₹1-escrow → full-payout); split payout = net − advance (advance released at pickup); escrow capture now step-up gated.
+- **Failed payments are retryable** (idempotency released); `clearSettlement` only clears on success; **cancel auto-refunds** all captured escrow/advance/balance.
+- Payout **frozen while a dispute or unpaid claim settlement** is open; stage-delivery now auto-rates + sends `trip_delivered`.
+- **OTP**: 5-attempt limit, constant-time compare, delivered to the supplier via push, stage/status-gated.
+- **Driver pay**: `Driver.payRate` + earnings = payRate or 25% share (was the full freight).
+
+**Mobile**
+- **Cross-platform prompt** replacing 20 iOS-only `Alert.prompt` call sites (Android crash fixed).
+- Trip deep-links resolve by trip id; `TripDetail`/`LoadDetail` in the deep-link registry; POD body aligned; single trip-execution path (coarse status removed).
+- Supplier load-card "Pay booking" action; KYC alert routes to KYC; LoadById error state; Market search refetch debounced.
+
 ---
 
 ## Research sources
