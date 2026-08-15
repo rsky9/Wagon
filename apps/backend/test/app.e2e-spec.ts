@@ -900,6 +900,27 @@ describe('Wagon API (e2e)', () => {
       expect(res.body.trip.status).toBe('in_transit')
     })
 
+    it('captures advance + balance split payments idempotently (in transit)', async () => {
+      // Advance and balance are separate captures with their own idempotency.
+      await request(app.getHttpServer())
+        .post('/api/v1/payments/escrow')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ tripId: execTripId, amount: 1000, stage: 'advance' })
+        .expect(201)
+      await request(app.getHttpServer())
+        .post('/api/v1/payments/escrow')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ tripId: execTripId, amount: 2000, stage: 'balance' })
+        .expect(201)
+      const again = await request(app.getHttpServer())
+        .post('/api/v1/payments/escrow')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ tripId: execTripId, amount: 9999, stage: 'advance' })
+        .expect(201)
+      expect(again.body.alreadyCaptured).toBe(true)
+      expect(again.body.payment.amount).toBe(1000)
+    })
+
     it('blocks delivery until delivery OTP verified, then delivers', async () => {
       await request(app.getHttpServer()).post(`/api/v1/trips/${execTripId}/advance`).set('Authorization', `Bearer ${trToken}`).expect(201)
       await request(app.getHttpServer()).post(`/api/v1/trips/${execTripId}/advance`).set('Authorization', `Bearer ${trToken}`).expect(201)

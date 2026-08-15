@@ -13,8 +13,8 @@ export class PaymentsController {
 
   @Post('escrow')
   @Roles('supplier')
-  capture(@Body() body: { tripId: string; amount: number }, @CurrentUser() user: User) {
-    return this.payments.captureEscrow(body.tripId, body.amount, user)
+  capture(@Body() body: { tripId: string; amount: number; stage?: 'escrow' | 'advance' | 'balance' }, @CurrentUser() user: User) {
+    return this.payments.captureEscrow(body.tripId, body.amount, user, body.stage ?? 'escrow')
   }
 
   @Post('release')

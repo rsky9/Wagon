@@ -63,6 +63,8 @@ enum TripStage {
 
 enum PaymentType {
   escrow
+  advance
+  balance
   payout
   refund
   settlement

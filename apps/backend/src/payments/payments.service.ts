@@ -19,11 +19,12 @@ export class PaymentsService {
   ) {}
 
   /** Supplier pays the escrow/booking amount for an accepted trip. Idempotent per trip. */
-  async captureEscrow(tripId: string, amount: number, user: User) {
+  /** Capture a payment (escrow full, or advance/balance split). Idempotent per (trip, stage). */
+  async captureEscrow(tripId: string, amount: number, user: User, stage: 'escrow' | 'advance' | 'balance' = 'escrow') {
     if (!amount || amount <= 0) {
       throw new BadRequestException('amount must be positive')
     }
-    const trip = await this.prisma.trip.findUnique({ where: { id: tripId }, include: { load: true } })
+    const trip = await this.prisma.trip.findUnique({ where: { id: tripId }, include: { load: true, booking: true } })
     if (!trip) {
       throw new NotFoundException('Trip not found')
     }
@@ -31,11 +32,25 @@ export class PaymentsService {
     if (!supplier || supplier.id !== trip.load.supplierId) {
       throw new BadRequestException('Only the load supplier can pay this escrow')
     }
-    if (trip.status !== 'accepted' && trip.status !== 'in_transit') {
+    if (stage === 'advance' && trip.status !== 'accepted' && trip.status !== 'in_transit') {
+      throw new BadRequestException('Advance payment requires accepted/in-transit trip')
+    }
+    if (stage === 'balance' && trip.status !== 'in_transit' && trip.status !== 'delivered') {
+      throw new BadRequestException('Balance payment requires trip in transit or delivered')
+    }
+    if (stage === 'escrow' && trip.status !== 'accepted' && trip.status !== 'in_transit') {
       throw new BadRequestException('Escrow only valid for accepted/in-transit trips')
     }
 
-    const idempotencyKey = `escrow_${tripId}`
+    // Enforce split terms: advance can't exceed the agreed advance amount.
+    if (stage === 'advance') {
+      const advanceCap = trip.booking?.advanceAmount ?? trip.load.advanceAmount ?? null
+      if (advanceCap != null && amount > advanceCap) {
+        throw new BadRequestException(`Advance cannot exceed the agreed ₹${advanceCap}`)
+      }
+    }
+
+    const idempotencyKey = stage === 'escrow' ? `escrow_${tripId}` : `${stage}_${tripId}`
     const existing = await this.prisma.payment.findUnique({ where: { idempotencyKey } })
     if (existing) {
       return { payment: existing, alreadyCaptured: true }
@@ -52,7 +67,7 @@ export class PaymentsService {
     const payment = await this.prisma.payment.create({
       data: {
         tripId,
-        type: 'escrow',
+        type: stage === 'escrow' ? 'escrow' : stage, // advance | balance
         amount,
         gstAmount: tax.gstAmount,
         tdsAmount: tax.tdsAmount,
@@ -78,15 +93,16 @@ export class PaymentsService {
       })
     }
 
-    // Canonical event: escrow captured.
+    // Canonical event: escrow/advance/balance captured.
+    const code = result.status === 'succeeded' ? (stage === 'escrow' ? 'ESCROW_CAPTURED' : `${stage.toUpperCase()}_CAPTURED`) : 'ESCROW_FAILED'
     await this.outbox.emit(await this.tx(), {
       eventType: 'FINANCE',
-      eventCode: result.status === 'succeeded' ? 'ESCROW_CAPTURED' : 'ESCROW_FAILED',
+      eventCode: code,
       entityType: 'trip',
       entityId: trip.id,
       shipmentId: await this.shipmentIdFor(trip.loadId),
       actorId: user.id,
-      payload: { tripId, amount, providerRef: result.providerRef },
+      payload: { tripId, amount, stage, providerRef: result.providerRef },
     })
 
     return { payment, alreadyCaptured: false }
@@ -128,11 +144,18 @@ export class PaymentsService {
       throw new BadRequestException('Delivery proof not yet confirmed by the consignee')
     }
 
+    // Full escrow OR (advance + balance) must be captured; both are valid paths.
     const escrow = await this.prisma.payment.findFirst({
       where: { tripId, type: 'escrow', status: 'succeeded' },
     })
-    if (!escrow) {
-      throw new BadRequestException('No escrow captured for this trip')
+    const [advance, balance] = await Promise.all([
+      this.prisma.payment.findFirst({ where: { tripId, type: 'advance', status: 'succeeded' } }),
+      this.prisma.payment.findFirst({ where: { tripId, type: 'balance', status: 'succeeded' } }),
+    ])
+    const capturedFull = escrow
+    const capturedSplit = advance || balance
+    if (!capturedFull && !capturedSplit) {
+      throw new BadRequestException('Capture the escrow (or advance + balance) before payout')
     }
 
     const idempotencyKey = `payout_${tripId}`
@@ -141,11 +164,14 @@ export class PaymentsService {
       return { payment: existing, alreadyPaid: true }
     }
 
-    // Agreed rate is the locked booking rate (fall back to the escrow amount).
-    const base = trip.booking?.rate ?? escrow.amount
+    // Agreed rate is the locked booking rate; split path pays the balance owed.
+    const captured = capturedFull ?? advance
+    const base = trip.booking?.rate ?? captured?.amount ?? 0
     const tax = PaymentsService.taxBreakdown(base)
-    // Transporter receives net of TDS; GST is collected on the service.
-    const payoutAmount = Math.round((base - tax.tdsAmount) * 100) / 100
+    const alreadyPaidBySplit = (advance?.amount ?? 0) + (balance?.amount ?? 0)
+    // Transporter receives net of TDS, minus any advance/balance already released.
+    const net = Math.round((base - tax.tdsAmount) * 100) / 100
+    const payoutAmount = capturedFull ? net : Math.max(0, Math.round((net - alreadyPaidBySplit) * 100) / 100)
 
     const result = await this.provider.payout({
       amount: payoutAmount,
@@ -185,7 +211,7 @@ export class PaymentsService {
       })
       // First-N-trips cashback: credit Wagon Cash on the first few payouts.
       if (tripsDone < PaymentsService.CASHBACK_FIRST_TRIPS) {
-        const cashback = Math.round(escrow.amount * PaymentsService.CASHBACK_RATE * 100) / 100
+        const cashback = Math.round(base * PaymentsService.CASHBACK_RATE * 100) / 100
         const note = `Cashback on trip #${tripsDone + 1} (${(PaymentsService.CASHBACK_RATE * 100).toFixed(0)}% of payout)`
         await this.prisma.user.update({
           where: { id: user.id },
