@@ -102,22 +102,11 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
   }
 
   const rateSupplier = (trip: TripInfo) => {
-    Alert.alert(t('ui.rateSupplier'), 'How was loading readiness and communication?', [
-      { text: 'Cancel', style: 'cancel' },
-      ...[5, 4, 3, 2, 1].map((s) => ({ text: `${s}★`, onPress: () => api.post(`/bidding/trip/${trip.id}/rate-supplier`, { score: s }).then(() => Alert.alert(t('ui.thanks'), 'Rating saved')).catch(() => Alert.alert(t('ui.error'), 'Failed to rate')) })),
-    ])
-  }
-
-  const advance = async (trip: TripInfo, status: 'in_transit' | 'delivered') => {
-    setBusy(trip.id)
-    try {
-      await api.patch(`/trips/${trip.id}/status`, { status })
-      fetchTrips()
-    } catch (e) {
-      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to update')
-    } finally {
-      setBusy(null)
-    }
+    const stars = [5, 4, 3, 2, 1].map((s) => ({
+      text: `${s}★`,
+      onPress: () => api.post(`/bidding/trip/${trip.id}/rate-supplier`, { score: s }).then(() => Alert.alert(t('ui.thanks'), 'Rating saved')).catch(() => Alert.alert(t('ui.error'), 'Failed to rate')),
+    }))
+    Alert.alert(t('ui.rateSupplier'), 'How was loading readiness and communication?', [{ text: 'Cancel', style: 'cancel' }, ...stars])
   }
 
   const uploadPod = async (trip: TripInfo) => {
@@ -140,7 +129,7 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
         type: asset.mimeType ?? 'application/pdf',
       })
       // Confirm the upload so the trip's POD is recorded (payout gate).
-      await api.post(`/payments/pod/${trip.id}`, { key: presigned.key })
+      await api.post(`/payments/pod/${trip.id}`, { photoKey: presigned.key })
       Alert.alert(t('ui.podUploaded'), 'Proof of delivery recorded')
       fetchTrips()
     } catch (e) {
@@ -220,7 +209,6 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
               trip={item}
               busy={busy === item.id}
               canHaul={canHaul}
-              onAdvance={advance}
               onUploadPod={uploadPod}
               onPayout={requestPayout}
               onOpenExecution={onOpenExecution}
@@ -238,7 +226,6 @@ function TripCard({
   trip,
   busy,
   canHaul,
-  onAdvance,
   onUploadPod,
   onPayout,
   onOpenExecution,
@@ -248,7 +235,6 @@ function TripCard({
   trip: TripInfo
   busy: boolean
   canHaul: boolean
-  onAdvance: (t: TripInfo, s: 'in_transit' | 'delivered') => void
   onUploadPod: (t: TripInfo) => void
   onPayout: (t: TripInfo) => void
   onOpenExecution: (tripId: string) => void

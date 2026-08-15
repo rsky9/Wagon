@@ -25,6 +25,7 @@ interface TripInfo {
 
 interface Props {
   loadId: string
+  tripId?: string
   onBack: () => void
   onTrack?: (tripId: string) => void
   onOpenShipment?: (shipmentId: string) => void
@@ -38,7 +39,7 @@ const TONE: Record<string, StatusTone> = {
   cancelled: 'danger',
 }
 
-export function TripDetailScreen({ loadId, onBack, onTrack, onOpenShipment }: Props) {
+export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipment }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
   const [trip, setTrip] = useState<TripInfo | null>(null)
@@ -53,7 +54,10 @@ export function TripDetailScreen({ loadId, onBack, onTrack, onOpenShipment }: Pr
     api
       .get<{ trips: TripInfo[] }>('/trips/mine')
       .then((res) => {
-        const t = res.trips.find((x) => x.load.id === loadId)
+        // Prefer a direct tripId match; fall back to matching by load id.
+        const t = tripId
+          ? res.trips.find((x) => x.id === tripId)
+          : res.trips.find((x) => x.load.id === loadId)
         setTrip(t ?? null)
         if (t) {
           api.get<{ snapshot: { rate: number; advanceAmount?: number | null; balanceAmount?: number | null; paymentTerms?: string | null } }>(`/bidding/trip/${t.id}/booking`)

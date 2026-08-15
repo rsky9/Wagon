@@ -81,7 +81,7 @@ export type RootStackParamList = {
   UnifiedTabs: undefined
   DriverHome: undefined
   LoadDetail: { load: Load; id?: string }
-  TripDetail: { loadId: string }
+  TripDetail: { loadId?: string; tripId?: string }
   Track: { tripId: string }
   Kyc: undefined
   Passbook: undefined
@@ -153,11 +153,13 @@ function navigateToUrl(nav: any, url: string, item?: { data?: { loadId?: string;
     'TripExceptions', 'Responses', 'Bookings', 'ReturnLoads', 'Track',
     'ShipmentDetail', 'Forwarding', 'Planning', 'EnablementFinance', 'Storage',
     'Global', 'Market', 'Integrations', 'EnablementHub', 'Shipments', 'TripExecute',
+    'LoadDetail', 'TripDetail',
   ])
   if (STACK_ROUTES.has(url)) {
     const params: Record<string, unknown> = {}
     const d = item?.data ?? {}
-    if (url === 'TripDetail' && d.loadId) params.loadId = d.loadId
+    if (url === 'TripDetail' && d.tripId) params.tripId = d.tripId
+    if (url === 'TripDetail' && d.loadId && !d.tripId) params.loadId = d.loadId
     if (url === 'Track' && d.tripId) params.tripId = d.tripId
     if (url === 'ShipmentDetail' && d.shipmentId) params.shipmentId = d.shipmentId
     if (url === 'DecisionRoom' && d.loadId) params.loadId = d.loadId
@@ -179,7 +181,7 @@ function navigateToUrl(nav: any, url: string, item?: { data?: { loadId?: string;
     if (m[1] === 'load') {
       nav.navigate('LoadDetail', { id: m[2] } as never)
     } else {
-      nav.navigate('TripDetail', { loadId: m[2] })
+      nav.navigate('TripDetail', { tripId: m[2] })
     }
   } else if (url.endsWith('loads')) {
     nav.navigate('UnifiedTabs', { screen: 'Marketplace' } as never)
@@ -243,10 +245,12 @@ function LoadByIdScreen({ loadId, onBack, onAccepted, onOpenBid }: { loadId: str
 
 function TripDetailRoute({ route, navigation }: NativeStackScreenProps<RootStackParamList, 'TripDetail'>) {
   const p = route.params as { loadId?: string; tripId?: string }
-  const loadId = p?.loadId ?? p?.tripId ?? ''
+  const loadId = p?.loadId ?? ''
+  const tripId = p?.tripId
   return (
     <TripDetailScreen
       loadId={loadId}
+      tripId={tripId}
       onBack={() => navigation.goBack()}
       onTrack={(tripId) => navigation.navigate('Track', { tripId })}
       onOpenShipment={(shipmentId) => navigation.navigate('ShipmentDetail', { shipmentId })}
