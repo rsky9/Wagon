@@ -652,5 +652,26 @@ describe('Enablement platform (e2e)', () => {
       expect(codes).toContain('GTIN')
       expect(codes).toContain('GTOT')
     })
+
+    it('personalizes the marketplace by capability (For You)', async () => {
+      // The transporter can offer truck capacity and quote transport demand.
+      const forTr = await api(trToken).get('/market/for-you').expect(200)
+      expect(forTr.body.canOffer).toContain('truck_capacity')
+      expect(forTr.body.canFulfill).toContain('transport')
+      expect(forTr.body.capabilities).toContain('transporter')
+      // A fresh transport demand (by the supplier, different org) shows up as
+      // demand the transporter can quote on.
+      await api(supToken).post('/market/requests', { kind: 'transport', originRef: 'ForyouCity', destinationRef: 'ForyouDrop', capacityNeeded: 2500 }).expect(201)
+      const demand = await api(trToken).get('/market/for-you').expect(200)
+      expect(demand.body.demandForMe.some((r: { kind: string }) => r.kind === 'transport')).toBe(true)
+      // Supply the transporter can get: warehouse space (complementary capability).
+      expect(Array.isArray(demand.body.supplyForMe)).toBe(true)
+      // Driver capability cannot offer or fulfill anything.
+      await api(supToken).patch('/auth/capabilities', { capabilities: ['supplier', 'driver'] }).expect(200)
+      const forSup = await api(supToken).get('/market/for-you').expect(200)
+      expect(forSup.body.canFulfill).toContain('transport')
+      // Restore capabilities for the rest of the suite.
+      await api(supToken).patch('/auth/capabilities', { capabilities: ['supplier'] }).expect(200)
+    })
   })
 })

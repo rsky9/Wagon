@@ -61,13 +61,38 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
   const activeMode = useActiveMode()
   const [data, setData] = useState<HomeSummary | null>(null)
   const [marketCounts, setMarketCounts] = useState<{ listings?: number; requests?: number } | null>(null)
+  const [forYou, setForYou] = useState<{
+    canOffer: string[]
+    canFulfill: string[]
+    canGet: string[]
+    myLive: { listings: number; openRequests: number; submittedQuotes: number }
+    demandForMe: Array<{ id: string; kind: string; originRef?: string | null; destinationRef?: string | null; city?: string | null; capacityNeeded?: number | null; requesterOrg?: { name: string } | null; requesterRating?: number | null; requesterCompletion?: number | null }>
+    supplyForMe: Array<{ id: string; kind: string; originRef?: string | null; destinationRef?: string | null; city?: string | null; price?: number | null; currency: string; providerOrg?: { name: string; verified: boolean } | null; providerRating?: number | null; providerCompletion?: number | null }>
+  } | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
+
+  const CAP_LABEL: Record<string, string> = {
+    truck_capacity: 'Truck capacity',
+    warehouse_space: 'Warehouse space',
+    carrier_service: 'Carrier space',
+    forwarder_service: 'Forwarder service',
+    transport: 'Transport',
+    warehouse: 'Warehouse',
+    forwarding: 'Forwarding',
+    carrier: 'Carrier',
+    insurance: 'Insurance',
+  }
+  const KIND_ICON: Record<string, string> = {
+    truck_capacity: '🚚', warehouse_space: '🏭', carrier_service: '🚢', forwarder_service: '📦',
+    transport: '🚚', warehouse: '🏭', forwarding: '📦', carrier: '🚢', insurance: '🛡️',
+  }
 
   const fetch = useCallback(() => {
     api.get<HomeSummary>('/home/summary').then(setData).catch(() => {}).finally(() => setLoading(false))
     api.get<{ listings: unknown[] }>('/market/listings').then((r) => setMarketCounts((c) => ({ ...c, listings: r.listings.length }))).catch(() => {})
     api.get<{ requests: unknown[] }>('/market/requests').then((r) => setMarketCounts((c) => ({ ...c, requests: r.requests.length }))).catch(() => {})
+    api.get<typeof forYou>('/market/for-you').then((r) => setForYou(r)).catch(() => {})
   }, [])
 
   useEffect(() => { fetch() }, [fetch])
@@ -101,17 +126,44 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
         {loading && <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 40 }}>{t('common.loading')}</Text>}
 
         {/* Marketplace strip — visible to every user type */}
-        {onOpenMarket && marketCounts && (
-          <Pressable style={[styles.marketStrip, { backgroundColor: 'rgba(249,115,22,0.1)', borderColor: '#F97316' }]} onPress={onOpenMarket}>
-            <Text style={{ fontSize: 22 }}>🏪</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: theme.foreground, fontWeight: '800', fontSize: 15 }}>Capability marketplace</Text>
-              <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>
-                {marketCounts.listings ?? 0} supply · {marketCounts.requests ?? 0} demand
-              </Text>
-            </View>
-            <Text style={{ color: '#F97316', fontWeight: '800', fontSize: 14 }}>Open ›</Text>
-          </Pressable>
+        {onOpenMarket && (forYou || marketCounts) && (
+          <View style={[styles.marketStrip, { backgroundColor: 'rgba(249,115,22,0.1)', borderColor: '#F97316' }]}>
+            <Pressable onPress={onOpenMarket}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                <Text style={{ fontSize: 22 }}>🏪</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: theme.foreground, fontWeight: '800', fontSize: 15 }}>Capability marketplace</Text>
+                  <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>
+                    {marketCounts?.listings ?? 0} supply · {marketCounts?.requests ?? 0} demand
+                  </Text>
+                </View>
+                <Text style={{ color: '#F97316', fontWeight: '800', fontSize: 14 }}>Open ›</Text>
+              </View>
+            </Pressable>
+
+            {forYou && (
+              <View style={{ marginTop: spacing.sm, gap: spacing.sm }}>
+                <Text style={{ color: theme.foreground, fontWeight: '800', fontSize: 13 }}>
+                  For you · {forYou.canOffer.length > 0 ? `you can offer ${forYou.canOffer.map((k) => CAP_LABEL[k] ?? k).join(', ')}` : 'get the most out of the network'}
+                </Text>
+                {forYou.demandForMe.length > 0 && (
+                  <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>
+                    {KIND_ICON[forYou.demandForMe[0].kind] ?? '📢'} {forYou.demandForMe.length} open {forYou.demandForMe[0].kind} demand you can quote · e.g. {forYou.demandForMe[0].originRef ?? forYou.demandForMe[0].city ?? '—'} → {forYou.demandForMe[0].destinationRef ?? '—'} from {forYou.demandForMe[0].requesterOrg?.name ?? 'a partner'}
+                  </Text>
+                )}
+                {forYou.supplyForMe.length > 0 && (
+                  <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>
+                    {KIND_ICON[forYou.supplyForMe[0].kind] ?? '🏪'} {forYou.supplyForMe[0].providerOrg?.name ?? 'A partner'} offers {CAP_LABEL[forYou.supplyForMe[0].kind] ?? forYou.supplyForMe[0].kind} ({forYou.supplyForMe[0].originRef ?? forYou.supplyForMe[0].city ?? '—'} → {forYou.supplyForMe[0].destinationRef ?? '—'})
+                  </Text>
+                )}
+                {(forYou.myLive.listings > 0 || forYou.myLive.openRequests > 0 || forYou.myLive.submittedQuotes > 0) && (
+                  <Text style={{ color: theme.foreground, fontSize: 12, fontWeight: '700' }}>
+                    Your market: {forYou.myLive.listings} live offer(s) · {forYou.myLive.openRequests} open need(s) · {forYou.myLive.submittedQuotes} quote(s)
+                  </Text>
+                )}
+              </View>
+            )}
+          </View>
         )}
 
         {/* Transporter cockpit */}

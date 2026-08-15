@@ -1179,6 +1179,99 @@ export class MarketService {
     }
   }
 
+  // ---------- Layer 1: "For You" personalization ----------
+
+  /**
+   * Personalized marketplace home: what THIS user can offer (by capability)
+   * and what demand they can quote on, plus what they can get from others.
+   * Turns the generic feed into a capability-matched surface.
+   */
+  async forYou(user: User) {
+    const capabilities = (user.capabilities?.length ? user.capabilities : [user.role]) as string[]
+    const orgIds = await this.orgAccess.memberOrgIds(user)
+
+    // Capability -> market kinds the user can SUPPLY (offer) and can FULFILL (quote).
+    const CAP_TO_OFFER: Record<string, string[]> = {
+      transporter: ['truck_capacity'],
+      warehouse: ['warehouse_space'],
+      carrier: ['carrier_service'],
+      forwarder: ['forwarder_service'],
+      supplier: ['truck_capacity'],
+      driver: [],
+    }
+    const CAP_TO_FULFILL: Record<string, string[]> = {
+      transporter: ['transport'],
+      warehouse: ['warehouse'],
+      carrier: ['carrier', 'insurance'],
+      forwarder: ['forwarding'],
+      supplier: ['transport', 'warehouse', 'forwarding', 'carrier', 'insurance'],
+      driver: [],
+    }
+    // Kinds the user might NEED to buy (complementary capabilities).
+    const CAP_TO_NEED: Record<string, string[]> = {
+      transporter: ['warehouse_space', 'forwarder_service', 'carrier_service'],
+      warehouse: ['truck_capacity', 'forwarder_service'],
+      carrier: ['truck_capacity', 'forwarder_service'],
+      forwarder: ['truck_capacity', 'warehouse_space', 'carrier_service'],
+      supplier: ['truck_capacity', 'warehouse_space', 'carrier_service', 'forwarder_service'],
+      driver: [],
+    }
+
+    const offerKinds = [...new Set(capabilities.flatMap((c) => CAP_TO_OFFER[c] ?? []))]
+    const fulfillKinds = [...new Set(capabilities.flatMap((c) => CAP_TO_FULFILL[c] ?? []))]
+    const needKinds = [...new Set(capabilities.flatMap((c) => CAP_TO_NEED[c] ?? []))]
+
+    // What I already have live.
+    const [myListings, myOpenRequests, mySubmittedQuotes] = await Promise.all([
+      this.prisma.marketListing.count({ where: { providerOrgId: { in: orgIds }, status: 'live' } }),
+      this.prisma.marketRequest.count({ where: { requesterOrgId: { in: orgIds }, status: { in: ['open', 'quoted'] } } }),
+      this.prisma.marketQuote.count({ where: { providerOrgId: { in: orgIds }, status: { in: ['submitted', 'accepted'] } } }),
+    ])
+
+    // Demand I can quote: open requests whose kind matches my capability.
+    const demandWhere: Record<string, unknown> = { status: 'open', requesterOrgId: { notIn: orgIds } }
+    if (fulfillKinds.length) demandWhere.kind = { in: fulfillKinds }
+    const demand = await this.prisma.marketRequest.findMany({
+      where: demandWhere as never,
+      include: { requesterOrg: { select: { id: true, name: true, verified: true } }, lane: true },
+      orderBy: { createdAt: 'desc' },
+      take: 8,
+    })
+    const demandForMe = await Promise.all(
+      demand.map(async (r) => {
+        const rating = await this.orgAverageRating(r.requesterOrgId)
+        return { ...r, requesterRating: rating.avg, requesterCompletion: (await this.orgTrust(r.requesterOrgId)).completionRate }
+      }),
+    )
+
+    // Supply I can get: live listings of complementary kinds, trust-scored.
+    const supplyWhere: Record<string, unknown> = { status: 'live', providerOrgId: { notIn: orgIds } }
+    if (needKinds.length) supplyWhere.kind = { in: needKinds }
+    const supply = await this.prisma.marketListing.findMany({
+      where: supplyWhere as never,
+      include: { providerOrg: { select: { id: true, name: true, verified: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 8,
+    })
+    const supplyForMe = await Promise.all(
+      supply.map(async (l) => {
+        const rating = await this.orgAverageRating(l.providerOrgId)
+        const trust = await this.orgTrust(l.providerOrgId)
+        return { ...l, providerRating: rating.avg, providerCompletion: trust.completionRate }
+      }),
+    )
+
+    return {
+      capabilities,
+      canOffer: offerKinds,
+      canFulfill: fulfillKinds,
+      canGet: needKinds,
+      myLive: { listings: myListings, openRequests: myOpenRequests, submittedQuotes: mySubmittedQuotes },
+      demandForMe,
+      supplyForMe,
+    }
+  }
+
   // ---------- Helpers ----------
 
   private async tx() {

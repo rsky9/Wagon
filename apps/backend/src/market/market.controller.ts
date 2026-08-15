@@ -26,6 +26,11 @@ export class MarketController {
     return this.market.createListing(body as never, user)
   }
 
+  @Get('for-you')
+  forYou(@CurrentUser() user: User) {
+    return this.market.forYou(user)
+  }
+
   @Get('listings')
   browseListings(@Query() query: Record<string, unknown>) {
     return this.market.browseListings(query as never)
