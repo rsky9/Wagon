@@ -118,9 +118,14 @@ export class PaymentsService {
     if (trip.status !== 'delivered') {
       throw new BadRequestException('Payout requires trip to be delivered')
     }
-    // Proof of delivery is mandatory before money moves — no POD, no payout.
-    if (!trip.podUrl) {
-      throw new BadRequestException('Proof of delivery (POD) must be uploaded before payout')
+    // Proof of delivery is mandatory before money moves — and the consignee
+    // must have CONFIRMED receipt. No confirmed POD, no payout.
+    const pod = await this.prisma.proofOfDelivery.findUnique({ where: { tripId } })
+    if (!pod || pod.status === 'pending') {
+      throw new BadRequestException('Delivery proof must be uploaded and confirmed by the consignee before payout')
+    }
+    if (pod.status !== 'confirmed' && pod.status !== 'verified') {
+      throw new BadRequestException('Delivery proof not yet confirmed by the consignee')
     }
 
     const escrow = await this.prisma.payment.findFirst({
@@ -168,6 +173,15 @@ export class PaymentsService {
       await this.prisma.user.update({
         where: { id: user.id },
         data: { tripsCount: { increment: 1 } },
+      })
+      // Notify the transporter their payout cleared.
+      await this.notifications.create({
+        userId: user.id,
+        type: 'payout_released',
+        title: 'Payout released',
+        body: `₹${payoutAmount.toLocaleString('en-IN')} paid for load #${trip.loadId.slice(-6)}`,
+        data: { tripId, loadId: trip.loadId },
+        category: 'payments',
       })
       // First-N-trips cashback: credit Wagon Cash on the first few payouts.
       if (tripsDone < PaymentsService.CASHBACK_FIRST_TRIPS) {
@@ -266,8 +280,8 @@ export class PaymentsService {
     }
   }
 
-  async uploadPod(tripId: string, key: string, user: User) {
-    const trip = await this.prisma.trip.findUnique({ where: { id: tripId } })
+  async uploadPod(tripId: string, input: { photoKey: string; signatureKey?: string; consigneeName?: string; lat?: number; lng?: number; note?: string }, user: User) {
+    const trip = await this.prisma.trip.findUnique({ where: { id: tripId }, include: { load: true } })
     if (!trip) {
       throw new NotFoundException('Trip not found')
     }
@@ -278,12 +292,45 @@ export class PaymentsService {
     if (trip.status !== 'delivered') {
       throw new BadRequestException('POD upload requires trip delivered')
     }
-    if (!key?.trim()) {
-      throw new BadRequestException('POD storage key is required')
+    if (!input.photoKey?.trim()) {
+      throw new BadRequestException('Delivery photo is required')
     }
-    const podUrl = key.startsWith('http') ? key : `s3://${key}`
-    const updated = await this.prisma.trip.update({ where: { id: tripId }, data: { podUrl } })
-    // Canonical evidence event: delivery proof captured.
+    const pod = await this.prisma.proofOfDelivery.upsert({
+      where: { tripId },
+      update: {
+        photoKey: input.photoKey.trim(),
+        signatureKey: input.signatureKey ?? null,
+        consigneeName: input.consigneeName ?? null,
+        lat: input.lat ?? null,
+        lng: input.lng ?? null,
+        note: input.note ?? null,
+        status: 'pending',
+      },
+      create: {
+        tripId,
+        photoKey: input.photoKey.trim(),
+        signatureKey: input.signatureKey ?? null,
+        consigneeName: input.consigneeName ?? null,
+        lat: input.lat ?? null,
+        lng: input.lng ?? null,
+        note: input.note ?? null,
+        status: 'pending',
+      },
+    })
+    // Keep the legacy podUrl in sync for downstream readers.
+    await this.prisma.trip.update({ where: { id: tripId }, data: { podUrl: `s3://${input.photoKey.trim()}` } })
+    // Notify the supplier that delivery evidence arrived (for consignee confirm).
+    const supplier = await this.prisma.supplier.findUnique({ where: { id: trip.load.supplierId }, include: { user: true } })
+    if (supplier) {
+      await this.notifications.create({
+        userId: supplier.userId,
+        type: 'pod_captured',
+        title: 'Delivery proof uploaded',
+        body: `Transporter uploaded delivery evidence for load #${trip.loadId.slice(-6)} — please confirm receipt.`,
+        data: { tripId, loadId: trip.loadId },
+        category: 'delivery',
+      })
+    }
     await this.outbox.emit(await this.tx(), {
       eventType: 'EXECUTION',
       eventCode: 'POD_CAPTURED',
@@ -291,9 +338,36 @@ export class PaymentsService {
       entityId: tripId,
       shipmentId: await this.shipmentIdFor(tripId),
       actorId: user.id,
-      payload: { tripId, podUrl, at: new Date().toISOString() },
+      payload: { tripId, podId: pod.id, status: 'pending' },
     })
-    return { trip: updated }
+    return { pod }
+  }
+
+  /** The consignee/supplier confirms delivery evidence (geotagged receipt). */
+  async confirmPod(tripId: string, user: User) {
+    const pod = await this.prisma.proofOfDelivery.findUnique({ where: { tripId } })
+    if (!pod) throw new NotFoundException('No POD uploaded for this trip')
+    const trip = await this.prisma.trip.findUnique({ where: { id: tripId }, include: { load: true } })
+    if (!trip) throw new NotFoundException('Trip not found')
+    const supplier = await this.prisma.supplier.findUnique({ where: { userId: user.id } })
+    if (!supplier || supplier.id !== trip.load.supplierId) {
+      throw new BadRequestException('Only the consignee/supplier can confirm delivery')
+    }
+    if (pod.status === 'confirmed' || pod.status === 'verified') throw new BadRequestException('POD already confirmed')
+    const updated = await this.prisma.proofOfDelivery.update({
+      where: { id: pod.id },
+      data: { status: 'confirmed', consigneeConfirmed: true, consigneeConfirmedAt: new Date() },
+    })
+    await this.outbox.emit(await this.tx(), {
+      eventType: 'EXECUTION',
+      eventCode: 'POD_CONFIRMED',
+      entityType: 'trip',
+      entityId: tripId,
+      shipmentId: await this.shipmentIdFor(tripId),
+      actorId: user.id,
+      payload: { tripId, podId: pod.id },
+    })
+    return { pod: updated }
   }
 
   /** Invoice for a delivered trip with TDS/GST breakdown. Uses the agreed booking rate. */

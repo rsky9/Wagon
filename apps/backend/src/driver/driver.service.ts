@@ -76,13 +76,19 @@ export class DriverService {
     const trip = await this.prisma.trip.findUnique({ where: { id: tripId } })
     if (!trip) throw new BadRequestException('Trip not found')
     if (trip.driverId !== driver.id) throw new BadRequestException('Not your trip')
-    if (!trip.podUrl) {
-      const updated = await this.prisma.trip.update({
-        where: { id: tripId },
-        data: { podUrl },
-      })
-      return { trip: updated, podUploaded: true }
+    const existing = await this.prisma.proofOfDelivery.findUnique({ where: { tripId } })
+    if (existing && existing.status !== 'pending') {
+      return { trip, podUploaded: false }
     }
-    return { trip, podUploaded: false }
+    const pod = await this.prisma.proofOfDelivery.upsert({
+      where: { tripId },
+      update: { photoKey: podUrl },
+      create: { tripId, photoKey: podUrl },
+    })
+    const updated = await this.prisma.trip.update({
+      where: { id: tripId },
+      data: { podUrl: `s3://${podUrl}` },
+    })
+    return { trip: updated, pod, podUploaded: true }
   }
 }

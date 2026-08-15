@@ -386,12 +386,27 @@ describe('Wagon API (e2e)', () => {
         .expect(400)
     })
 
-    it('transporter uploads POD and receives payout after step-up verification', async () => {
-      // POD now requires a real storage key.
+    it('transporter uploads POD, consignee confirms, receives payout after step-up', async () => {
+      // Transporter uploads delivery evidence (photo + geotag).
       await request(app.getHttpServer())
         .post(`/api/v1/payments/pod/${tripId}`)
         .set('Authorization', `Bearer ${trToken}`)
-        .send({ key: 'pod/e2e/123.png' })
+        .send({ photoKey: 'pod/e2e/123.png', consigneeName: 'E2E Consignee', lat: 13.1, lng: 80.3 })
+        .expect(201)
+
+      // Payout is blocked until the consignee/supplier confirms receipt.
+      const stepEarly = await stepUpAction('release_payout', trToken)
+      await request(app.getHttpServer())
+        .post('/api/v1/payments/release')
+        .set('Authorization', `Bearer ${trToken}`)
+        .set('x-action-token', stepEarly)
+        .send({ tripId })
+        .expect(400)
+
+      // Consignee (supplier) confirms the delivery evidence.
+      await request(app.getHttpServer())
+        .post(`/api/v1/payments/pod/${tripId}/confirm`)
+        .set('Authorization', `Bearer ${supToken}`)
         .expect(201)
 
       // Money release requires a step-up OTP (action token) — without it, 401.

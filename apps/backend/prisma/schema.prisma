@@ -482,12 +482,37 @@ model Trip {
   exceptions   TripException[]
   messages     Message[]
   reviews      Review[]
+  pod          ProofOfDelivery? @relation("TripPOD")
   supplierRating Int?
   supplierReview String?
   transporterRatedAt DateTime?
   supplierRatedAt DateTime?
   @@index([loadId])
   @@index([transporterId])
+}
+
+/// Proof of delivery: evidence that cargo reached the consignee. A photo +
+/// consignee signature + geotag + timestamp, confirmed by the consignee and
+/// reviewed before payout is released.
+model ProofOfDelivery {
+  id             String   @id @default(cuid())
+  tripId         String   @unique
+  trip           Trip     @relation("TripPOD", fields: [tripId], references: [id], onDelete: Cascade)
+  photoKey       String?  // S3 key of the delivery photo
+  signatureKey   String?  // S3 key of the consignee signature capture
+  consigneeName  String?
+  consigneeMobile String?
+  consigneeConfirmed Boolean @default(false)
+  consigneeConfirmedAt DateTime?
+  lat            Float?
+  lng            Float?
+  note           String?
+  status         String   @default("pending") // pending | confirmed | verified | disputed
+  verifiedBy     String?  // admin user id
+  verifiedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  @@index([tripId])
 }
 
 // Real-world logistics exceptions: breakdown, accident, traffic, delay, etc.

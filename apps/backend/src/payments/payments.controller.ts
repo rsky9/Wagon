@@ -41,7 +41,13 @@ export class PaymentsController {
 
   @Post('pod/:tripId')
   @Roles('transporter')
-  uploadPod(@Param('tripId') tripId: string, @Body() body: { key: string }, @CurrentUser() user: User) {
-    return this.payments.uploadPod(tripId, body.key, user)
+  uploadPod(@Param('tripId') tripId: string, @Body() body: { photoKey: string; signatureKey?: string; consigneeName?: string; lat?: number; lng?: number; note?: string }, @CurrentUser() user: User) {
+    return this.payments.uploadPod(tripId, body, user)
+  }
+
+  @Post('pod/:tripId/confirm')
+  @Roles('supplier')
+  confirmPod(@Param('tripId') tripId: string, @CurrentUser() user: User) {
+    return this.payments.confirmPod(tripId, user)
   }
 }
