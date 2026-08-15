@@ -100,17 +100,31 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
   const submit = async () => {
     setSubmitting(true)
     try {
+      // Geocode pickup/drop to real coordinates; compute distance from the route.
+      let pickupLat = 17.385, pickupLng = 78.487, dropLat = 13.083, dropLng = 80.27
+      let distanceKm = Number(distance)
+      const [gPick, gDrop] = await Promise.all([
+        api.get<{ found: boolean; coords: [number, number] | null }>(`/reference/geocode?q=${encodeURIComponent(pickup)}`),
+        api.get<{ found: boolean; coords: [number, number] | null }>(`/reference/geocode?q=${encodeURIComponent(drop)}`),
+      ])
+      if (gPick.found && gPick.coords) { pickupLat = gPick.coords[0]; pickupLng = gPick.coords[1] }
+      if (gDrop.found && gDrop.coords) { dropLat = gDrop.coords[0]; dropLng = gDrop.coords[1] }
+      if (!distanceKm || distanceKm <= 0) {
+        const dist = await api.get<{ found: boolean; distanceKm: number | null }>(`/reference/distance?from=${encodeURIComponent(pickup)}&to=${encodeURIComponent(drop)}`)
+        if (dist.found && dist.distanceKm) distanceKm = dist.distanceKm
+      }
+
       await api.post('/loads', {
         pickupAddr: pickup,
         dropAddr: drop,
-        pickupLat: 17.385, pickupLng: 78.487, dropLat: 13.083, dropLng: 80.27,
+        pickupLat, pickupLng, dropLat, dropLng,
         date: new Date(pickupDate).toISOString(),
         pickupDate: new Date(pickupDate).toISOString(),
         dropDate: dropDate ? new Date(dropDate).toISOString() : undefined,
         truckType,
         modelId,
         weight: Number(weight),
-        distanceKm: Number(distance) || 100,
+        distanceKm: distanceKm || 100,
         materialId: materials.find((m) => m.name === material)?.id ?? materials[0]?.id,
         bodyType,
         loadingReq: loadingReq || undefined,
