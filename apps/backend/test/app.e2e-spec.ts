@@ -12,6 +12,7 @@ describe('Wagon API (e2e)', () => {
   let supToken: string
   let trToken: string
   let admToken: string
+  let trRefresh: string
   let loadId: string
   let tripId: string
 
@@ -85,7 +86,12 @@ describe('Wagon API (e2e)', () => {
   describe('auth', () => {
     it('authenticates supplier, transporter and admin via OTP', async () => {
       supToken = await verify(SUP, await requestOtp(SUP))
-      trToken = await verify(TR, await requestOtp(TR))
+      const tr = await request(app.getHttpServer())
+        .post('/api/v1/auth/verify')
+        .send({ mobile: TR, code: await requestOtp(TR), deviceId: 'dev-e2e-transporter' })
+        .expect(201)
+      trToken = tr.body.accessToken
+      trRefresh = tr.body.refreshToken
       admToken = await verify(ADM, await requestOtp(ADM))
       expect(supToken).toBeTruthy()
       expect(trToken).toBeTruthy()
@@ -103,6 +109,45 @@ describe('Wagon API (e2e)', () => {
         .post('/api/v1/auth/verify')
         .send({ mobile: SUP, code: '0000' })
         .expect(400)
+    })
+
+    it('rotates refresh tokens and binds sessions to a device', async () => {
+      const rt = trRefresh
+
+      // First refresh rotates (returns a new token) and succeeds.
+      const r1 = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: rt, deviceId: 'dev-e2e-transporter' })
+        .expect(201)
+      expect(r1.body.refreshToken).not.toBe(rt)
+
+      // Reusing the rotated token is rejected (theft signal).
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: rt, deviceId: 'dev-e2e-transporter' })
+        .expect(401)
+
+      // Refreshing from a different device is rejected and revokes the family.
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: r1.body.refreshToken, deviceId: 'dev-e2e-2' })
+        .expect(401)
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: r1.body.refreshToken, deviceId: 'dev-e2e-transporter' })
+        .expect(401)
+    })
+
+    it('exposes home summary with money + alerts for the role', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/home/summary')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      expect(res.body.capabilities).toContain('transporter')
+      expect(res.body.transporter).toBeTruthy()
+      expect(typeof res.body.transporter.money?.payoutPending).toBe('number')
+      expect(res.body.alerts).toBeTruthy()
+      expect(typeof res.body.alerts.unreadNotifications).toBe('number')
     })
 
     it('rejects requests without a token', async () => {
