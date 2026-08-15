@@ -443,23 +443,28 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
         </Pressable>
       </View>
 
-      <View style={styles.tabs}>
+      {/* Category bar */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} style={{ flexGrow: 0 }}>
         {([
-          ['listings', 'Supply'],
-          ['requests', 'Demand'],
-          ['carriers', 'Carriers'],
-          ['ai', 'AI'],
-          ['partners', 'Partners'],
-          ['mine', 'My market'],
-        ] as [Tab, string][]).map(([k, label]) => (
-          <Pressable key={k} style={[styles.tabBtn, tab === k && { backgroundColor: '#F97316' }]} onPress={() => setTab(k)}>
-            <Text style={{ color: tab === k ? '#fff' : theme.mutedForeground, fontWeight: '800', fontSize: 12 }}>{label}</Text>
-            <View style={[styles.tabCount, { backgroundColor: tab === k ? 'rgba(255,255,255,0.25)' : theme.muted }]}>
-              <Text style={{ color: tab === k ? '#fff' : theme.mutedForeground, fontSize: 10, fontWeight: '800' }}>{counts[k] ?? 0}</Text>
-            </View>
-          </Pressable>
-        ))}
-      </View>
+          ['listings', 'Supply', '🏪'],
+          ['requests', 'Demand', '📢'],
+          ['carriers', 'Carriers', '🚢'],
+          ['ai', 'AI', '🤖'],
+          ['partners', 'Partners', '🤝'],
+          ['mine', 'My market', '🗂️'],
+        ] as [Tab, string, string][]).map(([k, label, icon]) => {
+          const active = tab === k
+          return (
+            <Pressable key={k} style={[styles.tabBtn, active && styles.tabActive]} onPress={() => setTab(k)}>
+              <Text style={{ fontSize: 15, opacity: active ? 1 : 0.7 }}>{icon}</Text>
+              <Text style={[styles.tabLabel, { color: active ? '#fff' : theme.foreground }]}>{label}</Text>
+              <View style={[styles.tabCount, { backgroundColor: active ? 'rgba(255,255,255,0.25)' : theme.muted }]}>
+                <Text style={{ color: active ? '#fff' : theme.mutedForeground, fontSize: 11, fontWeight: '800' }}>{counts[k] ?? 0}</Text>
+              </View>
+            </Pressable>
+          )
+        })}
+      </ScrollView>
 
       {tab === 'listings' && (
         <>
@@ -808,9 +813,11 @@ const styles = StyleSheet.create({
   publishStrip: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1 },
   publishBtn: { flex: 1, borderRadius: radius.lg, paddingVertical: spacing.md, alignItems: 'center' },
   publishBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
-  tabs: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md },
-  tabBtn: { flex: 1, borderRadius: radius.md, padding: spacing.sm, alignItems: 'center', gap: 2, backgroundColor: 'rgba(128,128,128,0.1)' },
-  tabCount: { borderRadius: radius.full, paddingHorizontal: 6, paddingVertical: 1, minWidth: 18, alignItems: 'center' },
+  tabs: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  tabBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderRadius: radius.full, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: 'rgba(128,128,128,0.1)', borderWidth: 1, borderColor: 'rgba(128,128,128,0.2)' },
+  tabActive: { backgroundColor: '#F97316', borderColor: '#F97316' },
+  tabLabel: { fontSize: 13, fontWeight: '800' },
+  tabCount: { borderRadius: radius.full, paddingHorizontal: 7, paddingVertical: 1, minWidth: 20, alignItems: 'center' },
   filters: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, flexWrap: 'wrap' },
   filterChip: { borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderWidth: 1, borderColor: 'rgba(128,128,128,0.4)' },
   filterActive: { backgroundColor: '#F97316', borderColor: '#F97316' },
