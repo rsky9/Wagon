@@ -69,6 +69,16 @@ export class FinanceController {
     return this.finance.assessRisk(shipmentId, user)
   }
 
+  @Post('plans/:id/cover-quote')
+  quotePlanCover(@Param('id') id: string, @Body() body: { declaredValue: number; currency?: string }, @CurrentUser() user: User) {
+    return this.finance.quotePlanCover(id, body, user)
+  }
+
+  @Post('plans/:id/cover-accept')
+  acceptPlanCover(@Param('id') id: string, @Body() body: { declaredValue: number; policyRef: string; currency?: string }, @CurrentUser() user: User) {
+    return this.finance.acceptPlanCover(id, body, user)
+  }
+
   @Get('shipments/:shipmentId/summary')
   summary(@Param('shipmentId') shipmentId: string, @CurrentUser() user: User) {
     return this.finance.summary(shipmentId, user)

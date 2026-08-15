@@ -412,8 +412,63 @@ export class FinanceService {
     return { assessment: { ...assessment, band } }
   }
 
-  async summary(shipmentId: string, user: User) {
-    await this.requireShipmentAccess(user, shipmentId)
+  /**
+   * Layer 6: quote priced insurance cover for a PLAN at booking time. Risk is
+   * derived from the plan's legs (mode + eta) and the declared cargo value;
+   * the premium is a transparent percentage. The orderer can accept the quote
+   * and immediately issue a policy (an insurer/partner underwrites).
+   */
+  async quotePlanCover(planId: string, input: { declaredValue: number; currency?: string }, user: User) {
+    if (input.declaredValue == null || input.declaredValue <= 0) throw new BadRequestException('Declared cargo value required')
+    const plan = await this.prisma.plan.findUnique({ where: { id: planId } })
+    if (!plan) throw new NotFoundException('Plan not found')
+    await this.requireShipmentAccess(user, plan.shipmentId)
+
+    const legs = (plan.legs as unknown as Array<{ mode?: string; etaHours?: number; cost?: number }>) ?? []
+    const MODE_RISK: Record<string, number> = { air: 0.05, rail: 0.1, road: 0.2, ocean: 0.25, inland_water: 0.18, multimodal: 0.22 }
+    const baseMode = legs.length ? Math.max(...legs.map((l) => MODE_RISK[l.mode ?? 'road'] ?? 0.2)) : 0.2
+    const legCountFactor = Math.min(0.1, (legs.length - 1) * 0.03)
+    const etaFactor = Math.min(0.1, ((plan.etaHours ?? 0) / 24) * 0.02)
+    const risk = Math.min(0.95, baseMode + legCountFactor + etaFactor)
+    const band = risk < 0.4 ? 'low' : risk < 0.7 ? 'medium' : 'high'
+
+    // Premium: risk-adjusted rate on declared value, with a floor.
+    const rate = band === 'low' ? 0.008 : band === 'medium' ? 0.015 : 0.025
+    const premium = Math.round(input.declaredValue * rate)
+    const coverage = input.declaredValue
+    const currency = input.currency ?? 'INR'
+
+    return {
+      quote: {
+        planId,
+        planRef: plan.ref,
+        declaredValue: input.declaredValue,
+        coverage,
+        premium,
+        currency,
+        rate,
+        risk,
+        band,
+        factors: { baseMode, legCountFactor, etaFactor },
+      },
+    }
+  }
+
+  /**
+   * Accept a plan cover quote: issue a policy underwritten by a partner
+   * (carrier/broker/other org). Returns the policy + premium payable.
+   */
+  async acceptPlanCover(planId: string, input: { declaredValue: number; policyRef: string; currency?: string }, user: User) {
+    const quote = await this.quotePlanCover(planId, { declaredValue: input.declaredValue, currency: input.currency }, user)
+    const q = quote.quote
+    const policy = await this.issuePolicy(
+      { shipmentId: (await this.prisma.plan.findUnique({ where: { id: planId } }))!.shipmentId, policyRef: input.policyRef, premium: q.premium, coverage: q.coverage, currency: q.currency },
+      user,
+    )
+    return { policy: policy.policy, quote: q }
+  }
+
+  async summary(shipmentId: string, user: User) {    await this.requireShipmentAccess(user, shipmentId)
     const [claims, policies, settlements, risks] = await Promise.all([
       this.prisma.claim.findMany({ where: { shipmentId }, orderBy: { createdAt: 'desc' } }),
       this.prisma.insurancePolicy.findMany({ where: { shipmentId }, orderBy: { createdAt: 'desc' } }),

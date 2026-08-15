@@ -61,6 +61,23 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
   const createOrder = () => {
     action('order', () => api.post('/forwarding/orders', { shipmentId, buyAmount: 1000, sellAmount: 1200 }), 'Forward order created')
   }
+  const quoteCover = (planId: string) => {
+    Alert.prompt('Insure this plan', 'Declared cargo value (₹)', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Quote', onPress: (val?: string) => {
+        const v = Number(val)
+        if (!v || v <= 0) { Alert.alert('Valid value required'); return }
+        setLoading(true)
+        api.post<{ quote: { premium: number; coverage: number; band: string; risk: number } }>(`/finance/plans/${planId}/cover-quote`, { declaredValue: v })
+          .then((r) => {
+            Alert.alert('Cover quote', `Coverage ₹${r.quote.coverage.toLocaleString('en-IN')}\nPremium ₹${r.quote.premium.toLocaleString('en-IN')} · ${r.quote.band} risk (${(r.quote.risk * 100).toFixed(0)}%)\nAccept to issue a policy.`)
+          })
+          .catch((e) => Alert.alert('Error', e.message))
+          .finally(() => { setLoading(false); fetch() })
+      } },
+    ])
+  }
+
   const fileClaim = () => {
     action('claim', () => api.post('/finance/claims', { shipmentId, reason: 'damage', amount: 1000 }), 'Claim filed')
   }
@@ -235,6 +252,9 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
               <Text style={[styles.chip, { color: p.status === 'selected' ? theme.success : theme.warning, borderColor: p.status === 'selected' ? theme.success : theme.warning }]}>{p.status}</Text>
             </View>
             <Text style={[styles.meta, { color: theme.mutedForeground }]}>₹{(p.cost ?? 0).toLocaleString('en-IN')} · {(p.etaHours ?? '—')}h · risk {p.riskScore}</Text>
+            <Pressable style={[styles.smallBtn, { backgroundColor: '#0EA5E9', alignSelf: 'flex-start', marginTop: spacing.sm }]} onPress={() => quoteCover(p.id)}>
+              <Text style={styles.smallBtnText}>Insure this plan</Text>
+            </Pressable>
           </View>
         ))}
 

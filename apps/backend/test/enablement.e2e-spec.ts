@@ -252,6 +252,27 @@ describe('Enablement platform (e2e)', () => {
       const list = await api(trToken).get('/finance/policies').expect(200)
       expect(list.body.policies.length).toBe(0)
     })
+
+    it('quotes and accepts priced insurance cover per plan (risk-based premium)', async () => {
+      // A plan exists for the fixture shipment (created in the Planning block).
+      const plans = await api(supToken).get(`/planning/shipments/${shipmentId}/plans`).expect(200)
+      const pid = plans.body.plans[0].id
+      const quote = await api(supToken).post(`/finance/plans/${pid}/cover-quote`, { declaredValue: 1_000_000 }).expect(201)
+      expect(quote.body.quote.coverage).toBe(1_000_000)
+      expect(quote.body.quote.premium).toBeGreaterThan(0)
+      expect(quote.body.quote.premium).toBeLessThan(1_000_000)
+      expect(['low', 'medium', 'high']).toContain(quote.body.quote.band)
+      // Higher value -> higher absolute premium (same risk rate).
+      const higher = await api(supToken).post(`/finance/plans/${pid}/cover-quote`, { declaredValue: 10_000_000 }).expect(201)
+      expect(higher.body.quote.premium).toBeGreaterThan(quote.body.quote.premium)
+      // Accepting issues a real policy under a partner org.
+      const accepted = await api(supToken).post(`/finance/plans/${pid}/cover-accept`, { declaredValue: 1_000_000, policyRef: 'POL-COVER-E2E' }).expect(201)
+      expect(accepted.body.policy.status).toBe('active')
+      expect(accepted.body.policy.coverage).toBe(1_000_000)
+      expect(accepted.body.policy.premium).toBe(quote.body.quote.premium)
+      // Bad value is rejected.
+      await api(supToken).post(`/finance/plans/${pid}/cover-quote`, { declaredValue: 0 }).expect(400)
+    })
   })
 
   describe('AI', () => {
