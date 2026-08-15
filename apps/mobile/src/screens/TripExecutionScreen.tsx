@@ -3,8 +3,11 @@ import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View, ScrollView, Pressable, Alert } from 'react-native'
 import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { StatusChip, Button, StatusStepper, type StatusTone } from '@wagon/components'
+import * as DocumentPicker from 'expo-document-picker'
+import { uploadToPresignedUrl } from '@wagon/api-client'
 import { api } from '../config'
 import { useI18n } from '@wagon/i18n'
+import { useStepUp } from '../hooks/useStepUp'
 
 interface TripDetail {
   id: string
@@ -60,6 +63,7 @@ export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
   const [trip, setTrip] = useState<TripDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const { stepUp } = useStepUp()
 
   const fetch = () => {
     api.get<{ trips: TripDetail[] }>('/trips/mine')
@@ -111,6 +115,45 @@ export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
     } catch (e) { Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed') } finally { setBusy(false) }
   }
 
+  const uploadPod = async () => {
+    try {
+      const picked = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*'],
+        copyToCacheDirectory: true,
+      })
+      if (picked.canceled || !picked.assets?.[0]) return
+      const asset = picked.assets[0]
+      setBusy(true)
+      const presigned = await api.post<{ uploadUrl: string; key: string }>(`/kyc/pod/${tripId}`, {
+        mimeType: asset.mimeType ?? 'application/octet-stream',
+        size: asset.size ?? 0,
+      })
+      await uploadToPresignedUrl(presigned.uploadUrl, {
+        uri: asset.uri,
+        name: asset.name ?? 'pod.pdf',
+        type: asset.mimeType ?? 'application/pdf',
+      })
+      await api.post(`/payments/pod/${tripId}`, { photoKey: presigned.key })
+      Alert.alert('POD uploaded', 'Delivery evidence recorded — the consignee will confirm receipt.')
+      fetch()
+    } catch (e) {
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to upload POD')
+    } finally { setBusy(false) }
+  }
+
+  const requestPayout = async () => {
+    const token = await stepUp('release_payout')
+    if (!token) return
+    setBusy(true)
+    try {
+      const res = await api.post<{ alreadyPaid?: boolean }>('/payments/release', { tripId }, { 'x-action-token': token })
+      Alert.alert('Payout', res.alreadyPaid ? 'Already paid out' : 'Payout processed')
+      fetch()
+    } catch (e) {
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to request payout')
+    } finally { setBusy(false) }
+  }
+
   const steps = STAGE_FLOW.map((s, i) => ({
     ...s,
     state: i < currentIdx ? ('done' as const) : i === currentIdx ? ('active' as const) : ('upcoming' as const),
@@ -149,8 +192,14 @@ export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
             <View style={[styles.done, { backgroundColor: theme.success + '1A' }]}>
               <Text style={{ color: theme.success, fontWeight: '800', fontSize: 16, textAlign: 'center' }}>✓ Trip completed</Text>
               <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 4 }}>
-                Uploaded POD: {trip.podUrl ? 'Yes' : 'No'} · Request payout from your Trips tab
+                POD: {trip.podUrl ? 'Uploaded' : 'Not uploaded'}
               </Text>
+              {!trip.podUrl && (
+                <Button label="Upload delivery proof" onPress={uploadPod} loading={busy} variant="secondary" />
+              )}
+              {trip.podUrl && (
+                <Button label="Request payout →" onPress={requestPayout} loading={busy} />
+              )}
             </View>
           )}
         </View>
@@ -181,5 +230,5 @@ const styles = StyleSheet.create({
   meta: { fontSize: 13 },
   stepper: { padding: spacing.md },
   actions: { gap: spacing.sm, marginTop: spacing.sm },
-  done: { borderRadius: radius.lg, padding: spacing.lg },
+  done: { borderRadius: radius.lg, padding: spacing.lg, gap: spacing.sm },
 })
