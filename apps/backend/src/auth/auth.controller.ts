@@ -77,7 +77,7 @@ export class AuthController {
   }
 
   // Step-up verification for sensitive actions (re-OTP to the registered mobile).
-  @Throttle({ default: { limit: 10, ttl: 600_000 } })
+  @Throttle({ default: { limit: 20, ttl: 600_000 } })
   @Post('actions/:action/request')
   @UseGuards(JwtAuthGuard)
   requestActionOtp(@Param('action') action: string, @CurrentUser() user: User) {

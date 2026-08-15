@@ -314,7 +314,13 @@ export class FinanceService {
     // Idempotent: one real payment per settlement (escrow-style capture).
     const idempotencyKey = `settlement_${settlementId}`
     const existing = await this.prisma.payment.findUnique({ where: { idempotencyKey } })
-    if (existing) return { settlement: { ...settlement, status: 'cleared', settledAt: settlement.settledAt }, payment: existing, alreadyPaid: true }
+    if (existing && existing.status === 'succeeded') {
+      return { settlement: { ...settlement, status: 'cleared', settledAt: settlement.settledAt }, payment: existing, alreadyPaid: true }
+    }
+    // A failed capture must be retryable.
+    if (existing && existing.status === 'failed') {
+      await this.prisma.payment.delete({ where: { id: existing.id } })
+    }
 
     const result = await this.provider.capture({ amount, currency: settlement.currency || 'INR', reference: idempotencyKey, metadata: { settlementId, shipmentId: settlement.shipmentId } })
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -330,13 +336,14 @@ export class FinanceService {
           status: result.status === 'succeeded' ? 'succeeded' : 'failed',
         },
       })
+      // Only a succeeded payment clears the settlement.
       const changed = await tx.settlement.update({
         where: { id: settlementId },
-        data: { status: 'cleared', settledAt: new Date() },
+        data: result.status === 'succeeded' ? { status: 'cleared', settledAt: new Date() } : { status: settlement.status },
       })
       await this.outbox.emit(tx as never, {
         eventType: 'FINANCE',
-        eventCode: result.status === 'succeeded' ? 'SETTLEMENT_PAID' : 'SETTLEMENT_CLEARED',
+        eventCode: result.status === 'succeeded' ? 'SETTLEMENT_PAID' : 'SETTLEMENT_FAILED',
         entityType: 'shipment',
         entityId: settlement.shipmentId,
         orgId: settlement.payerId ?? null,

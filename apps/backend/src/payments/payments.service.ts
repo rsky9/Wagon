@@ -50,10 +50,31 @@ export class PaymentsService {
       }
     }
 
+    // Money-in must match money-out: a full escrow must equal the agreed rate.
+    if (stage === 'escrow') {
+      const agreed = trip.booking?.rate ?? trip.load.fareEstimate ?? null
+      if (agreed != null && amount !== agreed) {
+        throw new BadRequestException(`Escrow must equal the agreed rate ₹${agreed}`)
+      }
+    }
+    // Split path: the balance must make advance + balance >= the agreed rate.
+    if (stage === 'balance') {
+      const agreed = trip.booking?.rate ?? trip.load.fareEstimate ?? null
+      const advance = await this.prisma.payment.findFirst({ where: { tripId, type: 'advance', status: 'succeeded' } })
+      const advanceAmt = advance?.amount ?? 0
+      if (agreed != null && advanceAmt + amount > agreed) {
+        throw new BadRequestException(`Advance (₹${advanceAmt}) + balance (₹${amount}) exceeds the agreed rate ₹${agreed}`)
+      }
+    }
+
     const idempotencyKey = stage === 'escrow' ? `escrow_${tripId}` : `${stage}_${tripId}`
     const existing = await this.prisma.payment.findUnique({ where: { idempotencyKey } })
-    if (existing) {
+    if (existing && existing.status === 'succeeded') {
       return { payment: existing, alreadyCaptured: true }
+    }
+    // A failed capture must be retryable — release the idempotency slot.
+    if (existing && existing.status === 'failed') {
+      await this.prisma.payment.delete({ where: { id: existing.id } })
     }
 
     const result = await this.provider.capture({
@@ -134,6 +155,21 @@ export class PaymentsService {
     if (trip.status !== 'delivered') {
       throw new BadRequestException('Payout requires trip to be delivered')
     }
+    // Freeze payouts while a dispute is open on this trip, or an approved claim
+    // settlement on the linked shipment is still unpaid.
+    const shipmentId = await this.shipmentIdFor(trip.loadId)
+    const [openDispute, unpaidClaimSettlement] = await Promise.all([
+      this.prisma.dispute.count({ where: { tripId, status: 'open' } }),
+      shipmentId
+        ? this.prisma.settlement.count({ where: { shipmentId, type: 'claim', status: 'due' } })
+        : Promise.resolve(0),
+    ])
+    if (openDispute > 0) {
+      throw new BadRequestException('Payout is frozen while a dispute is open on this trip')
+    }
+    if (unpaidClaimSettlement > 0) {
+      throw new BadRequestException('Payout is frozen while an approved claim settlement is unpaid')
+    }
     // Proof of delivery is mandatory before money moves — and the consignee
     // must have CONFIRMED receipt. No confirmed POD, no payout.
     const pod = await this.prisma.proofOfDelivery.findUnique({ where: { tripId } })
@@ -152,26 +188,28 @@ export class PaymentsService {
       this.prisma.payment.findFirst({ where: { tripId, type: 'advance', status: 'succeeded' } }),
       this.prisma.payment.findFirst({ where: { tripId, type: 'balance', status: 'succeeded' } }),
     ])
-    const capturedFull = escrow
-    const capturedSplit = advance || balance
-    if (!capturedFull && !capturedSplit) {
+    if (!escrow && !(advance && balance)) {
       throw new BadRequestException('Capture the escrow (or advance + balance) before payout')
     }
 
     const idempotencyKey = `payout_${tripId}`
     const existing = await this.prisma.payment.findUnique({ where: { idempotencyKey } })
-    if (existing) {
+    if (existing && existing.status === 'succeeded') {
       return { payment: existing, alreadyPaid: true }
     }
+    if (existing && existing.status === 'failed') {
+      await this.prisma.payment.delete({ where: { id: existing.id } })
+    }
 
-    // Agreed rate is the locked booking rate; split path pays the balance owed.
-    const captured = capturedFull ?? advance
-    const base = trip.booking?.rate ?? captured?.amount ?? 0
+    // Agreed rate is the locked booking rate.
+    const base = trip.booking?.rate ?? trip.load.fareEstimate ?? 0
     const tax = PaymentsService.taxBreakdown(base)
-    const alreadyPaidBySplit = (advance?.amount ?? 0) + (balance?.amount ?? 0)
-    // Transporter receives net of TDS, minus any advance/balance already released.
     const net = Math.round((base - tax.tdsAmount) * 100) / 100
-    const payoutAmount = capturedFull ? net : Math.max(0, Math.round((net - alreadyPaidBySplit) * 100) / 100)
+    // Full-escrow path: the transporter is paid the full net.
+    // Split path: the advance was already released at pickup, so the final
+    // payout is the net minus the advance already received.
+    const advanceAmt = advance?.amount ?? 0
+    const payoutAmount = escrow ? net : Math.max(0, Math.round((net - advanceAmt) * 100) / 100)
 
     const result = await this.provider.payout({
       amount: payoutAmount,

@@ -297,20 +297,36 @@ describe('Wagon API (e2e)', () => {
     })
 
     it('supplier captures escrow idempotently (while accepted)', async () => {
+      // The escrow must equal the load's agreed fare, and requires step-up.
+      const loadRes = await request(app.getHttpServer())
+        .get(`/api/v1/loads/${loadId}`)
+        .set('Authorization', `Bearer ${supToken}`)
+        .expect(200)
+      const agreed = loadRes.body.load.fareEstimate
+      const token = await stepUpAction('capture_escrow', supToken)
       const first = await request(app.getHttpServer())
         .post('/api/v1/payments/escrow')
         .set('Authorization', `Bearer ${supToken}`)
-        .send({ tripId, amount: 5000 })
+        .set('x-action-token', token)
+        .send({ tripId, amount: agreed })
         .expect(201)
       expect(first.body.alreadyCaptured).toBe(false)
 
       const second = await request(app.getHttpServer())
         .post('/api/v1/payments/escrow')
         .set('Authorization', `Bearer ${supToken}`)
-        .send({ tripId, amount: 5000 })
+        .set('x-action-token', token)
+        .send({ tripId, amount: agreed })
         .expect(201)
       expect(second.body.alreadyCaptured).toBe(true)
       expect(second.body.payment.id).toBe(first.body.payment.id)
+      // Over/under-paying the agreed rate is rejected.
+      await request(app.getHttpServer())
+        .post('/api/v1/payments/escrow')
+        .set('Authorization', `Bearer ${supToken}`)
+        .set('x-action-token', token)
+        .send({ tripId, amount: agreed - 1 })
+        .expect(400)
     })
 
     it('moves trip to in-transit and records tracking points', async () => {
@@ -901,24 +917,38 @@ describe('Wagon API (e2e)', () => {
     })
 
     it('captures advance + balance split payments idempotently (in transit)', async () => {
-      // Advance and balance are separate captures with their own idempotency.
+      // Advance and balance are separate captures with their own idempotency,
+      // each requiring step-up. Use the trip's actual fare for valid split terms.
+      const tripRes = await request(app.getHttpServer())
+        .get('/api/v1/trips/mine')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      const execTrip = tripRes.body.trips.find((t: { id: string }) => t.id === execTripId)
+      const fare = execTrip?.load?.fareEstimate ?? 3000
+      const advanceAmt = Math.round(fare * 0.3)
+      const balanceAmt = fare - advanceAmt
+      const t1 = await stepUpAction('capture_escrow', supToken)
       await request(app.getHttpServer())
         .post('/api/v1/payments/escrow')
         .set('Authorization', `Bearer ${supToken}`)
-        .send({ tripId: execTripId, amount: 1000, stage: 'advance' })
+        .set('x-action-token', t1)
+        .send({ tripId: execTripId, amount: advanceAmt, stage: 'advance' })
         .expect(201)
+      const t2 = await stepUpAction('capture_escrow', supToken)
       await request(app.getHttpServer())
         .post('/api/v1/payments/escrow')
         .set('Authorization', `Bearer ${supToken}`)
-        .send({ tripId: execTripId, amount: 2000, stage: 'balance' })
+        .set('x-action-token', t2)
+        .send({ tripId: execTripId, amount: balanceAmt, stage: 'balance' })
         .expect(201)
       const again = await request(app.getHttpServer())
         .post('/api/v1/payments/escrow')
         .set('Authorization', `Bearer ${supToken}`)
+        .set('x-action-token', t1)
         .send({ tripId: execTripId, amount: 9999, stage: 'advance' })
         .expect(201)
       expect(again.body.alreadyCaptured).toBe(true)
-      expect(again.body.payment.amount).toBe(1000)
+      expect(again.body.payment.amount).toBe(advanceAmt)
     })
 
     it('blocks delivery until delivery OTP verified, then delivers', async () => {

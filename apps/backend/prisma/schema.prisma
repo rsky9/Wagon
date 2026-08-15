@@ -264,6 +264,9 @@ model Driver {
   licenseKey      String?
   licenseVerified Boolean  @default(false)
   status          Boolean  @default(true)
+  // Driver's per-trip pay rate (₹); when null, driver pay defaults to a share
+  // of the trip fare (see driver earnings). The transporter sets this.
+  payRate         Float?
   trucks          Truck[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -491,6 +494,7 @@ model Trip {
   supplierRatedAt DateTime?
   @@index([loadId])
   @@index([transporterId])
+  @@unique([loadId])
 }
 
 /// Proof of delivery: evidence that cargo reached the consignee. A photo +

@@ -57,7 +57,8 @@ export class DriverService {
     return { available: updated.status }
   }
 
-  /** Driver earnings summary from delivered trips. */
+  /** Driver earnings from delivered trips. Uses the driver's pay rate when set,
+   *  else a default share (e.g. 25%) of the trip fare — NOT the full freight. */
   async earnings(user: User) {
     const driver = await this.driverFor(user)
     if (!driver) return { trips: 0, earned: 0 }
@@ -65,8 +66,13 @@ export class DriverService {
       where: { driverId: driver.id, status: 'delivered' },
       include: { load: true },
     })
-    const earned = trips.reduce((s, t) => s + t.load.fareEstimate, 0)
-    return { trips: trips.length, earned }
+    const earned = trips.reduce((s, t) => s + this.driverPay(driver, t.load.fareEstimate), 0)
+    return { trips: trips.length, earned, payRate: driver.payRate ?? null }
+  }
+
+  private driverPay(driver: { payRate: number | null }, fare: number) {
+    if (driver.payRate != null && driver.payRate > 0) return driver.payRate
+    return Math.round(fare * 0.25) // default 25% share when no pay rate is set
   }
 
   /** Driver uploads POD for a delivered trip they were assigned to. */

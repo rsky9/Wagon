@@ -1,5 +1,8 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common'
+import { Injectable, BadRequestException, NotFoundException, Inject } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
+import { timingSafeEqual } from 'node:crypto'
+import Redis from 'ioredis'
+import { REDIS } from '../redis/redis.module'
 import { PrismaService } from '../prisma/prisma.service'
 import { NotificationsService } from '../notifications/notifications.service'
 import { ShipmentProjector } from '../shipments/shipment-projector.service'
@@ -14,6 +17,7 @@ export class TripsService {
     private readonly config: ConfigService,
     private readonly shipments: ShipmentProjector,
     private readonly market: MarketService,
+    @Inject(REDIS) private readonly redis: Redis,
   ) {}
 
   async quote(loadId: string, amount: number, user: User) {
@@ -92,6 +96,8 @@ export class TripsService {
     }
 
     const trip = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.trip.findUnique({ where: { loadId } })
+      if (existing) throw new BadRequestException('Load already assigned to a trip')
       const created = await tx.trip.create({
         data: { loadId, transporterId: transporter.id },
       })
@@ -139,6 +145,9 @@ export class TripsService {
     }
     if (trip.transporterId !== (await this.transporterId(user))) {
       throw new BadRequestException('Not your trip')
+    }
+    if (trip.status === 'cancelled') {
+      throw new BadRequestException('Trip is cancelled — cannot update status')
     }
 
     const transitions: Record<string, string[]> = {
@@ -240,6 +249,7 @@ export class TripsService {
     const isTransporter = trip.transporterId === (await this.transporterId(user))
     const isDriver = await this.isAssignedDriver(trip.driverId, user)
     if (!isTransporter && !isDriver) throw new BadRequestException('Not your trip')
+    if (trip.status === 'cancelled') throw new BadRequestException('Trip is cancelled — cannot advance')
     if (trip.status === 'delivered' || trip.stage === 'delivered') throw new BadRequestException('Trip already completed')
 
     // Driver identity: a driver advancing execution must be a license-verified
@@ -281,12 +291,19 @@ export class TripsService {
     if (supplier) {
       await this.notifications.create({
         userId: supplier.userId,
-        type: 'trip_stage',
-        title: this.stageLabel(next),
-        body: `Load #${trip.loadId.slice(-6)} ${this.stageLabel(next).toLowerCase()}`,
+        type: isDelivered ? 'trip_delivered' : 'trip_stage',
+        title: isDelivered ? 'Load delivered' : this.stageLabel(next),
+        body: isDelivered
+          ? `Load #${trip.loadId.slice(-6)} was delivered — confirm delivery evidence to release payout.`
+          : `Load #${trip.loadId.slice(-6)} ${this.stageLabel(next).toLowerCase()}`,
         data: { tripId: trip.id, loadId: trip.loadId, stage: next },
         category: 'trips',
       })
+    }
+
+    // Marketplace trust: auto-rate the transporter's org after delivery.
+    if (isDelivered) {
+      await this.market.autoRateFromTrip(trip as never, user).catch(() => {})
     }
 
     // Phase 1 — keep the canonical Shipment in sync when the trip stage crosses
@@ -313,11 +330,20 @@ export class TripsService {
 
   /** Generate a 4-digit pickup or delivery OTP shown to the supplier. */
   async generateOtp(tripId: string, kind: 'pickup' | 'delivery', user: User) {
-    const trip = await this.prisma.trip.findUnique({ where: { id: tripId } })
+    const trip = await this.prisma.trip.findUnique({ where: { id: tripId }, include: { load: true } })
     if (!trip) throw new NotFoundException('Trip not found')
     const isTransporter = trip.transporterId === (await this.transporterId(user))
     const isDriver = await this.isAssignedDriver(trip.driverId, user)
     if (!isTransporter && !isDriver) throw new BadRequestException('Not your trip')
+    // Stage/status-gate: pickup OTP is for the pre-load phase, delivery OTP for
+    // the in-transit/delivery phase. Supports both the stage machine and the
+    // coarse status path.
+    if (kind === 'pickup' && trip.status !== 'accepted' && trip.stage !== 'arrived_pickup' && trip.stage !== 'accepted') {
+      throw new BadRequestException('Pickup OTP is only valid before the trip is in transit')
+    }
+    if (kind === 'delivery' && trip.status === 'accepted' && trip.stage === 'accepted') {
+      throw new BadRequestException('Delivery OTP is only valid once the trip is in transit')
+    }
     const code = String(Math.floor(1000 + Math.random() * 9000))
     const updated = await this.prisma.trip.update({
       where: { id: tripId },
@@ -325,7 +351,18 @@ export class TripsService {
         ? { pickupOtp: code, pickupOtpAt: new Date() }
         : { deliveryOtp: code, deliveryOtpAt: new Date() },
     })
-    // Mock: log the code; real impl sends to supplier via SMS/push.
+    // Deliver the code to the supplier (push + mock log).
+    const supplier = await this.prisma.supplier.findUnique({ where: { id: trip.load.supplierId }, include: { user: true } })
+    if (supplier) {
+      await this.notifications.create({
+        userId: supplier.userId,
+        type: kind === 'pickup' ? 'pickup_otp' : 'delivery_otp',
+        title: kind === 'pickup' ? 'Pickup confirmation code' : 'Delivery confirmation code',
+        body: `Load #${trip.loadId.slice(-6)} ${kind} code: ${code}. Share it with your transporter.`,
+        data: { tripId, loadId: trip.loadId },
+        category: 'execution',
+      })
+    }
     const isProd = this.config.get('NODE_ENV') === 'production'
     if (!isProd) console.log(`[mock-otp-${kind}] trip=${tripId} code=${code}`)
     return { kind, otpGenerated: true, devCode: isProd ? undefined : code, trip: updated }
@@ -340,13 +377,32 @@ export class TripsService {
 
     const expected = kind === 'pickup' ? trip.pickupOtp : trip.deliveryOtp
     if (!expected) throw new BadRequestException(`No ${kind} OTP generated`)
-    if (expected !== code) throw new BadRequestException('Invalid OTP')
+
+    // Brute-force protection: max 5 attempts per OTP.
+    const attemptsKey = `otp_attempts:${tripId}:${kind}`
+    const attempts = Number((await this.redis.get(attemptsKey)) ?? '0')
+    if (attempts >= 5) {
+      throw new BadRequestException('Too many OTP attempts — request a new code')
+    }
+    const ok = this.constantTimeEqual(expected, code)
+    if (!ok) {
+      await this.redis.set(attemptsKey, String(attempts + 1), 'EX', 600)
+      throw new BadRequestException('Invalid OTP')
+    }
+    await this.redis.del(attemptsKey)
 
     const updated = await this.prisma.trip.update({
       where: { id: tripId },
       data: kind === 'pickup' ? { pickupOtp: null, pickupOtpVerifiedAt: new Date() } : { deliveryOtp: null, deliveryOtpVerifiedAt: new Date() },
     })
     return { trip: updated, verified: true }
+  }
+
+  private constantTimeEqual(a: string, b: string) {
+    const ab = Buffer.from(a)
+    const bb = Buffer.from(b)
+    if (ab.length !== bb.length) return false
+    return timingSafeEqual(ab, bb)
   }
 
   /** Transporter or supplier cancels an active trip; the load returns to the feed. */
@@ -379,6 +435,27 @@ export class TripsService {
       // Return the load to 'posted' so it can be re-bid, unless it's already delivered.
       if (trip.load.status !== 'delivered' && trip.load.status !== 'completed') {
         await tx.load.update({ where: { id: trip.loadId }, data: { status: 'posted' } })
+      }
+      // Reverse any captured escrow/advance/balance so the supplier gets their
+      // money back (a refund Payment row per captured stage).
+      const captures = await tx.payment.findMany({
+        where: { tripId, type: { in: ['escrow', 'advance', 'balance'] }, status: 'succeeded' },
+      })
+      for (const c of captures) {
+        const refundKey = `refund_${c.idempotencyKey}`
+        const existingRefund = await tx.payment.findUnique({ where: { idempotencyKey: refundKey } })
+        if (existingRefund) continue
+        await tx.payment.create({
+          data: {
+            tripId,
+            type: 'refund',
+            amount: c.amount,
+            method: c.method,
+            providerRef: `refund-${c.providerRef ?? tripId}`,
+            idempotencyKey: refundKey,
+            status: 'succeeded',
+          },
+        })
       }
       return t
     })

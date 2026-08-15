@@ -13,6 +13,7 @@ export class PaymentsController {
 
   @Post('escrow')
   @Roles('supplier')
+  @UseGuards(ActionVerifiedGuard('capture_escrow'))
   capture(@Body() body: { tripId: string; amount: number; stage?: 'escrow' | 'advance' | 'balance' }, @CurrentUser() user: User) {
     return this.payments.captureEscrow(body.tripId, body.amount, user, body.stage ?? 'escrow')
   }
