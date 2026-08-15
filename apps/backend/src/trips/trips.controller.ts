@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { Roles } from '../auth/guards/roles.decorator'
+import { ActionVerifiedGuard } from '../auth/guards/action-verified.guard'
 import { CurrentUser } from '../auth/guards/current-user.decorator'
 import { TripsService } from './trips.service'
 import type { User } from '@prisma/client'
@@ -26,6 +27,7 @@ export class TripsController {
 
   @Post('accept')
   @Roles('transporter')
+  @UseGuards(ActionVerifiedGuard('accept_load'))
   accept(@Body() body: { loadId: string }, @CurrentUser() user: User) {
     return this.trips.accept(body.loadId, user)
   }

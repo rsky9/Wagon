@@ -199,7 +199,7 @@ export class AuthService {
     return { actionToken: token, action, expiresIn: 5 * 60 * 1000 }
   }
 
-  private readonly validActions = ['release_payout', 'confirm_booking', 'delete_account', 'capture_escrow']
+  private readonly validActions = ['release_payout', 'confirm_booking', 'delete_account', 'capture_escrow', 'accept_load']
 
   private async upsertUserByMobile(mobile: string) {
     const existing = await this.prisma.user.findUnique({ where: { mobile } })

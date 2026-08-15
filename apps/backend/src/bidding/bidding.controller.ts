@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
+import { ActionVerifiedGuard } from '../auth/guards/action-verified.guard'
 import { CurrentUser } from '../auth/guards/current-user.decorator'
 import { BiddingService, type SubmitBidInput } from './bidding.service'
 import type { User } from '@prisma/client'
@@ -62,6 +63,7 @@ export class BiddingController {
   }
 
   @Post('load/:loadId/confirm/transporter')
+  @UseGuards(ActionVerifiedGuard('confirm_booking'))
   transporterConfirm(
     @Param('loadId') loadId: string,
     @Body() body: { bidId: string },

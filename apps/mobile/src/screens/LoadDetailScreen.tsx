@@ -13,6 +13,7 @@ import { useTheme, spacing, radius, formatINR, formatWeight, shadows } from '@wa
 import { RouteRail, StatusChip, Button, type StatusTone } from '@wagon/components'
 import { api } from '../config'
 import { useAuth } from '../auth'
+import { useStepUp } from '../hooks/useStepUp'
 import type { Load } from '@wagon/contracts'
 import { useI18n } from '@wagon/i18n'
 
@@ -38,6 +39,7 @@ export function LoadDetailScreen({ load, onBack, onAccepted, onOpenBid }: Props)
   const insets = useSafeAreaInsets()
   const { session } = useAuth()
   const caps = session?.profile.capabilities?.length ? session.profile.capabilities : [session?.profile.role ?? '']
+  const { stepUp } = useStepUp()
   const canHaul = caps.includes('transporter')
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -52,9 +54,12 @@ export function LoadDetailScreen({ load, onBack, onAccepted, onOpenBid }: Props)
   }
 
   const accept = async () => {
+    // Committing to a load is a serious action — confirm identity with a re-OTP.
+    const token = await stepUp('accept_load')
+    if (!token) return
     setLoading(true)
     try {
-      await api.post<{ trip: unknown }>('/trips/accept', { loadId: load.id })
+      await api.post<{ trip: unknown }>('/trips/accept', { loadId: load.id }, { 'x-action-token': token })
       Alert.alert(t('ui.loadReserved'), 'Start the trip from your Trips tab.', [
         { text: 'View trip', onPress: onAccepted },
       ])

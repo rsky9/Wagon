@@ -36,6 +36,20 @@ describe('Wagon API (e2e)', () => {
     return res.body.accessToken as string
   }
 
+  /** Step up a sensitive action: request + verify a re-OTP, return the action token. */
+  const stepUpAction = async (action: string, token: string) => {
+    const step = await request(app.getHttpServer())
+      .post(`/api/v1/auth/actions/${action}/request`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(201)
+    const verified = await request(app.getHttpServer())
+      .post(`/api/v1/auth/actions/${action}/verify`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ code: step.body.devCode })
+      .expect(201)
+    return verified.body.actionToken as string
+  }
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
@@ -248,10 +262,24 @@ describe('Wagon API (e2e)', () => {
   })
 
   describe('trips → payments → tracking (sequential lifecycle)', () => {
+    beforeAll(async () => {
+      // Accepting a load now requires an active truck in the fleet.
+      const ref = await request(app.getHttpServer()).get('/api/v1/reference').expect(200)
+      const model = ref.body.models.find((m: { type: string }) => m.type === 'container')
+      await request(app.getHttpServer())
+        .post('/api/v1/trucks')
+        .set('Authorization', `Bearer ${trToken}`)
+        .send({ truckNo: 'AP11LIFE', type: 'container', modelId: model.id, origin: 'Hyderabad' })
+        .expect(201)
+    })
+
     it('transporter accepts the load and a trip is created', async () => {
+      // Accept requires a step-up OTP (identity confirmation before committing).
+      const actionToken = await stepUpAction('accept_load', trToken)
       const res = await request(app.getHttpServer())
         .post('/api/v1/trips/accept')
         .set('Authorization', `Bearer ${trToken}`)
+        .set('x-action-token', actionToken)
         .send({ loadId })
         .expect(201)
       tripId = res.body.trip.id
@@ -259,9 +287,11 @@ describe('Wagon API (e2e)', () => {
     })
 
     it('rejects double-acceptance (load already assigned)', async () => {
+      const actionToken = await stepUpAction('accept_load', trToken)
       await request(app.getHttpServer())
         .post('/api/v1/trips/accept')
         .set('Authorization', `Bearer ${trToken}`)
+        .set('x-action-token', actionToken)
         .send({ loadId })
         .expect(400)
     })
@@ -815,9 +845,11 @@ describe('Wagon API (e2e)', () => {
           modelId: model.id, weight: 30, distanceKm: 100, materialId: material.id,
         })
         .expect(201)
+      const actionToken = await stepUpAction('accept_load', trToken)
       const acceptRes = await request(app.getHttpServer())
         .post('/api/v1/trips/accept')
         .set('Authorization', `Bearer ${trToken}`)
+        .set('x-action-token', actionToken)
         .send({ loadId: loadRes.body.load.id })
         .expect(201)
       execTripId = acceptRes.body.trip.id
@@ -1240,9 +1272,11 @@ describe('Wagon API (e2e)', () => {
     })
 
     it('transporter confirms and creates the immutable snapshot', async () => {
+      const actionToken = await stepUpAction('confirm_booking', trToken)
       const res = await request(app.getHttpServer())
         .post(`/api/v1/bidding/load/${loadId}/confirm/transporter`)
         .set('Authorization', `Bearer ${trToken}`)
+        .set('x-action-token', actionToken)
         .send({ bidId })
         .expect(201)
       expect(res.body.trip.id).toBeTruthy()

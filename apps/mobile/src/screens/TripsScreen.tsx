@@ -86,9 +86,11 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
   }, [fetchTrips, fetchPending])
 
   const confirmBooking = async (loadId: string, bidId: string) => {
+    const token = await stepUp('confirm_booking')
+    if (!token) return
     setBusy(bidId)
     try {
-      await api.post(`/bidding/load/${loadId}/confirm/transporter`, { bidId })
+      await api.post(`/bidding/load/${loadId}/confirm/transporter`, { bidId }, { 'x-action-token': token })
       Alert.alert(t('ui.confirmed'), 'Booking locked in — trip created')
       fetchTrips()
       fetchPending()

@@ -77,6 +77,13 @@ export class TripsService {
     if (!transporterUser?.transporterVerified) {
       throw new BadRequestException('Complete KYC verification to accept loads')
     }
+    // A transporter can only accept with an active truck in their fleet.
+    const activeTruck = await this.prisma.truck.findFirst({
+      where: { transporterId: transporter.id, activeStatus: true },
+    })
+    if (!activeTruck) {
+      throw new BadRequestException('Add an active truck to your fleet before accepting loads')
+    }
 
     // Self-deal guard: a user with both capabilities must never haul their own load.
     const owner = await this.prisma.supplier.findUnique({ where: { id: load.supplierId }, select: { userId: true } })
@@ -234,6 +241,16 @@ export class TripsService {
     const isDriver = await this.isAssignedDriver(trip.driverId, user)
     if (!isTransporter && !isDriver) throw new BadRequestException('Not your trip')
     if (trip.status === 'delivered' || trip.stage === 'delivered') throw new BadRequestException('Trip already completed')
+
+    // Driver identity: a driver advancing execution must be a license-verified
+    // member of the transporter's fleet (matched by their registered mobile).
+    if (isDriver) {
+      const driver = await this.prisma.driver.findFirst({
+        where: { id: trip.driverId ?? '__none__', mobile: user.mobile },
+      })
+      if (!driver) throw new BadRequestException('Driver not registered in the fleet')
+      if (!driver.licenseVerified) throw new BadRequestException('Driver license must be verified before executing trips')
+    }
 
     const next = TripsService.STAGE_ORDER[trip.stage]?.[0]
     if (!next) throw new BadRequestException(`No next stage from ${trip.stage}`)
