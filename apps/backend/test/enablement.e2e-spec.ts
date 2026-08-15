@@ -731,5 +731,33 @@ describe('Enablement platform (e2e)', () => {
       expect(dec.body.plan).toBeNull()
       expect(dec.body.note).toContain('No live')
     })
+
+    it('re-procures a failed leg from the live marketplace', async () => {
+      // Build a selected plan whose road leg has live replacement supply on its lane.
+      const ship = await api(supToken).post('/foundation/shipments', { commodity: 'ReProc', weightKg: 1000 }).expect(201)
+      const sid = ship.body.shipment.id
+      await api(supToken).post('/planning/plans', {
+        shipmentId: sid,
+        legs: [{ mode: 'road', origin: 'ReProOrigin', destination: 'ReProPort', cost: 15000, etaHours: 20 }],
+        cost: 15000, etaHours: 20,
+      }).expect(201)
+      const plans = await api(supToken).get(`/planning/shipments/${sid}/plans`).expect(200)
+      const planId = plans.body.plans[0].id
+      await api(supToken).post(`/planning/plans/${planId}/select`).expect(201)
+
+      // Live truck_capacity supply on the exact failed lane.
+      await api(trToken).post('/market/listings', { kind: 'truck_capacity', originRef: 'ReProOrigin', destinationRef: 'ReProPort', capacityAvailable: 5000, price: 19000 }).expect(201)
+
+      const det = await api(supToken).get(`/foundation/shipments/${sid}`).expect(200)
+      const roadLeg = det.body.shipment.legs.find((l: { mode: string }) => l.mode === 'road')
+      const failed = await api(supToken).post(`/foundation/legs/${roadLeg.id}/transition`, { event: 'failed', reason: 'breakdown' }).expect(201)
+      expect(failed.body.rePlan).toBeTruthy()
+      expect(failed.body.rePlan.sourcedFromMarket).toBe(true)
+      // Replacement carries the real marketplace provider (tr org), not a static flip.
+      const legs = failed.body.rePlan.plan.legs as Array<{ mode: string; providerId?: string; carrier?: string; cost?: number }>
+      expect(legs[0].providerId).toBeTruthy()
+      expect(legs[0].cost).toBe(19000)
+      expect(legs[0].carrier).toBeTruthy()
+    })
   })
 })

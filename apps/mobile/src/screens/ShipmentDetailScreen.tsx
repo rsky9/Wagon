@@ -78,6 +78,28 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
     action(event, () => api.post(`/foundation/legs/${legId}/transition`, { event }), `${event === 'departed' ? 'Departed' : 'Arrived'} recorded`)
   }
 
+  const failLeg = (legId: string) => {
+    Alert.prompt('Fail leg', 'Reason (e.g. breakdown, customs hold)', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Fail + re-plan', onPress: (reason?: string) => {
+        if (!reason?.trim()) { Alert.alert('Reason required'); return }
+        setLoading(true)
+        api.post<{ rePlan?: { plan?: { ref?: string; legs?: Array<{ mode: string; carrier?: string; cost?: number }> }; sourcedFromMarket?: boolean } }>(`/foundation/legs/${legId}/transition`, { event: 'failed', reason: reason.trim() })
+          .then((r) => {
+            const rp = r.rePlan
+            if (rp?.plan) {
+              const first = (rp.plan.legs ?? [])[0]
+              Alert.alert('Re-planned', `${rp.sourcedFromMarket ? 'Sourced from the marketplace' : 'Fallback route'}\n${first?.mode ?? ''} · ${first?.carrier ?? ''}\n₹${(first?.cost ?? 0).toLocaleString('en-IN')}`)
+            } else {
+              Alert.alert('Leg failed', 'No plan re-plan available')
+            }
+          })
+          .catch((e) => Alert.alert('Error', e.message))
+          .finally(() => { setLoading(false); fetch() })
+      } },
+    ])
+  }
+
   const addCargo = () => {
     Alert.prompt('Add cargo unit', 'Weight (kg)', [
       { text: 'Cancel', style: 'cancel' },
@@ -167,6 +189,11 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
                 {l.status === 'in_transit' && (
                   <Pressable style={[styles.smallBtn, { backgroundColor: theme.success }]} onPress={() => legTransition(l.id, 'arrived')}>
                     <Text style={styles.smallBtnText}>Arrive</Text>
+                  </Pressable>
+                )}
+                {(l.status === 'planned' || l.status === 'booked' || l.status === 'in_transit') && (
+                  <Pressable style={[styles.smallBtn, { backgroundColor: theme.danger }]} onPress={() => failLeg(l.id)}>
+                    <Text style={styles.smallBtnText}>Fail ↻</Text>
                   </Pressable>
                 )}
               </View>

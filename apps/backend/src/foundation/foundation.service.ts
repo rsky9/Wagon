@@ -342,10 +342,27 @@ export class FoundationService {
       return changed
     })
     // Auto re-plan: a failed leg on the active plan should immediately surface an
-    // alternative. Original stays selected — the orderer decides.
+    // alternative, sourced live from the marketplace when possible. Original
+    // stays selected — the orderer decides.
     let rePlan: unknown = undefined
     if (event === 'failed') {
-      rePlan = await this.planning.autoRePlanOnLegFailure(leg.shipmentId, legId, reason ?? 'leg failed', user).catch(() => null)
+      rePlan = await (async () => {
+        try {
+          const sourced = await this.market.findReplacementForLane(
+            { originRef: leg.pickupAddr, destinationRef: leg.dropAddr, mode: leg.mode },
+            user,
+          ).catch(() => ({ replacement: null }))
+          return this.planning.autoRePlanOnLegFailure(
+            leg.shipmentId,
+            legId,
+            reason ?? 'leg failed',
+            user,
+            sourced?.replacement ?? undefined,
+          )
+        } catch {
+          return null
+        }
+      })()
     }
     return { leg: updated, rePlan }
   }

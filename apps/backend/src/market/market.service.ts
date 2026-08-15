@@ -1102,6 +1102,76 @@ export class MarketService {
     })
   }
 
+  // ---------- Layer 4: failure -> instant re-procurement ----------
+
+  /**
+   * Find a live replacement provider for a failed leg's lane. Returns the best
+   * matching listing (kind implied by mode) so the planner can re-procure
+   * instantly instead of falling back to a static mode flip.
+   */
+  async findReplacementForLane(input: { originRef?: string | null; destinationRef?: string | null; mode?: string | null; capacityNeeded?: number }, user: User) {
+    const MODE_TO_KIND: Record<string, string[]> = {
+      road: ['truck_capacity'],
+      rail: ['truck_capacity'],
+      inland_water: ['truck_capacity'],
+      ocean: ['carrier_service'],
+      air: ['carrier_service'],
+      multimodal: ['forwarder_service', 'truck_capacity', 'carrier_service'],
+    }
+    const kinds = input.mode ? (MODE_TO_KIND[input.mode] ?? ['truck_capacity', 'carrier_service']) : ['truck_capacity', 'carrier_service', 'warehouse_space', 'forwarder_service']
+
+    const where: Record<string, unknown> = { status: 'live', kind: { in: kinds } }
+    const candidates = await this.prisma.marketListing.findMany({
+      where: where as never,
+      include: { providerOrg: { select: { id: true, name: true, verified: true } } },
+    })
+
+    const o = input.originRef?.toLowerCase()
+    const d = input.destinationRef?.toLowerCase()
+    const scored = await Promise.all(
+      candidates.map(async (c) => {
+        let score = 0
+        if (o && c.originRef && c.originRef.toLowerCase() === o) score += 30
+        if (d && c.destinationRef && c.destinationRef.toLowerCase() === d) score += 30
+        if (input.capacityNeeded && c.capacityAvailable && c.capacityAvailable >= input.capacityNeeded) score += 10
+        const rating = await this.orgAverageRating(c.providerOrgId)
+        score += (rating.avg ?? 3) * 2
+        const trust = await this.orgTrust(c.providerOrgId)
+        if (trust.completionRate != null) score += (trust.completionRate / 100) * 10
+        if (c.providerOrg.verified) score += 5
+        return { listing: c, score, rating: rating.avg, completionRate: trust.completionRate }
+      }),
+    )
+    scored.sort((a, b) => b.score - a.score)
+    // Only a candidate on the failed leg's lane is a real replacement.
+    const viable = scored.filter((s) => {
+      const c = s.listing
+      return o && (c.originRef?.toLowerCase() === o || c.city?.toLowerCase() === o)
+    })
+    if (viable.length === 0) {
+      return { replacement: null, reason: `No live replacement supply on lane ${input.originRef} → ${input.destinationRef ?? '—'}` }
+    }
+    const best = viable[0]!
+    return {
+      replacement: {
+        mode: input.mode ?? 'road',
+        origin: best.listing.originRef ?? best.listing.city ?? input.originRef ?? undefined,
+        destination: best.listing.destinationRef ?? input.destinationRef ?? undefined,
+        equipment: best.listing.equipment ?? undefined,
+        providerId: best.listing.providerOrgId,
+        carrier: best.listing.providerOrg.name,
+        cost: best.listing.price ?? undefined,
+        etaHours: 24,
+        marketListingId: best.listing.id,
+      },
+      providerOrgId: best.listing.providerOrgId,
+      providerName: best.listing.providerOrg.name,
+      rating: best.rating,
+      completionRate: best.completionRate,
+      score: best.score,
+    }
+  }
+
   // ---------- Phase C: org reputation ----------
 
   /** Average rating of an org on a given axis (default: any axis). */

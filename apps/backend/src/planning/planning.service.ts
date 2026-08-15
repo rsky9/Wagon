@@ -251,9 +251,17 @@ export class PlanningService {
   /**
    * Auto re-plan when a physical leg fails: find the shipment's selected plan,
    * map the failed leg's route to a plan leg, and emit a re_plan with a
-   * fallback mode. Keeps the original plan selected — the orderer still chooses.
+   * replacement. When a marketReplacement is supplied (sourced live from the
+   * marketplace) it is used; otherwise a static mode fallback applies. Keeps
+   * the original plan selected — the orderer still chooses.
    */
-  async autoRePlanOnLegFailure(shipmentId: string, failedLegId: string, reason: string, user: User) {
+  async autoRePlanOnLegFailure(
+    shipmentId: string,
+    failedLegId: string,
+    reason: string,
+    user: User,
+    marketReplacement?: PlanLeg & { marketListingId?: string },
+  ) {
     const shipment = await this.prisma.shipment.findUnique({
       where: { id: shipmentId },
       include: { activePlan: true, legs: { orderBy: { sequence: 'asc' } } },
@@ -275,14 +283,30 @@ export class PlanningService {
     if (index < 0) return { plan: null, note: 'Failed leg not found in selected plan' }
 
     const failedLeg = planLegs[index]!
-    const fallback = {
-      ...failedLeg,
-      mode: failedLeg.mode === 'road' ? 'rail' : 'road',
-      cost: (failedLeg.cost ?? 0) > 0 ? Math.round((failedLeg.cost ?? 0) * 1.15) : undefined,
-      etaHours: (failedLeg.etaHours ?? 0) > 0 ? Math.round(((failedLeg.etaHours ?? 0) * 1.2) * 10) / 10 : undefined,
-      carrier: `fallback after ${reason}`,
+    // Prefer the live market replacement (real provider, real price).
+    let replacement: PlanLeg
+    if (marketReplacement) {
+      replacement = {
+        mode: marketReplacement.mode ?? failedLeg.mode,
+        origin: marketReplacement.origin ?? failedLeg.origin,
+        destination: marketReplacement.destination ?? failedLeg.destination,
+        equipment: marketReplacement.equipment,
+        providerId: marketReplacement.providerId,
+        carrier: marketReplacement.carrier ?? `re-planned via market after ${reason}`,
+        cost: marketReplacement.cost ?? failedLeg.cost,
+        etaHours: marketReplacement.etaHours ?? failedLeg.etaHours,
+      }
+    } else {
+      replacement = {
+        ...failedLeg,
+        mode: failedLeg.mode === 'road' ? 'rail' : 'road',
+        cost: (failedLeg.cost ?? 0) > 0 ? Math.round((failedLeg.cost ?? 0) * 1.15) : undefined,
+        etaHours: (failedLeg.etaHours ?? 0) > 0 ? Math.round(((failedLeg.etaHours ?? 0) * 1.2) * 10) / 10 : undefined,
+        carrier: `fallback after ${reason}`,
+      }
     }
-    return this.rePlan(selected.id, index, fallback, user)
+    const result = await this.rePlan(selected.id, index, replacement, user)
+    return { ...result, sourcedFromMarket: Boolean(marketReplacement), failedLegIndex: index }
   }
 
   async detail(planId: string, user: User) {
