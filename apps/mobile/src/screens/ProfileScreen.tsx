@@ -187,7 +187,7 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
 
         {/* Finance */}
         <GroupTitle>Finance</GroupTitle>
-        <SettingRow icon="💰" label={t('profile.earnings')} onPress={onOpenFinance} />
+        <SettingRow icon="💰" label="Earnings & payments" onPress={onOpenFinance} />
         <SettingRow icon="🧾" label={t('profile.invoices')} sub={t('profile.invoicesSub')} onPress={onOpenInvoices} />
         <SettingRow icon="⚖️" label={t('profile.disputes')} sub={t('profile.disputesSub')} onPress={onOpenDisputes} />
 
