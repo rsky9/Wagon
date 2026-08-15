@@ -242,6 +242,17 @@ Shipments, GMV, repeat rate, conversion · quote response, fill rate, provider l
 
 These three are the keystone of the whole thesis, self-contained, and won't disturb `main` (they live on this branch). Once the schema + migration + basic event relay are in, we validate the existing road flow still works, then expand.
 
+### 10.1 Delivered: marketplace innovation layers (this branch)
+
+The marketplace evolved from a listing board into a capability graph + plan engine:
+
+1. **For-You personalization** — `GET /market/for-you` maps the user's capabilities to what they can offer / quote / need; Home shows a personalized "For you" card (what I offer, matching demand/supply, my live market state).
+2. **Live-state offers** — every offer card carries `onMarketNow` (availability window), `fresh` (hours since the provider's last event), `lastEvent`, `claimRate`, `ratingCount`, `activeTrips` — the marketplace sells trust + freshness, not just capacity.
+3. **Capability decomposition** — `POST /market/requests/:id/decompose` fans one need out to live listings per leg, scores them, and reassembles a single multi-party `Plan` (source `market_decompose`) the orderer selects. Unsatisfiable legs are reported honestly.
+4. **Failure → instant re-procurement** — on `LEG_FAILED`, the planner sources a live replacement from the marketplace (`findReplacementForLane`) instead of a static mode flip; the re-plan carries the real provider + price.
+5. **Programmatic marketplace** — connectors get a machine credential (`apiKeyHash`, raw key shown once); `x-api-key`-guarded `/programmatic/market/*` lets an ERP/TMS post demand, decompose, and browse supply with no human app.
+6. **Risk/insurance as a tradable capability** — `POST /finance/plans/:id/cover-quote` prices a transparent risk-based premium per plan (mode + eta + declared value); `cover-accept` issues a real policy under a partner org.
+
 ---
 
 ## Research sources
