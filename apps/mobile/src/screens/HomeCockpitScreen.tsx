@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { StyleSheet, Text, View, ScrollView, Pressable, RefreshControl } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useTheme, spacing, radius, formatINR, shadows } from '@wagon/design'
+import { useTheme, spacing, radius, formatINR, shadows, gradients } from '@wagon/design'
 import { AppLogo } from '../components/AppLogo'
 import { ModeSwitcher } from '../components/ModeSwitcher'
 import { useActiveMode } from '../mode'
 import { useI18n } from '@wagon/i18n'
 import { useAuth } from '../auth'
 import { api } from '../config'
+import { Greeting, KpiCard, QuickAction, SectionHeader, StatTile, CapabilityChip } from '../components/ui'
 
 interface LoadRef {
   id: string
@@ -46,12 +47,48 @@ interface HomeSummary {
   transporter?: TransporterSummary
 }
 
+interface ForYou {
+  capabilities: string[]
+  canOffer: string[]
+  canFulfill: string[]
+  canGet: string[]
+  myLive: { listings: number; openRequests: number; submittedQuotes: number }
+  demandForMe: Array<{ id: string; kind: string; originRef?: string | null; destinationRef?: string | null; city?: string | null; requesterOrg?: { name: string } | null }>
+  supplyForMe: Array<{ id: string; kind: string; originRef?: string | null; destinationRef?: string | null; city?: string | null; price?: number | null; currency: string; providerOrg?: { name: string; verified: boolean } | null }>
+}
+
 interface Props {
   onOpenLoad: (load: LoadRef) => void
   onOpenTrips: () => void
   onOpenMarketplace: () => void
   onPostLoad: () => void
   onOpenMarket?: () => void
+}
+
+const CAP_LABEL: Record<string, string> = {
+  supplier: 'Shipper',
+  transporter: 'Transporter',
+  forwarder: 'Forwarder',
+  warehouse: 'Warehouse',
+  carrier: 'Carrier',
+  driver: 'Driver',
+}
+
+const KIND_LABEL: Record<string, string> = {
+  truck_capacity: 'Truck capacity',
+  warehouse_space: 'Warehouse space',
+  carrier_service: 'Carrier space',
+  forwarder_service: 'Forwarder service',
+  transport: 'Transport',
+  warehouse: 'Warehouse',
+  forwarding: 'Forwarding',
+  carrier: 'Carrier',
+  insurance: 'Insurance',
+}
+
+const KIND_ICON: Record<string, string> = {
+  truck_capacity: '🚚', warehouse_space: '🏭', carrier_service: '🚢', forwarder_service: '📦',
+  transport: '🚚', warehouse: '🏭', forwarding: '📦', carrier: '🚢', insurance: '🛡️',
 }
 
 export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, onPostLoad, onOpenMarket }: Props) {
@@ -61,51 +98,43 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
   const activeMode = useActiveMode()
   const [data, setData] = useState<HomeSummary | null>(null)
   const [marketCounts, setMarketCounts] = useState<{ listings?: number; requests?: number } | null>(null)
-  const [forYou, setForYou] = useState<{
-    canOffer: string[]
-    canFulfill: string[]
-    canGet: string[]
-    myLive: { listings: number; openRequests: number; submittedQuotes: number }
-    demandForMe: Array<{ id: string; kind: string; originRef?: string | null; destinationRef?: string | null; city?: string | null; capacityNeeded?: number | null; requesterOrg?: { name: string } | null; requesterRating?: number | null; requesterCompletion?: number | null }>
-    supplyForMe: Array<{ id: string; kind: string; originRef?: string | null; destinationRef?: string | null; city?: string | null; price?: number | null; currency: string; providerOrg?: { name: string; verified: boolean } | null; providerRating?: number | null; providerCompletion?: number | null }>
-  } | null>(null)
+  const [forYou, setForYou] = useState<ForYou | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
-
-  const CAP_LABEL: Record<string, string> = {
-    truck_capacity: 'Truck capacity',
-    warehouse_space: 'Warehouse space',
-    carrier_service: 'Carrier space',
-    forwarder_service: 'Forwarder service',
-    transport: 'Transport',
-    warehouse: 'Warehouse',
-    forwarding: 'Forwarding',
-    carrier: 'Carrier',
-    insurance: 'Insurance',
-  }
-  const KIND_ICON: Record<string, string> = {
-    truck_capacity: '🚚', warehouse_space: '🏭', carrier_service: '🚢', forwarder_service: '📦',
-    transport: '🚚', warehouse: '🏭', forwarding: '📦', carrier: '🚢', insurance: '🛡️',
-  }
 
   const fetch = useCallback(() => {
     api.get<HomeSummary>('/home/summary').then(setData).catch(() => {}).finally(() => setLoading(false))
     api.get<{ listings: unknown[] }>('/market/listings').then((r) => setMarketCounts((c) => ({ ...c, listings: r.listings.length }))).catch(() => {})
     api.get<{ requests: unknown[] }>('/market/requests').then((r) => setMarketCounts((c) => ({ ...c, requests: r.requests.length }))).catch(() => {})
-    api.get<typeof forYou>('/market/for-you').then((r) => setForYou(r)).catch(() => {})
+    api.get<ForYou>('/market/for-you').then((r) => setForYou(r)).catch(() => {})
   }, [])
-
   useEffect(() => { fetch() }, [fetch])
 
   const caps = session?.profile.capabilities?.length ? session.profile.capabilities : [session?.profile.role ?? '']
   const isSupplier = caps.includes('supplier')
   const isTransporter = caps.includes('transporter')
   const isBoth = isSupplier && isTransporter
-  // Default surface: active mode (persisted) else supplier if available else transporter.
   const surface: 'supplier' | 'transporter' =
     activeMode === 'supplier' ? 'supplier' : activeMode === 'transporter' ? 'transporter' : isSupplier ? 'supplier' : 'transporter'
   const showSupplier = isSupplier && (surface === 'supplier' || !isBoth)
   const showTransporter = isTransporter && (surface === 'transporter' || !isBoth)
+
+  const userName = session?.profile?.name
+  const needsAttention: Array<{ icon: string; text: string; onPress: () => void }> = []
+  if (forYou && forYou.demandForMe.length > 0) {
+    const d = forYou.demandForMe[0]!
+    needsAttention.push({ icon: KIND_ICON[d.kind] ?? '📢', text: `${forYou.demandForMe.length} open ${d.kind} demand you can quote`, onPress: onOpenMarket ?? onOpenMarketplace })
+  }
+  if (data?.supplier && data.supplier.awaitingResponses > 0) {
+    needsAttention.push({ icon: '⏳', text: `${data.supplier.awaitingResponses} loads awaiting responses`, onPress: onOpenMarketplace })
+  }
+  if (data?.transporter?.truckNowAvailable && data.transporter.lastTripDrop) {
+    needsAttention.push({ icon: '🎯', text: `Truck free near ${data.transporter.lastTripDrop} — find return loads`, onPress: onOpenTrips })
+  }
+  if (forYou && forYou.supplyForMe.length > 0) {
+    const s = forYou.supplyForMe[0]!
+    needsAttention.push({ icon: KIND_ICON[s.kind] ?? '🏪', text: `${s.providerOrg?.name ?? 'A partner'} offers ${KIND_LABEL[s.kind] ?? s.kind}`, onPress: onOpenMarket ?? onOpenMarketplace })
+  }
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top', 'left', 'right']}>
@@ -125,112 +154,104 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
       >
         {loading && <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 40 }}>{t('common.loading')}</Text>}
 
-        {/* Marketplace strip — visible to every user type */}
-        {onOpenMarket && (forYou || marketCounts) && (
-          <View style={[styles.marketStrip, { backgroundColor: 'rgba(249,115,22,0.1)', borderColor: '#F97316' }]}>
-            <Pressable onPress={onOpenMarket}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                <Text style={{ fontSize: 22 }}>🏪</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: theme.foreground, fontWeight: '800', fontSize: 15 }}>Capability marketplace</Text>
-                  <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>
-                    {marketCounts?.listings ?? 0} supply · {marketCounts?.requests ?? 0} demand
-                  </Text>
-                </View>
-                <Text style={{ color: '#F97316', fontWeight: '800', fontSize: 14 }}>Open ›</Text>
-              </View>
-            </Pressable>
-
-            {forYou && (
-              <View style={{ marginTop: spacing.sm, gap: spacing.sm }}>
-                <Text style={{ color: theme.foreground, fontWeight: '800', fontSize: 13 }}>
-                  For you · {forYou.canOffer.length > 0 ? `you can offer ${forYou.canOffer.map((k) => CAP_LABEL[k] ?? k).join(', ')}` : 'get the most out of the network'}
-                </Text>
-                {forYou.demandForMe.length > 0 && (
-                  <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>
-                    {KIND_ICON[forYou.demandForMe[0].kind] ?? '📢'} {forYou.demandForMe.length} open {forYou.demandForMe[0].kind} demand you can quote · e.g. {forYou.demandForMe[0].originRef ?? forYou.demandForMe[0].city ?? '—'} → {forYou.demandForMe[0].destinationRef ?? '—'} from {forYou.demandForMe[0].requesterOrg?.name ?? 'a partner'}
-                  </Text>
-                )}
-                {forYou.supplyForMe.length > 0 && (
-                  <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>
-                    {KIND_ICON[forYou.supplyForMe[0].kind] ?? '🏪'} {forYou.supplyForMe[0].providerOrg?.name ?? 'A partner'} offers {CAP_LABEL[forYou.supplyForMe[0].kind] ?? forYou.supplyForMe[0].kind} ({forYou.supplyForMe[0].originRef ?? forYou.supplyForMe[0].city ?? '—'} → {forYou.supplyForMe[0].destinationRef ?? '—'})
-                  </Text>
-                )}
-                {(forYou.myLive.listings > 0 || forYou.myLive.openRequests > 0 || forYou.myLive.submittedQuotes > 0) && (
-                  <Text style={{ color: theme.foreground, fontSize: 12, fontWeight: '700' }}>
-                    Your market: {forYou.myLive.listings} live offer(s) · {forYou.myLive.openRequests} open need(s) · {forYou.myLive.submittedQuotes} quote(s)
-                  </Text>
-                )}
-              </View>
-            )}
+        {/* Greeting + capabilities */}
+        <Greeting name={userName ?? ''} role={`You can offer · ${(forYou?.canOffer ?? []).length > 0 ? forYou!.canOffer.map((k) => CAP_LABEL[k] ?? k).join(', ') : 'browse the network'}`} />
+        {caps.length > 0 && (
+          <View style={styles.capRow}>
+            {caps.map((c) => <CapabilityChip key={c} label={CAP_LABEL[c] ?? c} />)}
           </View>
         )}
 
-        {/* Transporter cockpit */}
-        {data?.transporter && showTransporter && (
-          <View style={{ gap: spacing.lg }}>
-            <View style={[styles.hero, { backgroundColor: '#0B1B2B' }, shadows.lg]}>
-              <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '600' }}>{t('home.yourFleet')}</Text>
-              <Text style={[styles.heroNum, { color: '#fff' }]}>{data.transporter.availableTrucks}<Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.7)' }}> / {data.transporter.fleetSize} {t('home.trucksAvailable')}</Text></Text>
-              <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 14, marginTop: 6 }}>
-                {data.transporter.matchingLoads} {t('home.matchingLoads')}
-              </Text>
-              {data.transporter.truckNowAvailable && data.transporter.lastTripDrop && (
-                <View style={[styles.heroBadge, { backgroundColor: 'rgba(249,115,22,0.35)' }]}>
-                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
-                    🎯 Your truck is available near {data.transporter.lastTripDrop} — find return loads
-                  </Text>
-                </View>
-              )}
-            </View>
+        {/* Quick actions */}
+        <View style={styles.quickRow}>
+          <QuickAction icon="➕" label="Post load" onPress={onPostLoad} tone="orange" />
+          <QuickAction icon="🔎" label="Find loads" onPress={onOpenMarketplace} tone="navy" />
+          {onOpenMarket && <QuickAction icon="🏪" label="Offer" onPress={onOpenMarket} tone="blue" />}
+          {onOpenMarket && <QuickAction icon="📢" label="Need" onPress={onOpenMarket} tone="green" />}
+        </View>
 
-            {data.transporter.recommended.length > 0 && (
-              <>
-                <SectionTitle>{t('home.recommended')}</SectionTitle>
-                {data.transporter.recommended.map((l) => (
-                  <LoadCard key={l.id} load={l} onPress={() => onOpenLoad(l)} theme={theme} />
-                ))}
-              </>
-            )}
+        {/* KPI hero grid */}
+        <View style={styles.kpiGrid}>
+          {showTransporter && data?.transporter && (
+            <KpiCard
+              label={t('home.yourFleet')}
+              value={`${data.transporter.availableTrucks}/${data.transporter.fleetSize}`}
+              sub={`${data.transporter.matchingLoads} matching loads`}
+              gradient={gradients.navy}
+              icon="🚚"
+              onPress={onOpenTrips}
+              style={styles.kpiFlex}
+            />
+          )}
+          {showSupplier && data?.supplier && (
+            <KpiCard
+              label={t('home.yourShipments')}
+              value={`${data.supplier.activeLoads}`}
+              sub={`${data.supplier.inTransit} in transit`}
+              gradient={['#F97316', '#FB923C']}
+              icon="📦"
+              onPress={onPostLoad}
+              style={styles.kpiFlex}
+            />
+          )}
+        </View>
 
-            {data.transporter.returnLoads.length > 0 && (
-              <>
-                <SectionTitle>{t('home.returnLoads')}</SectionTitle>
-                {data.transporter.returnLoads.map((l) => (
-                  <LoadCard key={l.id} load={l} onPress={() => onOpenLoad(l)} theme={theme} />
-                ))}
-              </>
-            )}
+        {/* Secondary stats */}
+        {showSupplier && data?.supplier && (
+          <View style={styles.statRow}>
+            <StatTile label="Awaiting bids" value={data.supplier.awaitingResponses} icon="⏳" onPress={onOpenMarketplace} />
+            <StatTile label="In transit" value={data.supplier.inTransit} icon="🚚" onPress={onOpenTrips} />
+            <StatTile label="Completed" value={data.supplier.completed} icon="✅" onPress={onOpenMarketplace} />
+          </View>
+        )}
+        {showTransporter && data?.transporter && (
+          <View style={styles.statRow}>
+            <StatTile label="Matching loads" value={data.transporter.matchingLoads} icon="🎯" onPress={onOpenMarketplace} />
+            <StatTile label="Fleet size" value={data.transporter.fleetSize} icon="🚚" onPress={onOpenMarketplace} />
+            <StatTile label="Available" value={data.transporter.availableTrucks} icon="🟢" onPress={onOpenMarketplace} />
           </View>
         )}
 
-        {/* Supplier cockpit */}
-        {data?.supplier && showSupplier && (
-          <View style={{ gap: spacing.lg }}>
-            <View style={[styles.hero, { backgroundColor: theme.primary }, shadows.orange]}>
-              <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600' }}>{t('home.yourShipments')}</Text>
-              <Text style={[styles.heroNum, { color: '#fff' }]}>{data.supplier.activeLoads}<Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.85)' }}> {t('home.activeLoads')}</Text></Text>
-              <View style={styles.heroStats}>
-                <Stat label={t("home.awaitingBids")} value={data.supplier.awaitingResponses} />
-                <Stat label={t("home.inTransit")} value={data.supplier.inTransit} />
-                <Stat label={t("home.completed")} value={data.supplier.completed} />
-              </View>
-              {data.supplier.canPostLoad && (
-                <Pressable style={[styles.cta, { backgroundColor: '#fff' }]} onPress={onPostLoad}>
-                  <Text style={{ color: theme.primary, fontWeight: '800', fontSize: 14 }}>{t('home.postNewLoad')}</Text>
+        {/* Needs your attention */}
+        {needsAttention.length > 0 && (
+          <>
+            <SectionHeader title="Needs your attention" />
+            <View style={[styles.alertCard, { backgroundColor: 'rgba(249,115,22,0.08)', borderColor: '#F97316' }]}>
+              {needsAttention.map((a, i) => (
+                <Pressable key={i} style={styles.alertRow} onPress={a.onPress}>
+                  <Text style={{ fontSize: 16 }}>{a.icon}</Text>
+                  <Text style={[styles.alertText, { color: theme.foreground }]}>{a.text}</Text>
+                  <Text style={{ color: '#F97316', fontWeight: '800' }}>›</Text>
                 </Pressable>
-              )}
+              ))}
             </View>
+          </>
+        )}
 
-            {data.supplier.inTransitTrips.length > 0 && (
-              <>
-                <SectionTitle>{t('home.inTransit')}</SectionTitle>
-                {data.supplier.inTransitTrips.map((t) => (
-                  <LoadCard key={t.id} load={t.load} onPress={onOpenTrips} theme={theme} />
-                ))}
-              </>
-            )}
-          </View>
+        {/* For you marketplace summary */}
+        {onOpenMarket && forYou && (
+          <>
+            <SectionHeader title="Your market" subtitle="Capability marketplace" action="Open" onAction={onOpenMarket} />
+            <View style={styles.marketGrid}>
+              <StatTile label="Live offers" value={forYou.myLive.listings} icon="🏪" onPress={onOpenMarket} />
+              <StatTile label="Open needs" value={forYou.myLive.openRequests} icon="📢" onPress={onOpenMarket} />
+              <StatTile label="My quotes" value={forYou.myLive.submittedQuotes} icon="🧾" onPress={onOpenMarket} />
+            </View>
+          </>
+        )}
+
+        {/* Recommended / return loads */}
+        {showTransporter && data?.transporter && data.transporter.recommended.length > 0 && (
+          <>
+            <SectionHeader title={t('home.recommended')} action="Browse" onAction={onOpenMarketplace} />
+            {data.transporter.recommended.map((l) => <LoadCard key={l.id} load={l} onPress={() => onOpenLoad(l)} theme={theme} />)}
+          </>
+        )}
+        {showTransporter && data?.transporter && data.transporter.returnLoads.length > 0 && (
+          <>
+            <SectionHeader title={t('home.returnLoads')} action="View" onAction={onOpenTrips} />
+            {data.transporter.returnLoads.map((l) => <LoadCard key={l.id} load={l} onPress={() => onOpenLoad(l)} theme={theme} />)}
+          </>
         )}
 
         {!loading && !data?.transporter && !data?.supplier && (
@@ -240,7 +261,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
                 <Text style={{ fontSize: 48 }}>🏪</Text>
                 <Text style={[styles.emptyTitle, { color: theme.foreground }]}>Capability marketplace</Text>
                 <Text style={[styles.emptySub, { color: theme.mutedForeground }]}>
-                  {marketCounts ? `${marketCounts.listings ?? 0} supply listings · ${marketCounts.requests ?? 0} open requests` : 'Browse & post across every capability'}
+                  {marketCounts ? `${marketCounts.listings ?? 0} supply · ${marketCounts.requests ?? 0} demand` : 'Browse & post across every capability'}
                 </Text>
                 <Pressable style={[styles.emptyCta, { backgroundColor: theme.primary }]} onPress={onOpenMarket}>
                   <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>Open marketplace</Text>
@@ -250,18 +271,10 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
               <>
                 <Text style={{ fontSize: 48 }}>🚀</Text>
                 <Text style={[styles.emptyTitle, { color: theme.foreground }]}>{t('home.welcome')}</Text>
-                <Text style={[styles.emptySub, { color: theme.mutedForeground }]}>
-                  {t('home.pickCapability')}
-                </Text>
-                {isTransporter ? (
-                  <Pressable style={[styles.emptyCta, { backgroundColor: theme.primary }]} onPress={onOpenMarketplace}>
-                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>{t('home.browseLoads')}</Text>
-                  </Pressable>
-                ) : (
-                  <Pressable style={[styles.emptyCta, { backgroundColor: theme.primary }]} onPress={onPostLoad}>
-                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>{t('load.postNew')}</Text>
-                  </Pressable>
-                )}
+                <Text style={[styles.emptySub, { color: theme.mutedForeground }]}>{t('home.pickCapability')}</Text>
+                <Pressable style={[styles.emptyCta, { backgroundColor: theme.primary }]} onPress={isTransporter ? onOpenMarketplace : onPostLoad}>
+                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>{isTransporter ? t('home.browseLoads') : t('load.postNew')}</Text>
+                </Pressable>
               </>
             )}
           </View>
@@ -269,23 +282,11 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
       </ScrollView>
     </SafeAreaView>
   )
-}function SectionTitle({ children }: { children: React.ReactNode }) {
-  const theme = useTheme()
-  return <Text style={[styles.sectionTitle, { color: theme.foreground }]}>{children}</Text>
-}
-
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <View style={{ alignItems: 'center' }}>
-      <Text style={{ color: '#fff', fontSize: 18, fontWeight: '800' }}>{value}</Text>
-      <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 11, marginTop: 1 }}>{label}</Text>
-    </View>
-  )
 }
 
 function LoadCard({ load, onPress, theme }: { load: LoadRef; onPress: () => void; theme: ReturnType<typeof useTheme> }) {
   return (
-    <Pressable style={[styles.loadCard, { backgroundColor: theme.background, borderColor: theme.border }]} onPress={onPress}>
+    <Pressable style={({ pressed }) => [styles.loadCard, { backgroundColor: theme.card, borderColor: theme.border }, shadows.sm, pressed && { opacity: 0.94 }]} onPress={onPress}>
       <View style={styles.loadTop}>
         <Text style={[styles.loadFare, { color: theme.foreground }]}>{formatINR(load.fareEstimate)}</Text>
         {typeof load.matchScore === 'number' && (
@@ -306,16 +307,17 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   header: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.sm },
   modeWrap: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
-  marketStrip: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderRadius: radius.lg, borderWidth: 1, padding: spacing.md, marginBottom: spacing.lg },
-  logo: { fontSize: 24, fontWeight: '800', letterSpacing: -0.02 },
-  body: { padding: spacing.lg, gap: spacing.lg, paddingBottom: 120 },
-  hero: { borderRadius: radius.xl, padding: spacing.xl, gap: spacing.xs },
-  heroNum: { fontSize: 34, fontWeight: '800', letterSpacing: -0.02 },
-  heroBadge: { borderRadius: radius.md, padding: spacing.md, marginTop: spacing.md },
-  heroStats: { flexDirection: 'row', gap: spacing.xxl, marginTop: spacing.md },
-  cta: { borderRadius: radius.md, paddingVertical: spacing.md, alignItems: 'center', marginTop: spacing.lg },
-  sectionTitle: { fontSize: 16, fontWeight: '800' },
-  loadCard: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, gap: spacing.sm },
+  body: { padding: spacing.lg, paddingBottom: 140 },
+  capRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg },
+  quickRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
+  kpiGrid: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
+  kpiFlex: { flex: 1 },
+  statRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.xs },
+  marketGrid: { flexDirection: 'row', gap: spacing.md },
+  alertCard: { borderRadius: radius.lg, borderWidth: 1, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, gap: spacing.sm },
+  alertRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
+  alertText: { flex: 1, fontSize: 14, fontWeight: '600' },
+  loadCard: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, gap: spacing.sm, marginBottom: spacing.md },
   loadTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   loadFare: { fontSize: 18, fontWeight: '800' },
   matchChip: { borderRadius: radius.full, paddingHorizontal: spacing.sm, paddingVertical: 3 },

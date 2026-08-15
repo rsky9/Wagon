@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { StyleSheet, Text, View, FlatList, Pressable, Alert, TextInput, Modal, ScrollView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useTheme, spacing, radius } from '@wagon/design'
+import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
 import { api } from '../config'
+import { TrustBadge, LiveStateBadge, SectionHeader } from '../components/ui'
 import type { MarketListing, MarketRequest, MarketQuote } from '@wagon/contracts'
 
 interface Props {
@@ -30,6 +31,12 @@ const KIND_LABEL: Record<string, string> = {
   carrier_service: 'Carrier space',
   forwarder_service: 'Forwarder service',
 }
+const KIND_ICON: Record<string, string> = {
+  truck_capacity: '🚚',
+  warehouse_space: '🏭',
+  carrier_service: '🚢',
+  forwarder_service: '📦',
+}
 const REQ_KINDS = ['transport', 'warehouse', 'forwarding', 'carrier', 'insurance']
 
 interface MineItem {
@@ -44,6 +51,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
   const [myListings, setMyListings] = useState<MarketListing[]>([])
   const [requests, setRequests] = useState<MarketRequest[]>([])
   const [mine, setMine] = useState<MineItem[]>([])
+  const [counts, setCounts] = useState<{ listings: number; requests: number; carriers: number; ai: number; partners: number; mine: number }>({ listings: 0, requests: 0, carriers: 0, ai: 0, partners: 0, mine: 0 })
   const [loading, setLoading] = useState(true)
   const [filterKind, setFilterKind] = useState('')
   const [searchOrigin, setSearchOrigin] = useState('')
@@ -102,15 +110,26 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
     if (searchDest) params.set('destination', searchDest)
     const qs = params.toString() ? `?${params.toString()}` : ''
     Promise.all([
-      api.get<{ listings: MarketListing[] }>(`/market/listings${qs}`),
-      api.get<{ requests: MarketRequest[] }>('/market/requests'),
-      api.get<{ requests: MineItem[] }>('/market/requests/mine').then((r) => setMine(r.requests)).catch(() => {}),
-      api.get<{ services: typeof carrierServices }>(`/market/carrier-services${carOriginSearch || carDestSearch ? `?origin=${encodeURIComponent(carOriginSearch)}&destination=${encodeURIComponent(carDestSearch)}` : ''}`).then((r) => setCarrierServices(r.services)).catch(() => {}),
-      api.get<{ listings: MarketListing[] }>('/market/listings/mine').then((r) => setMyListings(r.listings)).catch(() => {}),
-      api.get<{ partners: typeof partners }>('/market/partners').then((r) => setPartners(r.partners)).catch(() => {}),
-      api.get<{ recommendations: AiRec[] }>('/ai/recommendations/mine').then((r) => setAiRecs(r.recommendations)).catch(() => {}),
-      api.get<{ quotes: typeof myQuotes }>('/market/quotes/mine').then((r) => setMyQuotes(r.quotes)).catch(() => {}),
-    ]).then(([l, r]) => { setListings(l.listings); setRequests(r.requests) })
+      api.get<{ listings: MarketListing[] }>(`/market/listings${qs}`).then((r) => r.listings),
+      api.get<{ requests: MarketRequest[] }>('/market/requests').then((r) => r.requests),
+      api.get<{ requests: MineItem[] }>('/market/requests/mine').then((r) => { setMine(r.requests); return r.requests }).catch(() => [] as MineItem[]),
+      api.get<{ services: typeof carrierServices }>(`/market/carrier-services${carOriginSearch || carDestSearch ? `?origin=${encodeURIComponent(carOriginSearch)}&destination=${encodeURIComponent(carDestSearch)}` : ''}`).then((r) => { setCarrierServices(r.services); return r.services }).catch(() => []),
+      api.get<{ listings: MarketListing[] }>('/market/listings/mine').then((r) => { setMyListings(r.listings); return r.listings }).catch(() => [] as MarketListing[]),
+      api.get<{ partners: typeof partners }>('/market/partners').then((r) => { setPartners(r.partners); return r.partners }).catch(() => []),
+      api.get<{ recommendations: AiRec[] }>('/ai/recommendations/mine').then((r) => { setAiRecs(r.recommendations); return r.recommendations }).catch(() => [] as AiRec[]),
+      api.get<{ quotes: typeof myQuotes }>('/market/quotes/mine').then((r) => { setMyQuotes(r.quotes); return r.quotes }).catch(() => []),
+    ]).then(([listings, requests, mineRes, servicesRes, myListingsRes, partnersRes, aiRes, quotesRes]) => {
+      setListings(listings)
+      setRequests(requests)
+      setCounts({
+        listings: listings.length,
+        requests: requests.length,
+        carriers: servicesRes.length,
+        ai: aiRes.length,
+        partners: partnersRes.length,
+        mine: myListingsRes.length + mineRes.length + quotesRes.length,
+      })
+    })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [filterKind, searchOrigin, searchDest, carOriginSearch, carDestSearch])
@@ -296,28 +315,38 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
   const renderListing = (l: MarketListing) => (
     <View key={l.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
       <View style={styles.cardTop}>
-        <Text style={[styles.cardTitle, { color: theme.foreground }]}>{KIND_LABEL[l.kind] ?? l.kind}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-          {l.providerOrg?.verified && <Text style={[styles.verified, { color: theme.success }]}>✓ verified</Text>}
-          {l.onMarketNow === false && <Text style={[styles.chip, { color: theme.danger, borderColor: theme.danger }]}>not now</Text>}
+        <View style={styles.kindRow}>
+          <View style={[styles.kindTile, { backgroundColor: 'rgba(249,115,22,0.12)' }]}>
+            <Text style={{ fontSize: 16 }}>{KIND_ICON[l.kind] ?? '🏪'}</Text>
+          </View>
+          <View>
+            <Text style={[styles.cardTitle, { color: theme.foreground }]}>{KIND_LABEL[l.kind] ?? l.kind}</Text>
+            <Text style={[styles.meta, { color: theme.mutedForeground }]}>
+              {l.originRef ?? l.city ?? '—'} → {l.destinationRef ?? '—'}
+            </Text>
+          </View>
         </View>
+        <LiveStateBadge onMarketNow={l.onMarketNow} fresh={l.fresh} claimRate={l.claimRate} />
       </View>
-      <Text style={[styles.meta, { color: theme.mutedForeground }]}>
-        {l.originRef ?? l.city ?? '—'} → {l.destinationRef ?? '—'} · {l.equipment ?? '—'} · {l.capacityAvailable ?? '—'} {l.capacityUnit}
-      </Text>
-      <View style={styles.cardTop}>
-        <Text style={[styles.price, { color: theme.foreground }]}>{l.price != null ? `${l.currency} ${l.price.toLocaleString('en-IN')}` : '—'}</Text>
-        <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>
-          {l.providerOrg?.name ?? '—'} · ★ {l.orgRating?.avg ? l.orgRating.avg.toFixed(1) : 'new'}
-          {l.completionRate != null ? ` · ${l.completionRate}% done` : ''}
-        </Text>
+
+      <View style={styles.cardMid}>
+        <View>
+          <Text style={[styles.price, { color: theme.foreground }]}>
+            {l.price != null ? `${l.currency} ${l.price.toLocaleString('en-IN')}` : '—'}
+          </Text>
+          <Text style={[styles.meta, { color: theme.mutedForeground }]}>
+            {l.capacityAvailable ?? '—'} {l.capacityUnit}{l.equipment ? ` · ${l.equipment}` : ''}
+            {l.availableFrom ? ` · from ${new Date(l.availableFrom).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}` : ''}
+          </Text>
+        </View>
+        {l.providerOrg?.verified && <Text style={[styles.verified, { color: theme.success }]}>✓ verified</Text>}
       </View>
-      <Text style={{ color: theme.mutedForeground, fontSize: 11 }}>
-        {l.claimRate != null ? `🛡️ ${(l.claimRate * 100).toFixed(0)}% claims · ` : ''}
-        {l.activeTrips != null && l.activeTrips > 0 ? `${l.activeTrips} trips done · ` : ''}
-        {l.fresh != null ? (l.fresh < 1 ? 'active just now' : `last active ${l.fresh}h ago`) : 'no recent activity'}
-        {l.availableFrom ? ` · avail ${new Date(l.availableFrom).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}` : ''}
-      </Text>
+
+      <View style={styles.providerRow}>
+        <Text style={[styles.meta, { color: theme.mutedForeground }]}>{l.providerOrg?.name ?? '—'}</Text>
+        <TrustBadge rating={l.orgRating?.avg} completion={l.completionRate} />
+      </View>
+
       <View style={styles.actions}>
         <Pressable style={[styles.actionBtn, { backgroundColor: '#F97316' }]} onPress={() => askProvider(l)}>
           <Text style={styles.actionText}>Ask</Text>
@@ -400,17 +429,36 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
         <Text style={[styles.title, { color: theme.foreground }]}>Marketplace</Text>
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
           {canPublishCarrier && (
-            <Pressable onPress={() => setShowCarrier(true)} hitSlop={8}><Text style={{ color: '#F97316', fontSize: 14, fontWeight: '800' }}>🚢 Publish</Text></Pressable>
+            <Pressable onPress={() => setShowCarrier(true)} hitSlop={8}><Text style={{ color: '#F97316', fontSize: 14, fontWeight: '800' }}>🚢</Text></Pressable>
           )}
-          <Pressable onPress={() => setShowListing(true)} hitSlop={8}><Text style={{ color: '#F97316', fontSize: 14, fontWeight: '800' }}>+ Offer</Text></Pressable>
           <Pressable onPress={() => setShowRequest(true)} hitSlop={8}><Text style={{ color: '#F97316', fontSize: 14, fontWeight: '800' }}>+ Need</Text></Pressable>
         </View>
       </View>
 
+      {/* Action-first publish strip */}
+      <View style={[styles.publishStrip, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <Pressable style={[styles.publishBtn, { backgroundColor: '#F97316' }]} onPress={() => setShowListing(true)}>
+          <Text style={styles.publishBtnText}>+ Offer supply</Text>
+        </Pressable>
+        <Pressable style={[styles.publishBtn, { backgroundColor: theme.foreground }]} onPress={() => setShowRequest(true)}>
+          <Text style={[styles.publishBtnText, { color: theme.background }]}>+ Post a need</Text>
+        </Pressable>
+      </View>
+
       <View style={styles.tabs}>
-        {([['listings', 'Supply'], ['requests', 'Demand'], ['carriers', 'Carriers'], ['ai', 'AI picks'], ['partners', 'Partners'], ['mine', 'My market']] as [Tab, string][]).map(([k, label]) => (
+        {([
+          ['listings', 'Supply'],
+          ['requests', 'Demand'],
+          ['carriers', 'Carriers'],
+          ['ai', 'AI'],
+          ['partners', 'Partners'],
+          ['mine', 'My market'],
+        ] as [Tab, string][]).map(([k, label]) => (
           <Pressable key={k} style={[styles.tabBtn, tab === k && { backgroundColor: '#F97316' }]} onPress={() => setTab(k)}>
-            <Text style={{ color: tab === k ? '#fff' : theme.mutedForeground, fontWeight: '800', fontSize: 13 }}>{label}</Text>
+            <Text style={{ color: tab === k ? '#fff' : theme.mutedForeground, fontWeight: '800', fontSize: 12 }}>{label}</Text>
+            <View style={[styles.tabCount, { backgroundColor: tab === k ? 'rgba(255,255,255,0.25)' : theme.muted }]}>
+              <Text style={{ color: tab === k ? '#fff' : theme.mutedForeground, fontSize: 10, fontWeight: '800' }}>{counts[k] ?? 0}</Text>
+            </View>
           </Pressable>
         ))}
       </View>
@@ -742,23 +790,31 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1 },
   title: { fontSize: 20, fontWeight: '800' },
+  publishStrip: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1 },
+  publishBtn: { flex: 1, borderRadius: radius.lg, paddingVertical: spacing.md, alignItems: 'center' },
+  publishBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
   tabs: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md },
-  tabBtn: { flex: 1, borderRadius: radius.md, padding: spacing.sm, alignItems: 'center', backgroundColor: 'rgba(128,128,128,0.1)' },
+  tabBtn: { flex: 1, borderRadius: radius.md, padding: spacing.sm, alignItems: 'center', gap: 2, backgroundColor: 'rgba(128,128,128,0.1)' },
+  tabCount: { borderRadius: radius.full, paddingHorizontal: 6, paddingVertical: 1, minWidth: 18, alignItems: 'center' },
   filters: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, flexWrap: 'wrap' },
   filterChip: { borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderWidth: 1, borderColor: 'rgba(128,128,128,0.4)' },
   filterActive: { backgroundColor: '#F97316', borderColor: '#F97316' },
   list: { padding: spacing.lg, gap: spacing.md },
-  card: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, gap: 4 },
+  card: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, gap: spacing.sm },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  kindRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  kindTile: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  cardMid: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  providerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 },
   cardTitle: { fontSize: 15, fontWeight: '800' },
   verified: { fontSize: 12, fontWeight: '700' },
   meta: { fontSize: 13 },
-  price: { fontSize: 15, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  price: { fontSize: 17, fontWeight: '800', fontVariant: ['tabular-nums'] },
   chip: { fontSize: 11, fontWeight: '700', borderWidth: 1, borderRadius: radius.full, paddingHorizontal: spacing.sm, paddingVertical: 2, textTransform: 'uppercase' },
   section: { gap: spacing.md },
   sectionTitle: { fontSize: 14, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
-  actionBtn: { borderRadius: radius.md, padding: spacing.sm, alignItems: 'center', marginTop: spacing.xs },
+  actionBtn: { flex: 1, borderRadius: radius.md, padding: spacing.sm, alignItems: 'center', marginTop: spacing.xs },
   actionText: { color: '#fff', fontWeight: '800', fontSize: 12 },
   smallBtn: { borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   quoteRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderTopWidth: 1, paddingTop: spacing.sm },
