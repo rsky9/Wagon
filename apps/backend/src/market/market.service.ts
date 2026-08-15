@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { OutboxRelay } from '../outbox/outbox-relay.service'
 import { OrgAccessService } from '../org-access/org-access.service'
 import { NotificationsService } from '../notifications/notifications.service'
+import { PlanningService } from '../planning/planning.service'
 import type { User } from '@prisma/client'
 
 const LISTING_KINDS = ['truck_capacity', 'warehouse_space', 'carrier_service', 'forwarder_service']
@@ -15,6 +16,7 @@ export class MarketService {
     private readonly orgAccess: OrgAccessService,
     private readonly notifications: NotificationsService,
     @Inject(OutboxRelay) private readonly outbox: OutboxRelay,
+    @Inject(PlanningService) private readonly planning: PlanningService,
   ) {}
 
   // ---------- Lanes (shared primitive) ----------
@@ -947,6 +949,157 @@ export class MarketService {
     )
     const matches = scored.sort((a, b) => b.score - a.score).slice(0, 10)
     return { matches }
+  }
+
+  // ---------- Layer 3: capability decomposition ----------
+
+  /**
+   * Decompose one need into a multi-party Plan. The caller gives a route spec
+   * (one or more legs: origin/destination/mode/kind), and each leg is fanned
+   * out to live listings of the matching capability kind, scored by lane/city/
+   * capacity fit + rating + completion, then the best provider per leg is
+   * assembled into a single Plan the orderer can select. This is the
+   * "describe an outcome, get a plan" engine.
+   */
+  async decompose(input: {
+    requestId: string
+    legs: Array<{
+      origin: string
+      destination?: string
+      city?: string
+      mode?: string
+      kind?: string
+      capacityNeeded?: number
+    }>
+  }, user: User) {
+    if (!input.legs?.length) throw new BadRequestException('Need at least one leg')
+    if (input.legs.length > 12) throw new BadRequestException('At most 12 legs')
+
+    const request = await this.prisma.marketRequest.findUnique({ where: { id: input.requestId } })
+    if (!request) throw new NotFoundException('Request not found')
+    const orgIds = await this.orgAccess.memberOrgIds(user)
+    if (!orgIds.includes(request.requesterOrgId)) throw new ForbiddenException('Not your request')
+
+    // Capability kind -> listing kind, and -> plan-leg mode.
+    const KIND_TO_LISTING: Record<string, string> = {
+      transport: 'truck_capacity',
+      warehouse: 'warehouse_space',
+      forwarding: 'forwarder_service',
+      carrier: 'carrier_service',
+    }
+    const KIND_TO_MODE: Record<string, string> = {
+      transport: 'road',
+      warehouse: 'road',
+      forwarding: 'multimodal',
+      carrier: 'ocean',
+    }
+
+    let totalCost = 0
+    let totalEta = 0
+    const planLegs: Array<Record<string, unknown>> = []
+    const selections: Array<{ legIndex: number; listing: Record<string, unknown>; providerOrgId: string }> = []
+
+    for (let i = 0; i < input.legs.length; i++) {
+      const leg = input.legs[i]!
+      const legKind = leg.kind ?? request.kind
+      const listingKind = KIND_TO_LISTING[legKind]
+      const mode = leg.mode ?? KIND_TO_MODE[legKind] ?? 'road'
+
+      const where: Record<string, unknown> = { status: 'live' }
+      if (listingKind) where.kind = listingKind
+      const candidates = await this.prisma.marketListing.findMany({
+        where: where as never,
+        include: { providerOrg: { select: { id: true, name: true, verified: true, verifiedCapabilities: true } }, lane: true },
+      })
+
+      // Score candidates for this leg (reuse the matchRequest scoring shape).
+      const scored = await Promise.all(
+        candidates.map(async (c) => {
+          let score = 0
+          const o = leg.origin.toLowerCase()
+          const d = leg.destination?.toLowerCase()
+          const laneHit =
+            (c.originRef && c.originRef.toLowerCase() === o) ||
+            (c.city && c.city.toLowerCase() === o) ||
+            (d && c.destinationRef && c.destinationRef.toLowerCase() === d)
+          if (laneHit) score += 25
+          if (c.originRef && c.originRef.toLowerCase() === o) score += 20
+          if (c.city && c.city.toLowerCase() === o) score += 15
+          if (d && c.destinationRef && c.destinationRef.toLowerCase() === d) score += 15
+          if (leg.capacityNeeded && c.capacityAvailable && c.capacityAvailable >= leg.capacityNeeded) score += 10
+          const rating = await this.orgAverageRating(c.providerOrgId)
+          score += (rating.avg ?? 3) * 2
+          const trust = await this.orgTrust(c.providerOrgId)
+          if (trust.completionRate != null) score += (trust.completionRate / 100) * 10
+          const kinds: string[] = (c.providerOrg.verifiedCapabilities as string[] | null) ?? []
+          if (c.providerOrg.verified) score += 5
+          if (kinds.some((k) => k === (listingKind === 'warehouse_space' ? 'warehouse' : listingKind === 'carrier_service' ? 'carrier' : listingKind === 'forwarder_service' ? 'forwarder' : 'transporter'))) score += 5
+          return { listing: c, score, rating: rating.avg, completionRate: trust.completionRate, laneHit }
+        }),
+      )
+      scored.sort((a, b) => b.score - a.score)
+
+      // Only listings touching the requested lane/city can fulfill this leg;
+      // a listing on a completely different lane is not a viable option.
+      const viable = scored.filter((s) => s.laneHit)
+      if (viable.length === 0) {
+        return {
+          request,
+          plan: null,
+          note: `No live ${listingKind ?? legKind} supply on lane ${leg.origin} → ${leg.destination ?? leg.city ?? '—'} for leg ${i + 1}`,
+          selections,
+          unsatisfiable: true,
+        }
+      }
+
+      const best = viable[0]!
+      const cost = (best.listing.price ?? 0) || 0
+      totalCost += cost
+      const eta = 24 + (best.listing.capacityAvailable ? (best.listing.capacityAvailable > 5000 ? 12 : 6) : 0)
+      totalEta += eta
+      planLegs.push({
+        mode,
+        origin: leg.origin,
+        destination: leg.destination ?? leg.city,
+        equipment: best.listing.equipment ?? undefined,
+        providerId: best.listing.providerOrgId,
+        cost: cost || undefined,
+        etaHours: eta,
+      })
+      selections.push({ legIndex: i, listing: best.listing, providerOrgId: best.listing.providerOrgId })
+    }
+
+    // Assemble a Plan for the shipment behind the request (or a new one).
+    const plan = await this.planning.propose(
+      { shipmentId: (await this.ensureShipmentForRequest(request.id, user)).id, source: 'market_decompose', legs: planLegs as never, cost: totalCost, etaHours: totalEta },
+      user,
+    )
+
+    await this.outbox.emit(await this.tx(), {
+      eventType: 'PLAN',
+      eventCode: 'PLAN_DECOMPOSED',
+      entityType: 'request',
+      entityId: request.id,
+      orgId: request.requesterOrgId,
+      actorId: user.id,
+      payload: { planRef: plan.plan.ref, legCount: planLegs.length, cost: totalCost, etaHours: totalEta },
+    })
+
+    return { request, plan: plan.plan, selections, legs: planLegs, cost: totalCost, etaHours: totalEta, unsatisfiable: false }
+  }
+
+  /** A MarketRequest may not have a shipment; create a canonical one to hold the plan. */
+  private async ensureShipmentForRequest(requestId: string, user: User) {
+    const existing = await this.prisma.shipment.findFirst({ where: { ref: `MRQ-${requestId.slice(-8)}` } })
+    if (existing) return existing
+    return this.prisma.shipment.create({
+      data: {
+        ref: `MRQ-${requestId.slice(-8)}`,
+        ownerOrgId: (await this.orgAccess.primaryOrg(user)).id,
+        commodity: 'Marketplace request',
+        status: 'draft',
+      },
+    })
   }
 
   // ---------- Phase C: org reputation ----------

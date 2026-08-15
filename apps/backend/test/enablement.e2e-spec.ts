@@ -694,5 +694,42 @@ describe('Enablement platform (e2e)', () => {
       const det = await api(supToken).get(`/market/listings/${listing.body.listing.id}`).expect(200)
       expect(det.body.listing.onMarketNow).toBe(true)
     })
+
+    it('decomposes one need into a multi-party plan (fan-out + recombine)', async () => {
+      // Publish supply on two capability kinds (road + ocean) so decomposition can fan out.
+      await api(trToken).post('/market/listings', { kind: 'truck_capacity', originRef: 'DecomposeCity', destinationRef: 'DecomposePort', capacityAvailable: 20000, price: 20000 }).expect(201)
+      await api(trToken).post('/market/listings', { kind: 'carrier_service', originRef: 'DecomposePort', destinationRef: 'DecomposeHub', capacityAvailable: 20000, price: 80000 }).expect(201)
+
+      const request = await api(supToken).post('/market/requests', { kind: 'transport', originRef: 'DecomposeCity', destinationRef: 'DecomposeHub', capacityNeeded: 12000 }).expect(201)
+      const dec = await api(supToken).post(`/market/requests/${request.body.request.id}/decompose`, {
+        legs: [
+          { origin: 'DecomposeCity', destination: 'DecomposePort', kind: 'transport', capacityNeeded: 12000 },
+          { origin: 'DecomposePort', destination: 'DecomposeHub', kind: 'carrier', capacityNeeded: 12000 },
+        ],
+      }).expect(201)
+
+      expect(dec.body.unsatisfiable).toBe(false)
+      expect(dec.body.plan).toBeTruthy()
+      expect(dec.body.plan.status).toBe('proposed')
+      expect(dec.body.plan.legs.length).toBe(2)
+      expect(dec.body.plan.legs[0].mode).toBe('road')
+      expect(dec.body.plan.legs[1].mode).toBe('ocean')
+      expect(dec.body.plan.legs[0].providerId).toBeTruthy()
+      expect(dec.body.plan.legs[1].providerId).toBeTruthy()
+      expect(dec.body.cost).toBeGreaterThan(0)
+      expect(dec.body.selections.length).toBe(2)
+      // The recombined plan can be selected by the requester.
+      await api(supToken).post(`/planning/plans/${dec.body.plan.id}/select`).expect(201)
+    })
+
+    it('reports unsatisfiable decomposition when a leg has no supply', async () => {
+      const request = await api(supToken).post('/market/requests', { kind: 'forwarding', originRef: 'NowhereCity', destinationRef: 'NowhereHub' }).expect(201)
+      const dec = await api(supToken).post(`/market/requests/${request.body.request.id}/decompose`, {
+        legs: [{ origin: 'NowhereCity', destination: 'NowhereHub', kind: 'forwarding' }],
+      }).expect(201)
+      expect(dec.body.unsatisfiable).toBe(true)
+      expect(dec.body.plan).toBeNull()
+      expect(dec.body.note).toContain('No live')
+    })
   })
 })

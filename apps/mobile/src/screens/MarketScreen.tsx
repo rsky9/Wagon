@@ -201,6 +201,29 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
       .finally(() => setBusy(false))
   }
 
+  const decompose = (r: MarketRequest) => {
+    Alert.prompt('Build a plan', `Route for ${r.kind} (e.g. Mumbai|Mundra|transport, Mundra|Singapore|carrier)`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Plan', onPress: (spec?: string) => {
+        const legs = (spec ?? '').split(/[;,]/).map((s) => {
+          const [origin, destination, kind] = s.split('|').map((x) => x.trim())
+          return origin ? { origin, destination: destination || undefined, kind: kind || undefined } : null
+        }).filter(Boolean) as Array<{ origin: string; destination?: string; kind?: string }>
+        if (legs.length === 0) { Alert.alert('Route required', 'e.g. Mumbai|Mundra|transport'); return }
+        setBusy(true)
+        api.post<{ plan?: { ref: string; status: string; legs: unknown[]; cost?: number | null }; unsatisfiable?: boolean; note?: string }>(`/market/requests/${r.id}/decompose`, { legs })
+          .then((res) => {
+            if (res.unsatisfiable) { Alert.alert('Cannot assemble', res.note ?? 'One leg has no supply'); return }
+            const p = res.plan!
+            Alert.alert('Plan ready', `${p.ref} · ${p.status}\n${(p.legs as Array<{ mode: string; origin?: string }>).map((l) => `${l.mode} ${l.origin ?? ''}`).join(' → ')}\n₹${(p.cost ?? 0).toLocaleString('en-IN')}\nSelect it in Planning to book.`)
+            fetch()
+          })
+          .catch((e) => Alert.alert('Error', e.message))
+          .finally(() => setBusy(false))
+      } },
+    ])
+  }
+
   const recommendCarriers = () => {
     Alert.prompt('AI carrier pick', 'Origin (port/city)', [
       { text: 'Cancel', style: 'cancel' },
@@ -329,6 +352,11 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
         {!withQuotes && r.status === 'open' && (
           <Pressable style={[styles.actionBtn, { backgroundColor: '#F97316' }]} onPress={() => setQuoteFor(r)}>
             <Text style={styles.actionText}>Quote</Text>
+          </Pressable>
+        )}
+        {!withQuotes && r.status === 'open' && (
+          <Pressable style={[styles.actionBtn, { backgroundColor: '#8B5CF6' }]} onPress={() => decompose(r)}>
+            <Text style={styles.actionText}>Plan</Text>
           </Pressable>
         )}
       </View>

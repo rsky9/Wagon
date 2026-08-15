@@ -131,6 +131,11 @@ export class MarketController {
     return this.market.matchRequest(id, user)
   }
 
+  @Post('requests/:id/decompose')
+  decompose(@Param('id') id: string, @Body() body: { legs: Array<{ origin: string; destination?: string; city?: string; mode?: string; kind?: string; capacityNeeded?: number }> }, @CurrentUser() user: User) {
+    return this.market.decompose({ requestId: id, legs: body.legs }, user)
+  }
+
   // Reputation
   @Post('ratings')
   rateOrg(@Body() body: Record<string, unknown>, @CurrentUser() user: User) {
