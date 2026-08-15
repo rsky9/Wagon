@@ -161,11 +161,29 @@ export class MarketService {
     }
     // Attach org reputation for trust signals.
     const withRating = await Promise.all(
-      filtered.map(async (l) => ({
-        ...l,
-        orgRating: await this.orgAverageRating(l.providerOrgId),
-        completionRate: (await this.orgTrust(l.providerOrgId)).completionRate,
-      })),
+      filtered.map(async (l) => {
+        const trust = await this.orgTrust(l.providerOrgId)
+        // Live-state: availability window + freshness + latest provider activity.
+        const latestEvent = await this.prisma.logisticsEvent.findFirst({
+          where: { orgId: l.providerOrgId },
+          orderBy: { occurredAt: 'desc' },
+          select: { eventCode: true, occurredAt: true },
+        })
+        const now = Date.now()
+        return {
+          ...l,
+          orgRating: trust.rating,
+          ratingCount: trust.ratingCount,
+          completionRate: trust.completionRate,
+          claimRate: trust.claimRate,
+          activeTrips: trust.trips,
+          onMarketNow: !l.availableFrom || new Date(l.availableFrom) <= new Date() ? (!l.availableTo || new Date(l.availableTo) >= new Date()) : false,
+          availableFrom: l.availableFrom,
+          availableTo: l.availableTo,
+          fresh: latestEvent ? Math.round((now - new Date(latestEvent.occurredAt).getTime()) / 36e5) : null,
+          lastEvent: latestEvent?.eventCode ?? null,
+        }
+      }),
     )
     return { listings: withRating }
   }
@@ -177,7 +195,24 @@ export class MarketService {
     })
     if (!listing) throw new NotFoundException('Listing not found')
     const trust = await this.orgTrust(listing.providerOrgId)
-    return { listing: { ...listing, orgRating: trust.rating, completionRate: trust.completionRate } }
+    const latestEvent = await this.prisma.logisticsEvent.findFirst({
+      where: { orgId: listing.providerOrgId },
+      orderBy: { occurredAt: 'desc' },
+      select: { eventCode: true, occurredAt: true },
+    })
+    return {
+      listing: {
+        ...listing,
+        orgRating: trust.rating,
+        ratingCount: trust.ratingCount,
+        completionRate: trust.completionRate,
+        claimRate: trust.claimRate,
+        activeTrips: trust.trips,
+        onMarketNow: !listing.availableFrom || new Date(listing.availableFrom) <= new Date() ? (!listing.availableTo || new Date(listing.availableTo) >= new Date()) : false,
+        fresh: latestEvent ? Math.round((Date.now() - new Date(latestEvent.occurredAt).getTime()) / 36e5) : null,
+        lastEvent: latestEvent?.eventCode ?? null,
+      },
+    }
   }
 
   /** Provider pauses/resumes/expires their own listing. */

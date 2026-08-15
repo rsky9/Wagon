@@ -673,5 +673,26 @@ describe('Enablement platform (e2e)', () => {
       // Restore capabilities for the rest of the suite.
       await api(supToken).patch('/auth/capabilities', { capabilities: ['supplier'] }).expect(200)
     })
+
+    it('surfaces live-state signals on offers (availability, freshness, claims)', async () => {
+      // A listing with an availability window and a provider who has activity.
+      const listing = await api(trToken).post('/market/listings', {
+        kind: 'truck_capacity', originRef: 'LiveCity', destinationRef: 'LiveDrop',
+        capacityAvailable: 3000, price: 25000,
+        availableFrom: new Date(Date.now() - 864e5).toISOString(),
+        availableTo: new Date(Date.now() + 7 * 864e5).toISOString(),
+      }).expect(201)
+      const browse = await api(supToken).get('/market/listings?kind=truck_capacity').expect(200)
+      const live = browse.body.listings.find((l: { id: string }) => l.id === listing.body.listing.id)
+      expect(live).toBeTruthy()
+      expect(live.onMarketNow).toBe(true)
+      expect(typeof live.fresh).toBe('number')
+      expect('lastEvent' in live).toBe(true)
+      expect('claimRate' in live).toBe(true)
+      expect('completionRate' in live).toBe(true)
+      // Detail also carries live-state.
+      const det = await api(supToken).get(`/market/listings/${listing.body.listing.id}`).expect(200)
+      expect(det.body.listing.onMarketNow).toBe(true)
+    })
   })
 })

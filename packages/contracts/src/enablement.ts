@@ -350,7 +350,15 @@ export interface MarketListing {
   description?: string | null
   sourceType?: string | null
   orgRating?: { avg: number | null; count: number } | null
+  ratingCount?: number | null
   completionRate?: number | null
+  claimRate?: number | null
+  activeTrips?: number | null
+  availableFrom?: string | null
+  availableTo?: string | null
+  onMarketNow?: boolean
+  fresh?: number | null
+  lastEvent?: string | null
   providerOrg?: { id: string; name: string; verified: boolean } | null
   createdAt: string
 }

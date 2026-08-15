@@ -268,7 +268,10 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
     <View key={l.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
       <View style={styles.cardTop}>
         <Text style={[styles.cardTitle, { color: theme.foreground }]}>{KIND_LABEL[l.kind] ?? l.kind}</Text>
-        {l.providerOrg?.verified && <Text style={[styles.verified, { color: theme.success }]}>✓ verified</Text>}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+          {l.providerOrg?.verified && <Text style={[styles.verified, { color: theme.success }]}>✓ verified</Text>}
+          {l.onMarketNow === false && <Text style={[styles.chip, { color: theme.danger, borderColor: theme.danger }]}>not now</Text>}
+        </View>
       </View>
       <Text style={[styles.meta, { color: theme.mutedForeground }]}>
         {l.originRef ?? l.city ?? '—'} → {l.destinationRef ?? '—'} · {l.equipment ?? '—'} · {l.capacityAvailable ?? '—'} {l.capacityUnit}
@@ -280,6 +283,12 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
           {l.completionRate != null ? ` · ${l.completionRate}% done` : ''}
         </Text>
       </View>
+      <Text style={{ color: theme.mutedForeground, fontSize: 11 }}>
+        {l.claimRate != null ? `🛡️ ${(l.claimRate * 100).toFixed(0)}% claims · ` : ''}
+        {l.activeTrips != null && l.activeTrips > 0 ? `${l.activeTrips} trips done · ` : ''}
+        {l.fresh != null ? (l.fresh < 1 ? 'active just now' : `last active ${l.fresh}h ago`) : 'no recent activity'}
+        {l.availableFrom ? ` · avail ${new Date(l.availableFrom).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}` : ''}
+      </Text>
       <View style={styles.actions}>
         <Pressable style={[styles.actionBtn, { backgroundColor: '#F97316' }]} onPress={() => askProvider(l)}>
           <Text style={styles.actionText}>Ask</Text>
