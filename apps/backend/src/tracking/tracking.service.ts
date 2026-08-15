@@ -48,11 +48,53 @@ export class TrackingService {
     const load = await this.prisma.load.findUnique({ where: { id: trip.loadId } })
     const geofence = load?.geofenceRadius ?? 1 // km default
     let zone: 'none' | 'pickup' | 'drop' = 'none'
+    let distDrop = 0
     if (load) {
       const distPickup = this.distanceKm(lat, lng, load.pickupLat, load.pickupLng)
-      const distDrop = this.distanceKm(lat, lng, load.dropLat, load.dropLng)
+      distDrop = this.distanceKm(lat, lng, load.dropLat, load.dropLng)
       if (distPickup <= geofence) zone = 'pickup'
       else if (distDrop <= geofence) zone = 'drop'
+    }
+
+    // Arrival events on zone transitions (idempotent per zone per trip).
+    const arrivedKey = `arrived:${tripId}:${zone}`
+    if (zone !== 'none' && !(await this.redis.get(arrivedKey))) {
+      await this.redis.set(arrivedKey, '1', 'EX', 86400)
+      const eventCode = zone === 'pickup' ? 'ARRIVED_AT_PICKUP' : 'ARRIVED_AT_DROP'
+      await this.prisma.logisticsEvent.create({
+        data: {
+          eventType: 'EXECUTION',
+          eventCode,
+          classifier: 'ACT',
+          entityType: 'trip',
+          entityId: tripId,
+          shipmentId: null,
+          occurredAt: new Date(),
+          source: 'gps',
+          actorId: user.id,
+          location: zone === 'pickup' ? load?.pickupAddr ?? null : load?.dropAddr ?? null,
+          payload: { tripId, loadId: trip.loadId, lat, lng },
+        },
+      })
+      // Notify the counterparty of arrival.
+      const supplier = await this.prisma.supplier.findUnique({ where: { id: load?.supplierId ?? '' } })
+      if (supplier) {
+        await this.prisma.notification.create({
+          data: {
+            userId: supplier.userId,
+            type: zone === 'pickup' ? 'arrived_pickup' : 'arrived_drop',
+            title: zone === 'pickup' ? 'Truck arrived at pickup' : 'Truck arrived at destination',
+            body: `${trip.loadId.slice(-6)} — truck reached ${zone === 'pickup' ? load?.pickupAddr : load?.dropAddr}`,
+            data: { tripId, loadId: trip.loadId },
+          },
+        })
+      }
+    }
+
+    // ETA from live speed (if any) + remaining distance to drop.
+    let etaMinutes: number | null = null
+    if (speedKmh && speedKmh > 5 && distDrop > 0) {
+      etaMinutes = Math.round((distDrop / speedKmh) * 60)
     }
 
     this.gateway.broadcast(tripId, {
@@ -61,9 +103,10 @@ export class TrackingService {
       speedKmh: speedKmh ?? null,
       recordedAt: record.recordedAt,
       zone,
+      etaMinutes,
     })
 
-    return { location: record, zone }
+    return { location: record, zone, etaMinutes }
   }
 
   private distanceKm(lat1: number, lng1: number, lat2: number, lng2: number) {

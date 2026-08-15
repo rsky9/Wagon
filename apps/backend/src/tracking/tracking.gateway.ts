@@ -77,7 +77,7 @@ export class TrackingGateway implements OnGatewayInit {
     client.leave(`trip:${data.tripId}`)
   }
 
-  broadcast(tripId: string, payload: { lat: number; lng: number; speedKmh?: number | null; recordedAt: Date; zone?: 'none' | 'pickup' | 'drop' }) {
+  broadcast(tripId: string, payload: { lat: number; lng: number; speedKmh?: number | null; recordedAt: Date; zone?: 'none' | 'pickup' | 'drop'; etaMinutes?: number | null }) {
     this.server.to(`trip:${tripId}`).emit('location', { tripId, ...payload })
   }
 }
