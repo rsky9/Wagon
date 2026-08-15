@@ -482,6 +482,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
             <TextInput style={[styles.input, styles.half, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="To (city)" placeholderTextColor={theme.mutedForeground} value={searchDest} onChangeText={setSearchDest} />
           </View>
           <FlatList
+            style={styles.listScroll}
             contentContainerStyle={styles.list}
             data={listings}
             keyExtractor={(l) => l.id}
@@ -493,6 +494,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
 
       {tab === 'carriers' && (
         <FlatList
+          style={styles.listScroll}
           contentContainerStyle={styles.list}
           data={carrierServices}
           keyExtractor={(s) => s.id}
@@ -532,6 +534,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
 
       {tab === 'partners' && (
         <FlatList
+          style={styles.listScroll}
           contentContainerStyle={styles.list}
           data={partners}
           keyExtractor={(p) => p.id}
@@ -553,6 +556,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
 
       {tab === 'ai' && (
         <FlatList
+          style={styles.listScroll}
           contentContainerStyle={styles.list}
           data={aiRecs}
           keyExtractor={(r) => r.id}
@@ -586,6 +590,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
 
       {tab === 'requests' && (
         <FlatList
+          style={styles.listScroll}
           contentContainerStyle={styles.list}
           data={requests}
           keyExtractor={(r) => r.id}
@@ -596,6 +601,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
 
       {tab === 'mine' && (
         <FlatList
+          style={styles.listScroll}
           contentContainerStyle={styles.list}
           data={[{ type: 'requests' as const }, { type: 'quotes' as const }, { type: 'supply' as const }]}
           keyExtractor={(i) => i.type}
@@ -646,8 +652,8 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
                       <Text style={[styles.price, { color: theme.foreground }]}>
                         {l.price != null ? `${l.currency} ${l.price.toLocaleString('en-IN')}` : '—'}
                       </Text>
-                      <Pressable style={[styles.actionBtn, { backgroundColor: l.status === 'live' ? theme.warning : theme.success }]} onPress={() => toggleListing(l)}>
-                        <Text style={styles.actionText}>{l.status === 'live' ? 'Pause' : 'Resume'}</Text>
+                      <Pressable style={[styles.smallActionBtn, { backgroundColor: l.status === 'live' ? theme.warning : theme.success }]} onPress={() => toggleListing(l)}>
+                        <Text style={styles.smallActionText}>{l.status === 'live' ? 'Pause' : 'Resume'}</Text>
                       </Pressable>
                     </View>
                   </MarketCard>
@@ -828,7 +834,8 @@ const styles = StyleSheet.create({
   filterChip: { borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderWidth: 1, borderColor: 'rgba(128,128,128,0.4)', marginBottom: spacing.xs },
   filterActive: { backgroundColor: '#F97316', borderColor: '#F97316' },
   searchRow: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.lg, marginBottom: spacing.md },
-  list: { padding: spacing.lg, gap: spacing.lg },
+  list: { padding: spacing.lg, paddingBottom: 140, gap: spacing.lg },
+  listScroll: { flex: 1 },
   cardMid: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: spacing.xs },
   providerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xs },
   slotPill: { borderRadius: radius.full, backgroundColor: 'rgba(128,128,128,0.12)', paddingHorizontal: spacing.sm, paddingVertical: 3 },
@@ -840,6 +847,8 @@ const styles = StyleSheet.create({
   actionBtn: { flex: 1, borderRadius: radius.md, padding: spacing.sm, alignItems: 'center', marginTop: spacing.xs },
   actionText: { color: '#fff', fontWeight: '800', fontSize: 12 },
   smallBtn: { borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  smallActionBtn: { borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, alignSelf: 'center' },
+  smallActionText: { color: '#fff', fontWeight: '800', fontSize: 12 },
   quoteRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderTopWidth: 1, paddingTop: spacing.sm },
   modalWrap: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modal: { borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, borderTopWidth: 1, padding: spacing.xl, gap: spacing.md, maxHeight: '80%' },
