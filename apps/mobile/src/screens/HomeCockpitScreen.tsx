@@ -75,6 +75,7 @@ interface Props {
   onPostLoad: () => void
   onOpenMarket?: () => void
   onOpenNotifications?: () => void
+  onOpenKyc?: () => void
 }
 
 const CAP_LABEL: Record<string, string> = {
@@ -103,7 +104,7 @@ const KIND_ICON: Record<string, string> = {
   transport: '🚚', warehouse: '🏭', forwarding: '📦', carrier: '🚢', insurance: '🛡️',
 }
 
-export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, onPostLoad, onOpenMarket, onOpenNotifications }: Props) {
+export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, onPostLoad, onOpenMarket, onOpenNotifications, onOpenKyc }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
   const { session } = useAuth()
@@ -145,7 +146,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
       needsAttention.push({ icon: '⚠️', text: `${alerts.activeExceptions} open exception${alerts.activeExceptions > 1 ? 's' : ''} need attention`, onPress: onOpenTrips })
     }
     if (alerts.kycPending) {
-      needsAttention.push({ icon: '🛡️', text: 'Complete your KYC to unlock bookings', onPress: onOpenMarketplace })
+      needsAttention.push({ icon: '🛡️', text: 'Complete your KYC to unlock bookings', onPress: onOpenKyc ?? onOpenMarketplace })
     }
     for (const d of alerts.expiringDocs) {
       needsAttention.push({ icon: '📄', text: `${d.truckNo}: ${d.doc} expires in ${d.daysLeft}d`, onPress: onOpenMarketplace })

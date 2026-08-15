@@ -97,6 +97,9 @@ export function MyLoads({ onPostLoad, onLogout, onSelectLoad, onOpenKyc, onOpenD
     if (load.status === 'delivered') {
       actions.push({ text: 'Complete', onPress: () => { api.patch(`/loads/${load.id}/complete`).then(fetchLoads).catch(() => {}) } })
     }
+    if (load.status === 'accepted' || load.status === 'in_transit') {
+      actions.push({ text: 'Pay booking / track →', onPress: () => onSelectLoad(load.id) })
+    }
     if (actions.length === 0) return
     Alert.alert(`Manage ${load.pickupAddr.split(',')[0]} → ${load.dropAddr.split(',')[0]}`, undefined, [...actions, { text: 'Close', style: 'cancel' }])
   }

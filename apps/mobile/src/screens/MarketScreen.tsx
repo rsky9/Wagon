@@ -133,7 +133,12 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [filterKind, searchOrigin, searchDest, carOriginSearch, carDestSearch])
-  useEffect(() => { fetch() }, [fetch])
+
+  // Debounce search keystrokes so the 8-parallel fetch doesn't fire per key.
+  useEffect(() => {
+    const t = setTimeout(fetch, 350)
+    return () => clearTimeout(t)
+  }, [fetch])
 
   const postListing = () => {
     if (!listOrigin && !listCity) { Alert.alert('Origin or city required'); return }

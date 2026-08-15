@@ -118,6 +118,7 @@ function HomeTab({ navigation }: any) {
       onPostLoad={() => root?.navigate('PostLoadWizard')}
       onOpenMarket={() => root?.navigate('Market')}
       onOpenNotifications={() => root?.navigate('Notifications')}
+      onOpenKyc={() => root?.navigate('Kyc')}
     />
   )
 }

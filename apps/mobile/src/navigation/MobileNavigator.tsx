@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar'
-import { View, Text } from 'react-native'
+import { View, Text, Pressable } from 'react-native'
 import { useState, useEffect } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { NavigationContainer, DefaultTheme, DarkTheme, createNavigationContainerRef } from '@react-navigation/native'
@@ -230,13 +230,23 @@ function LoadDetailRoute({ route, navigation }: NativeStackScreenProps<RootStack
 
 function LoadByIdScreen({ loadId, onBack, onAccepted, onOpenBid }: { loadId: string; onBack: () => void; onAccepted: () => void; onOpenBid: () => void }) {
   const [load, setLoad] = useState<Load | null>(null)
+  const [failed, setFailed] = useState(false)
   useEffect(() => {
-    api.get<{ load: Load }>(`/loads/${loadId}`).then((r) => setLoad(r.load)).catch(() => setLoad(null))
+    setFailed(false)
+    api.get<{ load: Load }>(`/loads/${loadId}`).then((r) => setLoad(r.load)).catch(() => { setFailed(true); setLoad(null) })
   }, [loadId])
   if (!load) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' }}>
-        <Text style={{ color: '#64748B', fontSize: 15 }}>{load === null ? 'Loading load…' : 'Load not found'}</Text>
+        <Pressable onPress={onBack} style={{ position: 'absolute', top: 50, left: 20 }} hitSlop={8}>
+          <Text style={{ color: '#64748B', fontSize: 20 }}>←</Text>
+        </Pressable>
+        <Text style={{ color: '#64748B', fontSize: 15 }}>{failed ? 'Load not found or unavailable' : 'Loading load…'}</Text>
+        {failed && (
+          <Pressable onPress={onBack} style={{ marginTop: 16, padding: 12, backgroundColor: '#F97316', borderRadius: 10 }}>
+            <Text style={{ color: '#fff', fontWeight: '800' }}>Go back</Text>
+          </Pressable>
+        )}
       </View>
     )
   }
