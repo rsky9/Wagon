@@ -151,16 +151,23 @@ function navigateToUrl(nav: any, url: string, item?: { data?: { loadId?: string;
     'RoleChange', 'PostLoadWizard', 'DecisionRoom', 'BidForm', 'Negotiation',
     'TripExceptions', 'Responses', 'Bookings', 'ReturnLoads', 'Track',
     'ShipmentDetail', 'Forwarding', 'Planning', 'EnablementFinance', 'Storage',
-    'Global', 'Market', 'Integrations', 'EnablementHub', 'Shipments',
+    'Global', 'Market', 'Integrations', 'EnablementHub', 'Shipments', 'TripExecute',
   ])
   if (STACK_ROUTES.has(url)) {
     const params: Record<string, unknown> = {}
-    if (url === 'TripDetail' && item?.data?.loadId) params.loadId = item.data.loadId
-    if (url === 'Track' && item?.data?.tripId) params.tripId = item.data.tripId
-    if (url === 'ShipmentDetail' && item?.data?.shipmentId) params.shipmentId = item.data.shipmentId
-    if (url === 'LoadDetail' && item?.data?.loadId) {
-      // LoadDetail needs a full load object; fall back to TripDetail by id.
-      nav.navigate('TripDetail', { loadId: item.data.loadId })
+    const d = item?.data ?? {}
+    if (url === 'TripDetail' && d.loadId) params.loadId = d.loadId
+    if (url === 'Track' && d.tripId) params.tripId = d.tripId
+    if (url === 'ShipmentDetail' && d.shipmentId) params.shipmentId = d.shipmentId
+    if (url === 'DecisionRoom' && d.loadId) params.loadId = d.loadId
+    if (url === 'Negotiation' && d.loadId) params.loadId = d.loadId
+    if (url === 'TripExceptions' && d.tripId) params.tripId = d.tripId
+    if (url === 'ReturnLoads' && d.tripId) params.tripId = d.tripId
+    if (url === 'TripExecute' && d.tripId) params.tripId = d.tripId
+    if (url === 'Quests') params.role = 'transporter'
+    if (url === 'LoadDetail' && d.loadId) {
+      // LoadDetail fetches by id in LoadByIdScreen when only an id is present.
+      nav.navigate('LoadDetail', { id: d.loadId } as never)
       return
     }
     nav.navigate(url, Object.keys(params).length ? params : undefined)
@@ -541,11 +548,11 @@ function QuestsRoute({ navigation, route }: any) {
 }
 
 function ResponsesRoute({ navigation }: any) {
-  return <ResponsesScreen onBack={() => navigation.goBack()} onSelectLoad={(id) => navigation.navigate('TripDetail', { loadId: id })} />
+  return <ResponsesScreen onBack={() => navigation.goBack()} onSelectLoad={(id) => navigation.navigate('LoadDetail', { id } as never)} />
 }
 
 function BookingsRoute({ navigation }: any) {
-  return <BookingsScreen onBack={() => navigation.goBack()} onSelectLoad={(id) => navigation.navigate('TripDetail', { loadId: id })} />
+  return <BookingsScreen onBack={() => navigation.goBack()} onSelectLoad={(id) => navigation.navigate('LoadDetail', { id } as never)} />
 }
 
 function TripExecuteRoute({ navigation, route }: any) {

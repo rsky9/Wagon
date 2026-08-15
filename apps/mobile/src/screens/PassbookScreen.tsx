@@ -78,15 +78,8 @@ export function PassbookScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
               balance={balance}
               primaryLabel={t("wallet.withdraw")}
               secondaryLabel={t("wallet.statement")}
-              onPrimary={() => Alert.alert(t('wallet.withdraw'), 'Withdrawals are released after each delivered trip payout. Your available balance settles automatically.', [{ text: 'OK' }])}
-              onSecondary={() => {
-                setLoading(true)
-                api
-                  .get<{ entries: PassbookEntry[]; balance: number }>('/payments/passbook')
-                  .then((res) => { setEntries(res.entries); setBalance(res.balance) })
-                  .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load passbook'))
-                  .finally(() => setLoading(false))
-              }}
+              onPrimary={onOpenBank ? () => onOpenBank() : () => Alert.alert(t('wallet.withdraw'), 'Add your bank details to receive payouts.', [{ text: 'OK' }])}
+              onSecondary={onOpenInvoices ? () => onOpenInvoices() : undefined}
             />
             {cashback > 0 && (
               <View style={[styles.cashback, { backgroundColor: theme.card, borderColor: theme.primary + '44' }]}>

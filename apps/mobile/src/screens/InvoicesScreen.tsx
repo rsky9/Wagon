@@ -1,6 +1,6 @@
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useCallback, useEffect, useState } from 'react'
-import { StyleSheet, Text, View, FlatList, Pressable, Alert } from 'react-native'
+import { StyleSheet, Text, View, FlatList, Pressable, Alert, Share } from 'react-native'
 import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
 import { api } from '../config'
@@ -77,6 +77,15 @@ export function InvoicesScreen({ onBack }: Props) {
                 <Row label={t('invoices.tds')} value={`−${formatINR(item.tdsAmount)}`} theme={theme} />
                 <Row label={t('invoices.netAmount')} value={formatINR(item.netAmount)} theme={theme} strong />
               </View>
+              <Pressable
+                style={[styles.shareBtn, { backgroundColor: theme.accent }]}
+                onPress={() => {
+                  const text = `${item.invoiceNo}\n${item.route}\nBase: ${formatINR(item.baseAmount)}\nGST: +${formatINR(item.gstAmount)}\nTDS: -${formatINR(item.tdsAmount)}\nNet: ${formatINR(item.netAmount)}\nStatus: ${item.settled ? 'Settled' : 'Pending'}`
+                  Share.share({ message: text }).catch(() => {})
+                }}
+              >
+                <Text style={{ color: theme.accentForeground, fontWeight: '800', fontSize: 13 }}>Share invoice</Text>
+              </Pressable>
             </View>
           )}
         />
@@ -104,4 +113,5 @@ const styles = StyleSheet.create({
   invoiceNo: { fontSize: 15, fontWeight: '800' },
   route: { fontSize: 13 },
   breakdown: { marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: 'transparent' },
+  shareBtn: { borderRadius: radius.md, padding: spacing.sm, alignItems: 'center', marginTop: spacing.sm },
 })
