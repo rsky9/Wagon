@@ -443,8 +443,8 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
         </Pressable>
       </View>
 
-      {/* Category grid: 3 cards per row */}
-      <View style={styles.catGrid}>
+      {/* Category bar: compact horizontal row */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catRow}>
         {([
           ['listings', 'Supply', '🏪'],
           ['requests', 'Demand', '📢'],
@@ -455,18 +455,16 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
         ] as [Tab, string, string][]).map(([k, label, icon]) => {
           const active = tab === k
           return (
-            <Pressable key={k} style={[styles.catCard, active && styles.catActive, { backgroundColor: active ? '#F97316' : theme.card, borderColor: active ? '#F97316' : theme.border }]} onPress={() => setTab(k)}>
-              <View style={[styles.catIcon, { backgroundColor: active ? 'rgba(255,255,255,0.25)' : 'rgba(249,115,22,0.12)' }]}>
-                <Text style={{ fontSize: 22 }}>{icon}</Text>
+            <Pressable key={k} style={[styles.catPill, active && styles.catActive, { backgroundColor: active ? '#F97316' : theme.card, borderColor: active ? '#F97316' : theme.border }]} onPress={() => setTab(k)}>
+              <Text style={{ fontSize: 15 }}>{icon}</Text>
+              <Text style={[styles.catPillLabel, { color: active ? '#fff' : theme.foreground }]}>{label}</Text>
+              <View style={[styles.catPillCount, { backgroundColor: active ? 'rgba(255,255,255,0.25)' : theme.muted }]}>
+                <Text style={{ color: active ? '#fff' : theme.mutedForeground, fontSize: 11, fontWeight: '800' }}>{counts[k] ?? 0}</Text>
               </View>
-              <Text style={[styles.catLabel, { color: active ? '#fff' : theme.foreground }]} numberOfLines={1}>{label}</Text>
-              <Text style={{ color: active ? 'rgba(255,255,255,0.85)' : theme.mutedForeground, fontSize: 12, fontWeight: '700' }}>
-                {counts[k] ?? 0} {label === 'My market' ? 'items' : 'live'}
-              </Text>
             </Pressable>
           )
         })}
-      </View>
+      </ScrollView>
 
       {tab === 'listings' && (
         <>
@@ -822,19 +820,19 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1 },
   title: { fontSize: 20, fontWeight: '800' },
-  publishStrip: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1 },
-  publishBtn: { flex: 1, borderRadius: radius.lg, paddingVertical: spacing.md, alignItems: 'center' },
+  publishStrip: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderBottomWidth: 1 },
+  publishBtn: { flex: 1, borderRadius: radius.lg, paddingVertical: spacing.sm, alignItems: 'center' },
   publishBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
-  catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-  catCard: { width: '31%', flexGrow: 1, borderRadius: radius.lg, borderWidth: 1, padding: spacing.sm, gap: spacing.xs, alignItems: 'center' },
+  catRow: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
+  catPill: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderRadius: radius.full, borderWidth: 1, paddingVertical: spacing.sm, paddingHorizontal: spacing.md },
   catActive: { borderColor: '#F97316' },
-  catIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  catLabel: { fontSize: 13, fontWeight: '800', textAlign: 'center' },
-  filters: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.lg, flexWrap: 'wrap', marginBottom: spacing.md },
-  filterChip: { borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderWidth: 1, borderColor: 'rgba(128,128,128,0.4)', marginBottom: spacing.xs },
+  catPillLabel: { fontSize: 13, fontWeight: '800' },
+  catPillCount: { borderRadius: radius.full, paddingHorizontal: 6, paddingVertical: 1, minWidth: 18, alignItems: 'center' },
+  filters: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, flexWrap: 'wrap', marginBottom: spacing.sm },
+  filterChip: { borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderWidth: 1, borderColor: 'rgba(128,128,128,0.4)', marginBottom: spacing.xs },
   filterActive: { backgroundColor: '#F97316', borderColor: '#F97316' },
-  searchRow: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.lg, marginBottom: spacing.md },
-  list: { padding: spacing.lg, paddingBottom: 140, gap: spacing.lg },
+  searchRow: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
+  list: { padding: spacing.lg, paddingBottom: 220, gap: spacing.lg },
   listScroll: { flex: 1 },
   cardMid: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: spacing.xs },
   providerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xs },
