@@ -110,6 +110,7 @@ function HomeTab({ navigation }: any) {
       onOpenMarketplace={() => navigation.navigate('Marketplace')}
       onPostLoad={() => root?.navigate('PostLoadWizard')}
       onOpenMarket={() => root?.navigate('Market')}
+      onOpenNotifications={() => root?.navigate('Notifications')}
     />
   )
 }

@@ -29,6 +29,7 @@ interface SupplierSummary {
   canPostLoad: boolean
   latestLoads: LoadRef[]
   inTransitTrips: Array<{ id: string; load: LoadRef }>
+  money?: { escrowPaid: number; wallet: number }
 }
 
 interface TransporterSummary {
@@ -39,12 +40,22 @@ interface TransporterSummary {
   returnLoads: LoadRef[]
   truckNowAvailable: boolean
   lastTripDrop?: string | null
+  money?: { payoutPending: number; collected: number; wallet: number }
+}
+
+interface HomeAlerts {
+  unreadNotifications: number
+  kycPending: boolean
+  activeExceptions: number
+  pendingBookings: number
+  expiringDocs: Array<{ truckNo: string; doc: string; daysLeft: number }>
 }
 
 interface HomeSummary {
   capabilities: string[]
   supplier?: SupplierSummary
   transporter?: TransporterSummary
+  alerts?: HomeAlerts
 }
 
 interface ForYou {
@@ -63,6 +74,7 @@ interface Props {
   onOpenMarketplace: () => void
   onPostLoad: () => void
   onOpenMarket?: () => void
+  onOpenNotifications?: () => void
 }
 
 const CAP_LABEL: Record<string, string> = {
@@ -91,7 +103,7 @@ const KIND_ICON: Record<string, string> = {
   transport: '🚚', warehouse: '🏭', forwarding: '📦', carrier: '🚢', insurance: '🛡️',
 }
 
-export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, onPostLoad, onOpenMarket }: Props) {
+export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, onPostLoad, onOpenMarket, onOpenNotifications }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
   const { session } = useAuth()
@@ -121,6 +133,24 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
 
   const userName = session?.profile?.name
   const needsAttention: Array<{ icon: string; text: string; onPress: () => void }> = []
+  const alerts = data?.alerts
+  if (alerts) {
+    if (alerts.unreadNotifications > 0) {
+      needsAttention.push({ icon: '🔔', text: `${alerts.unreadNotifications} unread notification${alerts.unreadNotifications > 1 ? 's' : ''}`, onPress: onOpenNotifications ?? onOpenTrips })
+    }
+    if (alerts.pendingBookings > 0) {
+      needsAttention.push({ icon: '📋', text: `${alerts.pendingBookings} booking${alerts.pendingBookings > 1 ? 's' : ''} waiting for your confirmation`, onPress: onOpenTrips })
+    }
+    if (alerts.activeExceptions > 0) {
+      needsAttention.push({ icon: '⚠️', text: `${alerts.activeExceptions} open exception${alerts.activeExceptions > 1 ? 's' : ''} need attention`, onPress: onOpenTrips })
+    }
+    if (alerts.kycPending) {
+      needsAttention.push({ icon: '🛡️', text: 'Complete your KYC to unlock bookings', onPress: onOpenMarketplace })
+    }
+    for (const d of alerts.expiringDocs) {
+      needsAttention.push({ icon: '📄', text: `${d.truckNo}: ${d.doc} expires in ${d.daysLeft}d`, onPress: onOpenMarketplace })
+    }
+  }
   if (forYou && forYou.demandForMe.length > 0) {
     const d = forYou.demandForMe[0]!
     needsAttention.push({ icon: KIND_ICON[d.kind] ?? '📢', text: `${forYou.demandForMe.length} open ${d.kind} demand you can quote`, onPress: onOpenMarket ?? onOpenMarketplace })
@@ -140,6 +170,16 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top', 'left', 'right']}>
       <View style={[styles.header, { backgroundColor: theme.background }]}>
         <AppLogo height={38} />
+        {onOpenNotifications && (
+          <Pressable onPress={onOpenNotifications} hitSlop={8} style={styles.bellWrap}>
+            <Text style={{ fontSize: 20 }}>🔔</Text>
+            {(data?.alerts?.unreadNotifications ?? 0) > 0 && (
+              <View style={[styles.bellDot, { backgroundColor: theme.danger }]}>
+                <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>{Math.min(data!.alerts!.unreadNotifications, 9)}</Text>
+              </View>
+            )}
+          </Pressable>
+        )}
       </View>
 
       {isBoth && (
@@ -195,6 +235,40 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
             />
           )}
         </View>
+
+        {/* Money strip (role-aware) */}
+        {(showTransporter && data?.transporter?.money) || (showSupplier && data?.supplier?.money) ? (
+          <View style={[styles.moneyStrip, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            {showTransporter && data?.transporter?.money && (
+              <>
+                <View style={styles.moneyCell}>
+                  <Text style={[styles.moneyLabel, { color: theme.mutedForeground }]}>Pending payout</Text>
+                  <Text style={[styles.moneyValue, { color: theme.primary }]}>{formatINR(data.transporter.money.payoutPending)}</Text>
+                </View>
+                <View style={styles.moneyCell}>
+                  <Text style={[styles.moneyLabel, { color: theme.mutedForeground }]}>Collected</Text>
+                  <Text style={[styles.moneyValue, { color: theme.foreground }]}>{formatINR(data.transporter.money.collected)}</Text>
+                </View>
+                <View style={styles.moneyCell}>
+                  <Text style={[styles.moneyLabel, { color: theme.mutedForeground }]}>Wallet</Text>
+                  <Text style={[styles.moneyValue, { color: theme.success }]}>{formatINR(data.transporter.money.wallet)}</Text>
+                </View>
+              </>
+            )}
+            {showSupplier && data?.supplier?.money && (
+              <>
+                <View style={styles.moneyCell}>
+                  <Text style={[styles.moneyLabel, { color: theme.mutedForeground }]}>Escrow paid</Text>
+                  <Text style={[styles.moneyValue, { color: theme.primary }]}>{formatINR(data.supplier.money.escrowPaid)}</Text>
+                </View>
+                <View style={styles.moneyCell}>
+                  <Text style={[styles.moneyLabel, { color: theme.mutedForeground }]}>Wallet</Text>
+                  <Text style={[styles.moneyValue, { color: theme.success }]}>{formatINR(data.supplier.money.wallet)}</Text>
+                </View>
+              </>
+            )}
+          </View>
+        ) : null}
 
         {/* Secondary stats */}
         {showSupplier && data?.supplier && (
@@ -305,13 +379,19 @@ function LoadCard({ load, onPress, theme }: { load: LoadRef; onPress: () => void
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  header: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.sm },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.sm },
+  bellWrap: { position: 'relative' },
+  bellDot: { position: 'absolute', top: -4, right: -6, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
   modeWrap: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
   body: { padding: spacing.lg, paddingBottom: 140 },
   capRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg },
   quickRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
   kpiGrid: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
   kpiFlex: { flex: 1 },
+  moneyStrip: { flexDirection: 'row', borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, marginBottom: spacing.md, gap: spacing.md },
+  moneyCell: { flex: 1 },
+  moneyLabel: { fontSize: 11, fontWeight: '600' },
+  moneyValue: { fontSize: 16, fontWeight: '800', marginTop: 2 },
   statRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.xs },
   marketGrid: { flexDirection: 'row', gap: spacing.md },
   alertCard: { borderRadius: radius.lg, borderWidth: 1, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, gap: spacing.sm },

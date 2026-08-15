@@ -45,6 +45,11 @@ export class HomeService {
             where: { supplierId: supplier.id, status: { in: ['completed', 'delivered'] } },
           }),
         ])
+        // Money: escrow paid out + wallet.
+        const escrowPaid = await this.prisma.payment.aggregate({
+          where: { type: 'escrow', status: 'succeeded', trip: { load: { supplierId: supplier.id } } },
+          _sum: { amount: true },
+        })
         result.supplier = {
           activeLoads: active.length,
           awaitingResponses: awaiting.length,
@@ -53,6 +58,7 @@ export class HomeService {
           latestLoads: active.slice(0, 3),
           inTransitTrips: inTransit.slice(0, 3),
           canPostLoad: active.length < 20,
+          money: { escrowPaid: escrowPaid._sum.amount ?? 0, wallet: user.cashbackBalance ?? 0 },
         }
       }
     }
@@ -93,6 +99,20 @@ export class HomeService {
           })
         }
 
+        // Money: pending payouts + collected earnings + wallet cash.
+        const trips = await this.prisma.trip.findMany({
+          where: { transporterId: transporter.id },
+          include: { payments: true, booking: true },
+          orderBy: { createdAt: 'desc' },
+        })
+        const payoutPending = trips
+          .filter((t) => t.status === 'delivered' && !t.payments.some((p) => p.type === 'payout' && p.status === 'succeeded'))
+          .reduce((s, t) => s + (t.booking?.rate ?? 0), 0)
+        const collected = trips.reduce(
+          (s, t) => s + t.payments.filter((p) => p.type === 'payout' && p.status === 'succeeded').reduce((a, p) => a + p.amount, 0),
+          0,
+        )
+
         result.transporter = {
           availableTrucks: availableTrucks.length,
           fleetSize: fleet.length,
@@ -101,11 +121,63 @@ export class HomeService {
           returnLoads,
           truckNowAvailable: availableTrucks.length > 0 && scored.length > 0,
           lastTripDrop: lastTrip?.load?.dropAddr ?? null,
+          money: { payoutPending, collected, wallet: user.cashbackBalance ?? 0 },
         }
       }
     }
 
+    // ----- Cross-cutting: what needs attention right now -----
+    const [unreadCount, kycPending, activeExceptions, pendingBookings, expiringDocs] = await Promise.all([
+      this.prisma.notification.count({ where: { userId: user.id, isRead: false } }),
+      this.prisma.user.count({
+        where: { id: user.id, kycStatus: { in: ['not_started', 'pending'] } },
+      }),
+      this.prisma.tripException.count({
+        where: {
+          status: 'open',
+          trip: { OR: [{ transporterId: (await this.transporterId(user)) ?? '__none__' }, { load: { supplierId: (await this.supplierId(user)) ?? '__none__' } }] },
+        },
+      }),
+      this.prisma.bid.count({
+        where: { status: 'booking_pending', transporter: { userId: user.id } },
+      }),
+      this.prisma.truck.findMany({
+        where: { transporterId: (await this.transporterId(user)) ?? '__none__' },
+        select: { id: true, truckNo: true, insuranceUpto: true, permitUpto: true, fitnessUpto: true },
+      }),
+    ])
+
+    const docAlerts = expiringDocs
+      .flatMap((t) => {
+        const soon = 30 * 24 * 60 * 60 * 1000
+        const now = Date.now()
+        const out: Array<{ truckNo: string; doc: string; daysLeft: number }> = []
+        for (const [doc, date] of [['insurance', t.insuranceUpto], ['permit', t.permitUpto], ['fitness', t.fitnessUpto]] as const) {
+          if (date && new Date(date).getTime() - now < soon && new Date(date).getTime() > now) {
+            out.push({ truckNo: t.truckNo, doc, daysLeft: Math.ceil((new Date(date).getTime() - now) / (24 * 60 * 60 * 1000)) })
+          }
+        }
+        return out
+      })
+      .slice(0, 3)
+
+    result.alerts = {
+      unreadNotifications: unreadCount,
+      kycPending: kycPending > 0,
+      activeExceptions,
+      pendingBookings,
+      expiringDocs: docAlerts,
+    }
+
     return result
+  }
+
+  private async transporterId(user: User) {
+    return (await this.prisma.transporter.findUnique({ where: { userId: user.id } }))?.id
+  }
+
+  private async supplierId(user: User) {
+    return (await this.prisma.supplier.findUnique({ where: { userId: user.id } }))?.id
   }
 
   private matchScore(load: { truckType: string; weight: number }, fleet: FleetTruck[]) {
