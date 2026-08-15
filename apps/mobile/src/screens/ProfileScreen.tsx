@@ -39,6 +39,7 @@ interface Props {
   onOpenBids: () => void
   onOpenDisputes: () => void
   onOpenEnablement: () => void
+  onOpenMarket?: () => void
 }
 
 const CAP_LABEL: Record<string, string> = {
@@ -50,13 +51,12 @@ const CAP_LABEL: Record<string, string> = {
   driver: 'Driver',
 }
 
-export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers, onOpenRateCard, onOpenNotifications, onOpenSettings, onOpenSearch, onOpenFinance, onOpenReviews, onOpenTickets, onOpenEmergency, onOpenChat, onOpenFleet, onOpenNotifPrefs, onOpenInvoices, onOpenLoadHistory, onOpenQuests, onOpenSaved, onOpenBids, onOpenDisputes, onOpenEnablement }: Props) {
+export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers, onOpenRateCard, onOpenNotifications, onOpenSettings, onOpenSearch, onOpenFinance, onOpenReviews, onOpenTickets, onOpenEmergency, onOpenChat, onOpenFleet, onOpenNotifPrefs, onOpenInvoices, onOpenLoadHistory, onOpenQuests, onOpenSaved, onOpenBids, onOpenDisputes, onOpenEnablement, onOpenMarket }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
   const { isDark, cycle } = useThemeMode()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [trust, setTrust] = useState<{ rating: number | null; ratingCount: number; trips: number; completionRate: number | null; claims: number } | null>(null)
-  const [orgId, setOrgId] = useState<string | null>(null)
 
   useEffect(() => {
     api
@@ -67,7 +67,6 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
       .get<{ organizations: { id: string }[] }>('/foundation/organizations')
       .then((r) => {
         if (r.organizations[0]) {
-          setOrgId(r.organizations[0].id)
           api.get<{ rating: number | null; ratingCount: number; trips: number; completionRate: number | null; claims: number }>(`/market/trust/${r.organizations[0].id}`)
             .then((res) => setTrust(res))
             .catch(() => {})
@@ -125,14 +124,14 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
 
         {/* Trust score */}
         {trust && (
-          <View style={[styles.trustCard, { backgroundColor: theme.card, borderColor: theme.border }, shadows.sm]}>
+          <Pressable style={[styles.trustCard, { backgroundColor: theme.card, borderColor: theme.border }, shadows.sm]} onPress={onOpenReviews}>
             <View style={styles.trustLeft}>
               <Text style={[styles.trustTitle, { color: theme.foreground }]}>Marketplace trust</Text>
               <Text style={[styles.trustSub, { color: theme.mutedForeground }]}>Your standing on the network</Text>
             </View>
             <View style={styles.trustScore}>
               <Text style={[styles.trustRating, { color: theme.primary }]}>{trust.rating ? `★ ${trust.rating.toFixed(1)}` : '★ new'}</Text>
-              <Text style={[styles.trustMeta, { color: theme.mutedForeground }]}>{trust.ratingCount} review(s)</Text>
+              <Text style={[styles.trustMeta, { color: theme.mutedForeground }]}>{trust.ratingCount} review(s) ›</Text>
             </View>
             <View style={styles.trustStats}>
               <View style={styles.trustStat}>
@@ -150,19 +149,18 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
                 <Text style={[styles.trustStatLabel, { color: theme.mutedForeground }]}>Claims</Text>
               </View>
             </View>
-          </View>
+          </Pressable>
         )}
 
         {/* Identity & Trust */}
         <GroupTitle>Identity &amp; Trust</GroupTitle>
         <SettingRow icon="🛡️" label={t('profile.verification')} sub={`${kycPct}% complete · ${profile?.kycStatus.replace('_', ' ')}`} onPress={onOpenKyc} trailing={kycPct > 0 ? `${kycPct}%` : undefined} />
-        {orgId && <SettingRow icon="🏢" label="Organization profile" sub="Members, kind & marketplace trust" onPress={onOpenEnablement} />}
         <SettingRow icon="⭐" label={t('profile.reviews')} onPress={onOpenReviews} />
         <SettingRow icon="🎯" label={t('profile.quests')} sub={t('profile.questsSub')} onPress={onOpenQuests} />
 
         {/* Marketplace & Operations */}
         <GroupTitle>Marketplace</GroupTitle>
-        <SettingRow icon="🏪" label="Capability marketplace" sub="Offer, demand & quotes" onPress={onOpenEnablement} />
+        <SettingRow icon="🏪" label="Capability marketplace" sub="Offer, demand & quotes" onPress={onOpenMarket ?? onOpenEnablement} />
         <SettingRow icon="🤝" label={t('profile.myBids')} sub="Bids you've submitted" onPress={onOpenBids} />
         <SettingRow icon="🔖" label={t('profile.saved')} sub={t('profile.savedSub')} onPress={onOpenSaved} />
         <SettingRow icon="🔍" label={t('profile.searchLoads')} onPress={onOpenSearch} />

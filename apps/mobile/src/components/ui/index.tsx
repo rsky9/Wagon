@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
   capChip: { borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, flexDirection: 'row', alignItems: 'center' },
   trustBadge: { borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, flexDirection: 'row', alignItems: 'center' },
   liveBadge: { borderRadius: radius.full, paddingHorizontal: spacing.sm, paddingVertical: 3, flexDirection: 'row', alignItems: 'center' },
-  settingRow: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  settingRow: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
   settingIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   settingLabel: { fontSize: 15, fontWeight: '700' },
   settingSub: { fontSize: 12, marginTop: 1 },

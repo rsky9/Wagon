@@ -256,6 +256,7 @@ function AccountTab({ navigation }: any) {
       onOpenBids={() => root?.navigate('MyBids')}
       onOpenDisputes={() => root?.navigate('Disputes')}
       onOpenEnablement={() => root?.navigate('EnablementHub')}
+      onOpenMarket={() => root?.navigate('Market')}
     />
   )
 }
