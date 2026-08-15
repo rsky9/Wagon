@@ -190,6 +190,58 @@ export function GroupTitle({ children }: { children: React.ReactNode }) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Market card — consistent card shell for marketplace tabs             */
+/* ------------------------------------------------------------------ */
+export function MarketCard({
+  icon,
+  title,
+  subtitle,
+  status,
+  statusColor,
+  children,
+  footer,
+  onPress,
+}: {
+  icon?: string
+  title: string
+  subtitle?: string
+  status?: string
+  statusColor?: string
+  children?: React.ReactNode
+  footer?: React.ReactNode
+  onPress?: () => void
+}) {
+  const theme = useTheme()
+  const sc = statusColor ?? theme.success
+  const body = (
+    <View style={[styles.marketCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+      <View style={styles.marketCardTop}>
+        {icon ? (
+          <View style={[styles.marketIcon, { backgroundColor: 'rgba(249,115,22,0.12)' }]}>
+            <Text style={{ fontSize: 18 }}>{icon}</Text>
+          </View>
+        ) : null}
+        <View style={{ flex: 1 }}>
+          <View style={styles.marketCardTitleRow}>
+            <Text style={[styles.marketCardTitle, { color: theme.foreground }]} numberOfLines={1}>{title}</Text>
+            {status ? (
+              <View style={[styles.marketStatusChip, { backgroundColor: sc + '1A' }]}>
+                <Text style={{ color: sc, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' }}>{status}</Text>
+              </View>
+            ) : null}
+          </View>
+          {subtitle ? <Text style={[styles.marketCardSub, { color: theme.mutedForeground }]} numberOfLines={2}>{subtitle}</Text> : null}
+        </View>
+      </View>
+      {children ? <View style={styles.marketCardBody}>{children}</View> : null}
+      {footer ? <View style={styles.marketCardFooter}>{footer}</View> : null}
+    </View>
+  )
+  if (!onPress) return body
+  return <Pressable onPress={onPress}>{body}</Pressable>
+}
+
+/* ------------------------------------------------------------------ */
 /* Styles                                                               */
 /* ------------------------------------------------------------------ */
 const styles = StyleSheet.create({
@@ -221,4 +273,13 @@ const styles = StyleSheet.create({
   settingSub: { fontSize: 12, marginTop: 1 },
   settingTrailing: { fontSize: 12, fontWeight: '700' },
   groupTitle: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6, marginTop: spacing.xl, marginBottom: spacing.sm, paddingHorizontal: spacing.xs },
+  marketCard: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, gap: spacing.md, marginBottom: spacing.md },
+  marketCardTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  marketIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  marketCardTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  marketCardTitle: { fontSize: 15, fontWeight: '800' },
+  marketStatusChip: { borderRadius: radius.full, paddingHorizontal: spacing.sm, paddingVertical: 2 },
+  marketCardSub: { fontSize: 13, marginTop: 2 },
+  marketCardBody: { gap: spacing.sm },
+  marketCardFooter: { borderTopWidth: 1, paddingTop: spacing.sm, gap: spacing.sm },
 })

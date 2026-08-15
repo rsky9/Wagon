@@ -14,7 +14,7 @@ import { api } from '../config'
 import { AppLogo } from '../components/AppLogo'
 import { useI18n } from '@wagon/i18n'
 import type { UserProfile } from '@wagon/contracts'
-import { SectionHeader, SettingRow, GroupTitle, CapabilityChip } from '../components/ui'
+import { SettingRow, GroupTitle } from '../components/ui'
 
 interface Props {
   onOpenKyc: () => void
@@ -95,30 +95,34 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
       <ScrollView contentContainerStyle={styles.body}>
 
         {/* Identity hero */}
-        <LinearGradient colors={['#0F172A', '#1E293B']} style={[styles.hero, shadows.lg]}>
+        <LinearGradient colors={['#F97316', '#FB923C']} style={[styles.hero, shadows.lg]}>
           <View style={styles.heroTop}>
-            <View style={[styles.avatar, { backgroundColor: 'rgba(249,115,22,0.25)' }]}>
-              <Text style={[styles.avatarText, { color: '#FB923C' }]}>
+            <View style={[styles.avatar, { backgroundColor: 'rgba(255,255,255,0.25)' }]}>
+              <Text style={[styles.avatarText, { color: '#fff' }]}>
                 {(profile?.name ?? 'T').charAt(0).toUpperCase()}
               </Text>
             </View>
             <View style={styles.heroInfo}>
               <Text style={[styles.heroName, { color: '#fff' }]}>{profile?.name ?? 'Your account'}</Text>
-              <Text style={[styles.heroMobile, { color: 'rgba(255,255,255,0.6)' }]}>{profile?.mobile ?? ''}</Text>
+              <Text style={[styles.heroMobile, { color: 'rgba(255,255,255,0.85)' }]}>{profile?.mobile ?? ''}</Text>
               <View style={styles.heroBadges}>
                 {verified && (
-                  <View style={[styles.heroBadge, { backgroundColor: 'rgba(16,185,129,0.2)' }]}>
-                    <Text style={{ color: '#34D399', fontSize: 11, fontWeight: '800' }}>✓ VERIFIED</Text>
+                  <View style={[styles.heroBadge, { backgroundColor: 'rgba(255,255,255,0.25)' }]}>
+                    <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>✓ VERIFIED</Text>
                   </View>
                 )}
-                <View style={[styles.heroBadge, { backgroundColor: 'rgba(249,115,22,0.2)' }]}>
-                  <Text style={{ color: '#FB923C', fontSize: 11, fontWeight: '800' }}>KYC {kycPct}%</Text>
+                <View style={[styles.heroBadge, { backgroundColor: 'rgba(255,255,255,0.25)' }]}>
+                  <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>KYC {kycPct}%</Text>
                 </View>
               </View>
             </View>
           </View>
           <View style={styles.capRow}>
-            {caps.map((c) => <CapabilityChip key={c} label={CAP_LABEL[c] ?? c} verified={verified} />)}
+            {caps.map((c) => (
+              <View key={c} style={[styles.heroChip, { backgroundColor: 'rgba(255,255,255,0.25)' }]}>
+                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>{CAP_LABEL[c] ?? c}</Text>
+              </View>
+            ))}
           </View>
         </LinearGradient>
 
@@ -230,6 +234,7 @@ const styles = StyleSheet.create({
   heroBadges: { flexDirection: 'row', gap: spacing.sm, marginTop: 2 },
   heroBadge: { borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: 3 },
   capRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  heroChip: { borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
   trustCard: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, marginTop: spacing.md, gap: spacing.md },
   trustLeft: { gap: 2 },
   trustTitle: { fontSize: 15, fontWeight: '800' },

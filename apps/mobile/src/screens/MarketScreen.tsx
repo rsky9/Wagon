@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
 import { api } from '../config'
-import { TrustBadge, LiveStateBadge, SectionHeader } from '../components/ui'
+import { TrustBadge, LiveStateBadge, SectionHeader, MarketCard } from '../components/ui'
 import type { MarketListing, MarketRequest, MarketQuote } from '@wagon/contracts'
 
 interface Props {
@@ -313,40 +313,30 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
   }
 
   const renderListing = (l: MarketListing) => (
-    <View key={l.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-      <View style={styles.cardTop}>
-        <View style={styles.kindRow}>
-          <View style={[styles.kindTile, { backgroundColor: 'rgba(249,115,22,0.12)' }]}>
-            <Text style={{ fontSize: 16 }}>{KIND_ICON[l.kind] ?? '🏪'}</Text>
-          </View>
-          <View>
-            <Text style={[styles.cardTitle, { color: theme.foreground }]}>{KIND_LABEL[l.kind] ?? l.kind}</Text>
-            <Text style={[styles.meta, { color: theme.mutedForeground }]}>
-              {l.originRef ?? l.city ?? '—'} → {l.destinationRef ?? '—'}
-            </Text>
-          </View>
-        </View>
+    <MarketCard
+      key={l.id}
+      icon={KIND_ICON[l.kind] ?? '🏪'}
+      title={KIND_LABEL[l.kind] ?? l.kind}
+      subtitle={`${l.originRef ?? l.city ?? '—'} → ${l.destinationRef ?? '—'}`}
+      status={l.onMarketNow === false ? 'not now' : l.status}
+      statusColor={l.onMarketNow === false ? theme.danger : theme.success}
+    >
+      <View style={styles.cardMid}>
+        <Text style={[styles.price, { color: theme.foreground }]}>
+          {l.price != null ? `${l.currency} ${l.price.toLocaleString('en-IN')}` : '—'}
+        </Text>
         <LiveStateBadge onMarketNow={l.onMarketNow} fresh={l.fresh} claimRate={l.claimRate} />
       </View>
-
-      <View style={styles.cardMid}>
-        <View>
-          <Text style={[styles.price, { color: theme.foreground }]}>
-            {l.price != null ? `${l.currency} ${l.price.toLocaleString('en-IN')}` : '—'}
-          </Text>
-          <Text style={[styles.meta, { color: theme.mutedForeground }]}>
-            {l.capacityAvailable ?? '—'} {l.capacityUnit}{l.equipment ? ` · ${l.equipment}` : ''}
-            {l.availableFrom ? ` · from ${new Date(l.availableFrom).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}` : ''}
-          </Text>
-        </View>
-        {l.providerOrg?.verified && <Text style={[styles.verified, { color: theme.success }]}>✓ verified</Text>}
-      </View>
-
+      <Text style={[styles.meta, { color: theme.mutedForeground }]}>
+        {l.capacityAvailable ?? '—'} {l.capacityUnit}{l.equipment ? ` · ${l.equipment}` : ''}
+        {l.availableFrom ? ` · from ${new Date(l.availableFrom).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}` : ''}
+      </Text>
       <View style={styles.providerRow}>
-        <Text style={[styles.meta, { color: theme.mutedForeground }]}>{l.providerOrg?.name ?? '—'}</Text>
+        <Text style={[styles.meta, { color: theme.mutedForeground }]}>
+          {l.providerOrg?.name ?? '—'} {l.providerOrg?.verified ? '✓' : ''}
+        </Text>
         <TrustBadge rating={l.orgRating?.avg} completion={l.completionRate} />
       </View>
-
       <View style={styles.actions}>
         <Pressable style={[styles.actionBtn, { backgroundColor: '#F97316' }]} onPress={() => askProvider(l)}>
           <Text style={styles.actionText}>Ask</Text>
@@ -355,23 +345,31 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
           <Text style={styles.actionText}>Rate</Text>
         </Pressable>
       </View>
-    </View>
+    </MarketCard>
   )
 
   const renderRequest = (r: MarketRequest, withQuotes = false) => (
-    <View key={r.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-      <View style={styles.cardTop}>
-        <Text style={[styles.cardTitle, { color: theme.foreground }]}>{r.kind} demand</Text>
-        <Text style={[styles.chip, { color: r.status === 'open' ? theme.success : theme.warning, borderColor: r.status === 'open' ? theme.success : theme.warning }]}>{r.status}</Text>
-      </View>
-      <Text style={[styles.meta, { color: theme.mutedForeground }]}>
-        {r.originRef ?? r.city ?? '—'} → {r.destinationRef ?? '—'} · {r.capacityNeeded ?? '—'} {r.capacityUnit} · {r.budget ? `${r.currency} ${r.budget.toLocaleString('en-IN')}` : '—'}
-      </Text>
-      {!withQuotes && (
-        <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>
-          {r.requesterOrg?.name ?? '—'} · ★ {r.requesterRating ? r.requesterRating.toFixed(1) : 'new'}
-          {r.requesterCompletion != null ? ` · ${r.requesterCompletion}% done` : ''}
+    <MarketCard
+      key={r.id}
+      icon={KIND_ICON[r.kind] ?? '📢'}
+      title={`${r.kind} demand`}
+      subtitle={`${r.originRef ?? r.city ?? '—'} → ${r.destinationRef ?? '—'}`}
+      status={r.status}
+      statusColor={r.status === 'open' ? theme.success : theme.warning}
+    >
+      <View style={styles.cardMid}>
+        <Text style={[styles.price, { color: theme.foreground }]}>
+          {r.budget ? `${r.currency} ${r.budget.toLocaleString('en-IN')}` : '—'}
         </Text>
+        <Text style={[styles.meta, { color: theme.mutedForeground }]}>
+          {r.capacityNeeded ?? '—'} {r.capacityUnit}
+        </Text>
+      </View>
+      {!withQuotes && (
+        <View style={styles.providerRow}>
+          <Text style={[styles.meta, { color: theme.mutedForeground }]}>{r.requesterOrg?.name ?? '—'}</Text>
+          <TrustBadge rating={r.requesterRating} completion={r.requesterCompletion} />
+        </View>
       )}
       <View style={styles.actions}>
         {withQuotes && r.status !== 'open' && (
@@ -419,7 +417,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
           ))}
         </View>
       )}
-    </View>
+    </MarketCard>
   )
 
   return (
@@ -504,16 +502,23 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
           }
           ListEmptyComponent={loading ? undefined : <EmptyState title="No carrier schedules" message="Carriers publish vessel/flight space here" icon="🚢" />}
           renderItem={({ item }) => (
-            <View key={item.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <View style={styles.cardTop}>
-                <Text style={[styles.cardTitle, { color: theme.foreground }]}>{item.vessel ?? item.flight ?? 'Carrier service'}</Text>
-                {item.carrierOrg?.verified && <Text style={[styles.verified, { color: theme.success }]}>✓ verified</Text>}
+            <MarketCard
+              key={item.id}
+              icon="🚢"
+              title={item.vessel ?? item.flight ?? 'Carrier service'}
+              subtitle={`${item.originRef ?? '—'} → ${item.destinationRef ?? '—'}`}
+              status={item.status}
+              statusColor={item.status === 'sold_out' ? theme.danger : theme.success}
+            >
+              <View style={styles.cardMid}>
+                <Text style={[styles.price, { color: theme.foreground }]}>
+                  {item.rate != null ? `${item.currency} ${item.rate.toLocaleString('en-IN')}` : '—'}
+                </Text>
+                <View style={styles.slotPill}>
+                  <Text style={{ color: theme.foreground, fontSize: 12, fontWeight: '800' }}>{item.availableSlots}/{item.totalSlots} slots</Text>
+                </View>
               </View>
-              <Text style={[styles.meta, { color: theme.mutedForeground }]}>
-                {item.originRef ?? '—'} → {item.destinationRef ?? '—'} · {item.availableSlots}/{item.totalSlots} slots
-              </Text>
-              <Text style={[styles.price, { color: theme.foreground }]}>{item.rate != null ? `${item.currency} ${item.rate.toLocaleString('en-IN')}` : '—'}</Text>
-            </View>
+            </MarketCard>
           )}
         />
       )}
@@ -525,13 +530,16 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
           keyExtractor={(p) => p.id}
           ListEmptyComponent={loading ? undefined : <EmptyState title="No partners yet" message="Integration partners join the network here" icon="🤝" />}
           renderItem={({ item }) => (
-            <View key={item.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <View style={styles.cardTop}>
-                <Text style={[styles.cardTitle, { color: theme.foreground }]}>{item.name}</Text>
-                {item.org?.verified && <Text style={[styles.verified, { color: theme.success }]}>✓ verified</Text>}
-              </View>
-              <Text style={[styles.meta, { color: theme.mutedForeground }]}>{item.kind} · {item.org?.name ?? '—'} · {item.baseUrl ?? '—'}</Text>
-            </View>
+            <MarketCard
+              key={item.id}
+              icon="🤝"
+              title={item.name}
+              subtitle={item.org?.name ?? 'Partner'}
+              status={item.org?.verified ? 'verified' : undefined}
+              statusColor={theme.success}
+            >
+              <Text style={[styles.meta, { color: theme.mutedForeground }]}>{item.kind}{item.baseUrl ? ` · ${item.baseUrl}` : ''}</Text>
+            </MarketCard>
           )}
         />
       )}
@@ -543,13 +551,17 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
           keyExtractor={(r) => r.id}
           ListEmptyComponent={loading ? undefined : <EmptyState title="No AI picks yet" message="Run match/carrier agents to get recommendations" icon="🤖" />}
           renderItem={({ item }) => (
-            <View key={item.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <View style={styles.cardTop}>
-                <Text style={[styles.cardTitle, { color: theme.foreground }]}>{item.agent} agent</Text>
-                <Text style={[styles.chip, { color: item.status === 'proposed' ? theme.warning : theme.success, borderColor: item.status === 'proposed' ? theme.warning : theme.success }]}>{item.status}</Text>
-              </View>
-              <Text style={[styles.meta, { color: theme.mutedForeground }]}>{item.summary}</Text>
-              {item.score != null && <Text style={{ color: theme.foreground, fontWeight: '700' }}>Score: {item.score.toFixed(2)}</Text>}
+            <MarketCard
+              key={item.id}
+              icon="🤖"
+              title={`${item.agent} agent`}
+              subtitle={item.summary}
+              status={item.status}
+              statusColor={item.status === 'proposed' ? theme.warning : theme.success}
+            >
+              {item.score != null && (
+                <Text style={{ color: theme.foreground, fontWeight: '800', fontSize: 15 }}>Score: {item.score.toFixed(2)}</Text>
+              )}
               {item.status === 'proposed' && (
                 <View style={styles.actions}>
                   <Pressable style={[styles.actionBtn, { backgroundColor: theme.success }]} onPress={() => aiAction(item, 'accepted')}>
@@ -560,7 +572,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
                   </Pressable>
                 </View>
               )}
-            </View>
+            </MarketCard>
           )}
         />
       )}
@@ -593,20 +605,20 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
               {myQuotes.length === 0
                 ? <EmptyState title="No quotes sent" message="Quotes you submit appear here" icon="🧾" />
                 : myQuotes.map((q) => (
-                  <View key={q.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                    <View style={styles.cardTop}>
-                      <Text style={[styles.cardTitle, { color: theme.foreground }]}>{q.request.kind} · {q.amount != null ? `${q.currency} ${q.amount.toLocaleString('en-IN')}` : '—'}</Text>
-                      <Text style={[styles.chip, { color: q.status === 'submitted' ? theme.warning : theme.success, borderColor: q.status === 'submitted' ? theme.warning : theme.success }]}>{q.status}</Text>
-                    </View>
-                    <Text style={[styles.meta, { color: theme.mutedForeground }]}>
-                      {q.request.originRef ?? '—'} → {q.request.destinationRef ?? '—'} · {q.etaHours ?? '—'}h · {q.request.requesterOrg?.name ?? '—'}
-                    </Text>
+                  <MarketCard
+                    key={q.id}
+                    icon="🧾"
+                    title={`${q.request.kind} · ${q.amount != null ? `${q.currency} ${q.amount.toLocaleString('en-IN')}` : '—'}`}
+                    subtitle={`${q.request.originRef ?? '—'} → ${q.request.destinationRef ?? '—'} · ${q.etaHours ?? '—'}h · ${q.request.requesterOrg?.name ?? '—'}`}
+                    status={q.status}
+                    statusColor={q.status === 'submitted' ? theme.warning : theme.success}
+                  >
                     {q.status === 'submitted' && (
                       <Pressable style={[styles.actionBtn, { backgroundColor: theme.danger }]} onPress={() => withdrawQuote(q.id)}>
                         <Text style={styles.actionText}>Withdraw</Text>
                       </Pressable>
                     )}
-                  </View>
+                  </MarketCard>
                 ))}
             </View>
           ) : (
@@ -615,20 +627,23 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
               {myListings.length === 0
                 ? <EmptyState title="No supply published" message="Tap + Offer to publish capacity" icon="🏪" />
                 : myListings.map((l) => (
-                  <View key={l.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                    <View style={styles.cardTop}>
-                      <Text style={[styles.cardTitle, { color: theme.foreground }]}>{KIND_LABEL[l.kind] ?? l.kind}</Text>
-                      <Text style={[styles.chip, { color: l.status === 'live' ? theme.success : theme.warning, borderColor: l.status === 'live' ? theme.success : theme.warning }]}>{l.status}</Text>
-                    </View>
-                    <Text style={[styles.meta, { color: theme.mutedForeground }]}>
-                      {l.originRef ?? l.city ?? '—'} → {l.destinationRef ?? '—'} · {l.price != null ? `${l.currency} ${l.price.toLocaleString('en-IN')}` : '—'}
-                    </Text>
-                    <View style={styles.actions}>
+                  <MarketCard
+                    key={l.id}
+                    icon={KIND_ICON[l.kind] ?? '🏪'}
+                    title={KIND_LABEL[l.kind] ?? l.kind}
+                    subtitle={`${l.originRef ?? l.city ?? '—'} → ${l.destinationRef ?? '—'}`}
+                    status={l.status}
+                    statusColor={l.status === 'live' ? theme.success : theme.warning}
+                  >
+                    <View style={styles.cardMid}>
+                      <Text style={[styles.price, { color: theme.foreground }]}>
+                        {l.price != null ? `${l.currency} ${l.price.toLocaleString('en-IN')}` : '—'}
+                      </Text>
                       <Pressable style={[styles.actionBtn, { backgroundColor: l.status === 'live' ? theme.warning : theme.success }]} onPress={() => toggleListing(l)}>
                         <Text style={styles.actionText}>{l.status === 'live' ? 'Pause' : 'Resume'}</Text>
                       </Pressable>
                     </View>
-                  </View>
+                  </MarketCard>
                 ))}
             </View>
           )}
@@ -800,17 +815,11 @@ const styles = StyleSheet.create({
   filterChip: { borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderWidth: 1, borderColor: 'rgba(128,128,128,0.4)' },
   filterActive: { backgroundColor: '#F97316', borderColor: '#F97316' },
   list: { padding: spacing.lg, gap: spacing.lg },
-  card: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, gap: spacing.sm, marginBottom: 0 },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  kindRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  kindTile: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   cardMid: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: spacing.xs },
   providerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xs },
-  cardTitle: { fontSize: 15, fontWeight: '800' },
-  verified: { fontSize: 12, fontWeight: '700' },
+  slotPill: { borderRadius: radius.full, backgroundColor: 'rgba(128,128,128,0.12)', paddingHorizontal: spacing.sm, paddingVertical: 3 },
   meta: { fontSize: 13 },
   price: { fontSize: 17, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  chip: { fontSize: 11, fontWeight: '700', borderWidth: 1, borderRadius: radius.full, paddingHorizontal: spacing.sm, paddingVertical: 2, textTransform: 'uppercase' },
   section: { gap: spacing.lg },
   sectionTitle: { fontSize: 14, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
@@ -819,7 +828,7 @@ const styles = StyleSheet.create({
   smallBtn: { borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   quoteRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderTopWidth: 1, paddingTop: spacing.sm },
   modalWrap: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modal: { borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, borderTopWidth: 1, padding: spacing.xl, gap: spacing.sm },
+  modal: { borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, borderTopWidth: 1, padding: spacing.xl, gap: spacing.sm, maxHeight: '88%' },
   modalTitle: { fontSize: 18, fontWeight: '800' },
   input: { borderRadius: radius.md, borderWidth: 1, padding: spacing.md, fontSize: 14 },
   half: { flex: 1 },
