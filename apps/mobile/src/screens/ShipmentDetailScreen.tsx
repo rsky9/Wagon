@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { StyleSheet, Text, View, ScrollView, Pressable, Alert } from 'react-native'
+import { StyleSheet, Text, View, ScrollView, Pressable, Alert, Modal, TextInput } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius } from '@wagon/design'
 import { api } from '../config'
@@ -36,6 +36,8 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
   const [sourceLoad, setSourceLoad] = useState<SourceLoad | null>(null)
   const [cargo, setCargo] = useState<CargoUnit[]>([])
   const [loading, setLoading] = useState(true)
+  const [coverPlanId, setCoverPlanId] = useState<string | null>(null)
+  const [coverValue, setCoverValue] = useState('')
 
   const fetch = useCallback(() => {
     api.get<{ shipment: Detail; sourceLoad: SourceLoad | null }>(`/foundation/shipments/${shipmentId}`)
@@ -62,20 +64,22 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
     action('order', () => api.post('/forwarding/orders', { shipmentId, buyAmount: 1000, sellAmount: 1200 }), 'Forward order created')
   }
   const quoteCover = (planId: string) => {
-    Alert.prompt('Insure this plan', 'Declared cargo value (₹)', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Quote', onPress: (val?: string) => {
-        const v = Number(val)
-        if (!v || v <= 0) { Alert.alert('Valid value required'); return }
-        setLoading(true)
-        api.post<{ quote: { premium: number; coverage: number; band: string; risk: number } }>(`/finance/plans/${planId}/cover-quote`, { declaredValue: v })
-          .then((r) => {
-            Alert.alert('Cover quote', `Coverage ₹${r.quote.coverage.toLocaleString('en-IN')}\nPremium ₹${r.quote.premium.toLocaleString('en-IN')} · ${r.quote.band} risk (${(r.quote.risk * 100).toFixed(0)}%)\nAccept to issue a policy.`)
-          })
-          .catch((e) => Alert.alert('Error', e.message))
-          .finally(() => { setLoading(false); fetch() })
-      } },
-    ])
+    setCoverPlanId(planId)
+    setCoverValue('')
+  }
+
+  const submitCover = () => {
+    if (!coverPlanId) return
+    const v = Number(coverValue)
+    if (!v || v <= 0) { Alert.alert('Valid value required'); return }
+    setLoading(true)
+    api.post<{ quote: { premium: number; coverage: number; band: string; risk: number } }>(`/finance/plans/${coverPlanId}/cover-quote`, { declaredValue: v })
+      .then((r) => {
+        setCoverPlanId(null)
+        Alert.alert('Cover quote', `Coverage ₹${r.quote.coverage.toLocaleString('en-IN')}\nPremium ₹${r.quote.premium.toLocaleString('en-IN')} · ${r.quote.band} risk (${(r.quote.risk * 100).toFixed(0)}%)\nAccept to issue a policy.`)
+      })
+      .catch((e) => Alert.alert('Error', e.message))
+      .finally(() => { setLoading(false); fetch() })
   }
 
   const fileClaim = () => {
@@ -284,6 +288,28 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
           ))}
         </View>
       </ScrollView>
+
+      {/* Insure plan modal */}
+      <Modal visible={!!coverPlanId} transparent animationType="slide">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={[styles.modalWrap, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Text style={{ color: theme.foreground, fontWeight: '800', fontSize: 18 }}>Insure this plan</Text>
+            <Text style={{ color: theme.mutedForeground, fontSize: 13 }}>Declared cargo value (₹)</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]}
+              placeholder="e.g. 500000"
+              placeholderTextColor={theme.mutedForeground}
+              keyboardType="numeric"
+              value={coverValue}
+              onChangeText={setCoverValue}
+            />
+            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <Pressable style={[styles.smallBtn, { backgroundColor: theme.muted }]} onPress={() => setCoverPlanId(null)}><Text style={styles.smallBtnText}>Cancel</Text></Pressable>
+              <Pressable style={[styles.smallBtn, { backgroundColor: '#0EA5E9' }]} onPress={submitCover}><Text style={styles.smallBtnText}>Quote</Text></Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   )
 }
@@ -305,4 +331,6 @@ const styles = StyleSheet.create({
   smallBtn: { borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   smallBtnText: { color: '#fff', fontWeight: '800', fontSize: 12 },
   actionText: { color: '#fff', fontWeight: '800', fontSize: 14 },
+  modalWrap: { borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, borderTopWidth: 1, padding: spacing.xl, gap: spacing.md },
+  input: { borderRadius: radius.md, borderWidth: 1, padding: spacing.md, fontSize: 14 },
 })

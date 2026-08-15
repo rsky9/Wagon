@@ -79,6 +79,10 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
   const [quoteAmount, setQuoteAmount] = useState('')
   const [quoteEta, setQuoteEta] = useState('')
 
+  // Decompose (build a plan) modal
+  const [decomposeFor, setDecomposeFor] = useState<MarketRequest | null>(null)
+  const [decomposeRoute, setDecomposeRoute] = useState('')
+
   // Carrier service publish modal
   const [showCarrier, setShowCarrier] = useState(false)
   const [carOrigin, setCarOrigin] = useState('')
@@ -202,26 +206,28 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
   }
 
   const decompose = (r: MarketRequest) => {
-    Alert.prompt('Build a plan', `Route for ${r.kind} (e.g. Mumbai|Mundra|transport, Mundra|Singapore|carrier)`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Plan', onPress: (spec?: string) => {
-        const legs = (spec ?? '').split(/[;,]/).map((s) => {
-          const [origin, destination, kind] = s.split('|').map((x) => x.trim())
-          return origin ? { origin, destination: destination || undefined, kind: kind || undefined } : null
-        }).filter(Boolean) as Array<{ origin: string; destination?: string; kind?: string }>
-        if (legs.length === 0) { Alert.alert('Route required', 'e.g. Mumbai|Mundra|transport'); return }
-        setBusy(true)
-        api.post<{ plan?: { ref: string; status: string; legs: unknown[]; cost?: number | null }; unsatisfiable?: boolean; note?: string }>(`/market/requests/${r.id}/decompose`, { legs })
-          .then((res) => {
-            if (res.unsatisfiable) { Alert.alert('Cannot assemble', res.note ?? 'One leg has no supply'); return }
-            const p = res.plan!
-            Alert.alert('Plan ready', `${p.ref} · ${p.status}\n${(p.legs as Array<{ mode: string; origin?: string }>).map((l) => `${l.mode} ${l.origin ?? ''}`).join(' → ')}\n₹${(p.cost ?? 0).toLocaleString('en-IN')}\nSelect it in Planning to book.`)
-            fetch()
-          })
-          .catch((e) => Alert.alert('Error', e.message))
-          .finally(() => setBusy(false))
-      } },
-    ])
+    setDecomposeFor(r)
+    setDecomposeRoute('')
+  }
+
+  const submitDecompose = () => {
+    const spec = decomposeRoute
+    const legs = spec.split(/[;,]/).map((s) => {
+      const [origin, destination, kind] = s.split('|').map((x) => x.trim())
+      return origin ? { origin, destination: destination || undefined, kind: kind || undefined } : null
+    }).filter(Boolean) as Array<{ origin: string; destination?: string; kind?: string }>
+    if (legs.length === 0 || !decomposeFor) { Alert.alert('Route required', 'e.g. Mumbai|Mundra|transport'); return }
+    setBusy(true)
+    api.post<{ plan?: { ref: string; status: string; legs: unknown[]; cost?: number | null }; unsatisfiable?: boolean; note?: string }>(`/market/requests/${decomposeFor.id}/decompose`, { legs })
+      .then((res) => {
+        setDecomposeFor(null)
+        if (res.unsatisfiable) { Alert.alert('Cannot assemble', res.note ?? 'One leg has no supply'); return }
+        const p = res.plan!
+        Alert.alert('Plan ready', `${p.ref} · ${p.status}\n${(p.legs as Array<{ mode: string; origin?: string }>).map((l) => `${l.mode} ${l.origin ?? ''}`).join(' → ')}\n₹${(p.cost ?? 0).toLocaleString('en-IN')}\nSelect it in Planning to book.`)
+        fetch()
+      })
+      .catch((e) => Alert.alert('Error', e.message))
+      .finally(() => setBusy(false))
   }
 
   const recommendCarriers = () => {
@@ -648,6 +654,30 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               <Pressable style={[styles.modalBtn, { backgroundColor: theme.muted }]} onPress={() => setQuoteFor(null)}><Text style={{ color: theme.foreground, fontWeight: '700' }}>Cancel</Text></Pressable>
               <Pressable style={[styles.modalBtn, { backgroundColor: '#F97316' }]} onPress={submitQuote} disabled={busy}><Text style={{ color: '#fff', fontWeight: '800' }}>{busy ? 'Sending…' : 'Send quote'}</Text></Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Decompose (build a multi-party plan) modal */}
+      <Modal visible={!!decomposeFor} transparent animationType="slide">
+        <View style={styles.modalWrap}>
+          <View style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Text style={[styles.modalTitle, { color: theme.foreground }]}>Build a plan · {decomposeFor?.kind}</Text>
+            <Text style={{ color: theme.mutedForeground, fontSize: 13 }}>
+              {decomposeFor?.originRef ?? decomposeFor?.city ?? '—'} → {decomposeFor?.destinationRef ?? '—'}
+            </Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]}
+              placeholder="Legs: Origin|Dest|kind (e.g. Mumbai|Mundra|transport, Mundra|Singapore|carrier)"
+              placeholderTextColor={theme.mutedForeground}
+              multiline
+              value={decomposeRoute}
+              onChangeText={setDecomposeRoute}
+            />
+            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <Pressable style={[styles.modalBtn, { backgroundColor: theme.muted }]} onPress={() => setDecomposeFor(null)}><Text style={{ color: theme.foreground, fontWeight: '700' }}>Cancel</Text></Pressable>
+              <Pressable style={[styles.modalBtn, { backgroundColor: '#8B5CF6' }]} onPress={submitDecompose} disabled={busy}><Text style={{ color: '#fff', fontWeight: '800' }}>{busy ? 'Planning…' : 'Assemble plan'}</Text></Pressable>
             </View>
           </View>
         </View>
