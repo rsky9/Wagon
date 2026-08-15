@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { StyleSheet, Text, View, ScrollView, Pressable, Alert, Modal, TextInput } from 'react-native'
+import { StyleSheet, Text, View, ScrollView, Pressable, Alert, Modal, TextInput, KeyboardAvoidingView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius } from '@wagon/design'
 import { api } from '../config'
@@ -291,7 +291,7 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
 
       {/* Insure plan modal */}
       <Modal visible={!!coverPlanId} transparent animationType="slide">
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }} behavior="padding">
           <View style={[styles.modalWrap, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Text style={{ color: theme.foreground, fontWeight: '800', fontSize: 18 }}>Insure this plan</Text>
             <Text style={{ color: theme.mutedForeground, fontSize: 13 }}>Declared cargo value (₹)</Text>
@@ -308,7 +308,7 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
               <Pressable style={[styles.smallBtn, { backgroundColor: '#0EA5E9' }]} onPress={submitCover}><Text style={styles.smallBtnText}>Quote</Text></Pressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   )

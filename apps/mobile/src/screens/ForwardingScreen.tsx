@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { StyleSheet, Text, View, FlatList, Pressable, Alert, TextInput, Modal } from 'react-native'
+import { StyleSheet, Text, View, FlatList, Pressable, Alert, TextInput, Modal, KeyboardAvoidingView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
@@ -186,7 +186,7 @@ export function ForwardingScreen({ onBack, onOpenShipments }: Props) {
       )}
 
       <Modal visible={modal === 'order'} transparent animationType="slide">
-        <View style={styles.modalWrap}>
+        <KeyboardAvoidingView style={styles.modalWrap} behavior="padding">
           <View style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Text style={[styles.modalTitle, { color: theme.foreground }]}>Create forward order</Text>
             <Text style={[styles.meta, { color: theme.mutedForeground }]}>Pick a shipment:</Text>
@@ -209,7 +209,7 @@ export function ForwardingScreen({ onBack, onOpenShipments }: Props) {
               <Pressable style={[styles.modalBtn, { backgroundColor: '#F97316' }]} onPress={createOrder} disabled={busy}><Text style={{ color: '#fff', fontWeight: '800' }}>{busy ? 'Creating…' : 'Create'}</Text></Pressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={modal === 'consolidate'} transparent animationType="slide">

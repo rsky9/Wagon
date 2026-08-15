@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { StyleSheet, Text, View, FlatList, Pressable, Alert, TextInput, Modal, ScrollView } from 'react-native'
+import { StyleSheet, Text, View, FlatList, Pressable, Alert, TextInput, Modal, ScrollView, KeyboardAvoidingView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
@@ -198,8 +198,8 @@ export function IntegrationsScreen({ onBack }: Props) {
 
       {/* Create webhook modal */}
       <Modal visible={showCreate} transparent animationType="slide">
-        <View style={styles.modalWrap}>
-          <ScrollView style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <KeyboardAvoidingView style={styles.modalWrap} behavior="padding">
+          <ScrollView style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]} keyboardShouldPersistTaps="handled">
             <Text style={[styles.modalTitle, { color: theme.foreground }]}>New webhook</Text>
             <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Name" placeholderTextColor={theme.mutedForeground} value={whName} onChangeText={setWhName} />
             <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="URL (https://...)" placeholderTextColor={theme.mutedForeground} value={whUrl} onChangeText={setWhUrl} autoCapitalize="none" />
@@ -209,7 +209,7 @@ export function IntegrationsScreen({ onBack }: Props) {
               <Pressable style={[styles.modalBtn, { backgroundColor: '#F97316' }]} onPress={createWebhook} disabled={busy}><Text style={{ color: '#fff', fontWeight: '800' }}>{busy ? 'Creating…' : 'Create'}</Text></Pressable>
             </View>
           </ScrollView>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   )

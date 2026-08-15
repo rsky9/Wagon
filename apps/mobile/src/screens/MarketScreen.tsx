@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { StyleSheet, Text, View, FlatList, Pressable, Alert, TextInput, Modal, ScrollView } from 'react-native'
+import { StyleSheet, Text, View, FlatList, Pressable, Alert, TextInput, Modal, ScrollView, KeyboardAvoidingView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
@@ -60,7 +60,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
   const [partners, setPartners] = useState<Array<{ id: string; name: string; kind: string; baseUrl?: string | null; org?: { name: string; verified: boolean } | null }>>([])
   const [aiRecs, setAiRecs] = useState<AiRec[]>([])
   const [compareRequest, setCompareRequest] = useState<MarketRequest | null>(null)
-  const [myQuotes, setMyQuotes] = useState<Array<{ id: string; amount?: number | null; currency: string; etaHours?: number | null; status: string; request: { id: string; kind: string; originRef?: string | null; destinationRef?: string | null; requesterOrg?: { name: string } | null } }>>([])
+  const [myQuotes, setMyQuotes] = useState<Array<{ id: string; amount?: number | null; currency: string; etaHours?: number | null; status: string; request?: { id: string; kind: string; originRef?: string | null; destinationRef?: string | null; requesterOrg?: { name: string } | null } | null }>>([])
 
   const canPublishCarrier = capabilities.includes('carrier')
 
@@ -604,7 +604,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
               <Text style={[styles.sectionTitle, { color: theme.foreground }]}>My requests ({mine.length})</Text>
               {mine.length === 0
                 ? <EmptyState title="No requests yet" message="Your requests and their quotes appear here" icon="📋" />
-                : mine.map((m) => renderRequest(m.request, true))}
+                : mine.map((m) => m.request ? renderRequest(m.request, true) : null)}
             </View>
           ) : item.type === 'quotes' ? (
             <View style={styles.section}>
@@ -615,8 +615,8 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
                   <MarketCard
                     key={q.id}
                     icon="🧾"
-                    title={`${q.request.kind} · ${q.amount != null ? `${q.currency} ${q.amount.toLocaleString('en-IN')}` : '—'}`}
-                    subtitle={`${q.request.originRef ?? '—'} → ${q.request.destinationRef ?? '—'} · ${q.etaHours ?? '—'}h · ${q.request.requesterOrg?.name ?? '—'}`}
+                    title={`${q.request?.kind ?? 'quote'} · ${q.amount != null ? `${q.currency} ${q.amount.toLocaleString('en-IN')}` : '—'}`}
+                    subtitle={`${q.request?.originRef ?? '—'} → ${q.request?.destinationRef ?? '—'} · ${q.etaHours ?? '—'}h · ${q.request?.requesterOrg?.name ?? '—'}`}
                     status={q.status}
                     statusColor={q.status === 'submitted' ? theme.warning : theme.success}
                   >
@@ -659,9 +659,9 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
 
       {/* Publish listing modal */}
       <Modal visible={showListing} transparent animationType="slide">
-        <View style={styles.modalWrap}>
+        <KeyboardAvoidingView style={styles.modalWrap} behavior="padding">
           <View style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <ScrollView contentContainerStyle={styles.modalContent}>
+            <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
               <Text style={[styles.modalTitle, { color: theme.foreground }]}>Publish supply</Text>
               <View style={styles.filters}>
                 {Object.keys(KIND_LABEL).map((k) => (
@@ -683,14 +683,14 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
               </View>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Post request modal */}
       <Modal visible={showRequest} transparent animationType="slide">
-        <View style={styles.modalWrap}>
+        <KeyboardAvoidingView style={styles.modalWrap} behavior="padding">
           <View style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <ScrollView contentContainerStyle={styles.modalContent}>
+            <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
               <Text style={[styles.modalTitle, { color: theme.foreground }]}>Post a need</Text>
               <View style={styles.filters}>
                 {REQ_KINDS.map((k) => (
@@ -712,12 +712,12 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
               </View>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Quote modal */}
       <Modal visible={!!quoteFor} transparent animationType="slide">
-        <View style={styles.modalWrap}>
+        <KeyboardAvoidingView style={styles.modalWrap} behavior="padding">
           <View style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Text style={[styles.modalTitle, { color: theme.foreground }]}>Quote on {quoteFor?.kind} demand</Text>
             <Text style={{ color: theme.mutedForeground, fontSize: 13 }}>
@@ -730,12 +730,12 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
               <Pressable style={[styles.modalBtn, { backgroundColor: '#F97316' }]} onPress={submitQuote} disabled={busy}><Text style={{ color: '#fff', fontWeight: '800' }}>{busy ? 'Sending…' : 'Send quote'}</Text></Pressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Decompose (build a multi-party plan) modal */}
       <Modal visible={!!decomposeFor} transparent animationType="slide">
-        <View style={styles.modalWrap}>
+        <KeyboardAvoidingView style={styles.modalWrap} behavior="padding">
           <View style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Text style={[styles.modalTitle, { color: theme.foreground }]}>Build a plan · {decomposeFor?.kind}</Text>
             <Text style={{ color: theme.mutedForeground, fontSize: 13 }}>
@@ -754,7 +754,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
               <Pressable style={[styles.modalBtn, { backgroundColor: '#8B5CF6' }]} onPress={submitDecompose} disabled={busy}><Text style={{ color: '#fff', fontWeight: '800' }}>{busy ? 'Planning…' : 'Assemble plan'}</Text></Pressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Quote comparison modal */}
@@ -791,7 +791,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
 
       {/* Carrier service publish modal */}
       <Modal visible={showCarrier} transparent animationType="slide">
-        <View style={styles.modalWrap}>
+        <KeyboardAvoidingView style={styles.modalWrap} behavior="padding">
           <View style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Text style={[styles.modalTitle, { color: theme.foreground }]}>Publish carrier service</Text>
             <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Origin (port/city)" placeholderTextColor={theme.mutedForeground} value={carOrigin} onChangeText={setCarOrigin} />
@@ -806,7 +806,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
               <Pressable style={[styles.modalBtn, { backgroundColor: '#F97316' }]} onPress={publishCarrier} disabled={busy}><Text style={{ color: '#fff', fontWeight: '800' }}>{busy ? 'Publishing…' : 'Publish'}</Text></Pressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   )
