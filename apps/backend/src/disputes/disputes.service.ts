@@ -45,7 +45,7 @@ export class DisputesService {
     return { disputes }
   }
 
-  async resolve(disputeId: string, resolution: string, actor: User) {
+  async resolve(disputeId: string, resolution: string, actor: User, outcome?: 'release' | 'block' | 'partial') {
     if (!resolution || resolution.trim().length === 0) {
       throw new BadRequestException('Resolution note is required')
     }
@@ -56,16 +56,19 @@ export class DisputesService {
     if (dispute.status === 'resolved') {
       throw new BadRequestException('Dispute already resolved')
     }
+    if (outcome && !['release', 'block', 'partial'].includes(outcome)) {
+      throw new BadRequestException('Outcome must be release, block or partial')
+    }
     const updated = await this.prisma.dispute.update({
       where: { id: disputeId },
-      data: { status: 'resolved', resolution },
+      data: { status: 'resolved', resolution, outcome: outcome ?? 'release' },
     })
     await this.audit.log({
       actorId: actor.id,
       action: 'dispute.resolve',
       resource: `dispute:${disputeId}`,
       before: { status: dispute.status },
-      after: { status: updated.status, resolution: updated.resolution },
+      after: { status: updated.status, resolution: updated.resolution, outcome: updated.outcome },
     })
     return updated
   }

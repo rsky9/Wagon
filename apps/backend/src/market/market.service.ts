@@ -841,9 +841,25 @@ export class MarketService {
         break
       }
       case 'carrier': {
+        // A carrier booking must reference a real shipment — create a canonical
+        // one when the requester has none (an empty string FK would 500).
+        let shipment = await tx.shipment.findFirst({ where: { ownerOrgId: r.requesterOrgId } })
+        if (!shipment) {
+          shipment = await tx.shipment.create({
+            data: {
+              ref: `MK-CA-${r.id.slice(-8)}-${Date.now().toString(36).toUpperCase()}`,
+              ownerOrgId: r.requesterOrgId,
+              commodity: 'carrier cargo',
+              status: 'booked',
+              mode: 'ocean',
+              originId: quote.providerOrgId,
+              destinationId: r.requesterOrgId,
+            },
+          })
+        }
         await tx.carrierBooking.create({
           data: {
-            shipmentId: (await tx.shipment.findFirst({ where: { ownerOrgId: r.requesterOrgId } }))?.id ?? '',
+            shipmentId: shipment.id,
             carrierId: quote.providerOrgId,
             bookingRef: `MK-${r.id.slice(-6)}`,
             rate: quote.amount,

@@ -404,6 +404,9 @@ export class TripsService {
         ? { pickupOtp: code, pickupOtpAt: new Date() }
         : { deliveryOtp: code, deliveryOtpAt: new Date() },
     })
+    // A fresh code resets the attempt counter — otherwise 5 wrong guesses lock
+    // the new code out for the full TTL.
+    await this.redis.del(`otp_attempts:${tripId}:${kind}`).catch(() => {})
     // Deliver the code to the supplier (push + mock log).
     const supplier = await this.prisma.supplier.findUnique({ where: { id: trip.load.supplierId }, include: { user: true } })
     if (supplier) {

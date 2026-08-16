@@ -452,6 +452,26 @@ An eighth deep audit of the bidding→trips→payments chain and the classic del
 - **Driver-only sessions** hide the transporter-only POD/payout actions (no more 403 dead-ends); **cancelled/unknown-stage trips** don't show a bogus "Mark next"; OTP generation shows the code only in dev builds.
 - Home supplier money includes split-path payments; EnablementFinance actions are busy-guarded; Driver Home shows a retry on network errors.
 
+### 10.10 Delivered: double-bill closure + negotiation/bidding flow repair
+
+A ninth deep audit of the money edges and the negotiation/bidding flows surfaced and fixed:
+
+**Money: no double-billing, no silent bypasses**
+- **Escrow and the advance+balance split are mutually exclusive** — a trip is paid one way or the other, so a supplier can no longer be billed up to 2× the agreed rate (`captureEscrow` rejects the second path once the first has captured).
+- **Claim settlements can't be duplicated**: the `claim` branch now enforces one due/cleared claim settlement per shipment and caps at the liable policy's remaining coverage (was able to drain a policy repeatedly).
+- **Platform-funded (null-payer) settlements require admin** to clear — any org member with shipment access can no longer trigger a capture on them.
+- **`primaryOrg` is deterministic** (prefers the role-kind org, else earliest membership) so money/org-binding writes never land on a DB-arbitrary org.
+- **Fresh OTP resets its attempt counter** (5 wrong guesses no longer lock a regenerated code); **carrier-quote acceptance** no longer 500s on shipment-less requester orgs (canonical shipment created).
+- **Admin force-complete records a confirmed POD** so captured escrow can actually be released; **dispute resolution now carries an outcome** (`release | block | partial`) that gates payout after resolution.
+- **Re-submitting a bid preserves the supplier's decision state** (a re-bid no longer silently downgrades shortlisted/negotiating to pending).
+
+**Mobile: negotiation + bidding flows close**
+- **Transporter can respond to a counteroffer** — MyBids rows in `negotiating` get a "Respond to counteroffer →" action routing to Negotiation (the endpoint existed but was unreachable).
+- **Decision Room shows Confirm/Reject for `accepted` bids** and "Awaiting transporter confirmation" for `booking_pending` (was a no-button dead-end after negotiation).
+- **Withdraw only shows for `pending`** bids (shortlisted was always rejected by the backend); **Marketplace mode re-syncs** when the user switches supplier/transporter.
+- **Trip execution OTP button disappears after generation** (regenerating no longer invalidates the code the supplier is typing); **TripDetail refetches + emits data-bus after pay/confirm** and gates OTP buttons to the supplier; confirm-receipt shows only when a POD exists.
+- **Passbook re-syncs on money changes** (data-bus subscription); **PostLoadWizard never publishes the wrong material** (explicit resolution or an error, no silent fallback).
+
 ---
 
 ## Research sources

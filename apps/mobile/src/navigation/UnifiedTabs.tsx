@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet, Pressable } from 'react-native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -137,6 +137,12 @@ function MarketplaceTab({ navigation }: any) {
   const initialMode = activeMode === 'supplier' ? 'myloads' : 'browse'
   const [mode, setMode] = useState<'browse' | 'myloads'>(isTransporter ? initialMode : 'myloads')
   const root = navigation.getParent()
+
+  // Re-sync when the user switches supplier/transporter mode on Home — the tab
+  // stays mounted, so without this the Marketplace surface keeps the old mode.
+  useEffect(() => {
+    if (isTransporter) setMode(activeMode === 'supplier' ? 'myloads' : 'browse')
+  }, [activeMode, isTransporter])
 
   if (isTransporter && isSupplier) {
     return (

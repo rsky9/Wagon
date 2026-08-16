@@ -101,10 +101,11 @@ export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
 
   const currentIdx = STAGE_FLOW.findIndex((s) => s.key === trip.stage)
   const isDelivered = trip.stage === 'delivered'
-  // OTP is required until the supplier VERIFIES it (not merely generated) — so a
-  // mistyped code can be regenerated instead of blocking the trip forever.
-  const needsPickupOtp = trip.stage === 'arrived_pickup' && !trip.pickupOtpVerifiedAt
-  const needsDeliveryOtp = trip.stage === 'arrived_drop' && !trip.deliveryOtpVerifiedAt
+  // The OTP button shows only until a code is GENERATED (regenerating would
+  // invalidate the code the supplier is already typing). The supplier then has
+  // until verification to enter it.
+  const needsPickupOtp = trip.stage === 'arrived_pickup' && !trip.pickupOtpAt
+  const needsDeliveryOtp = trip.stage === 'arrived_drop' && !trip.deliveryOtpAt
   const pickupOtpPending = trip.stage === 'arrived_pickup' && !!trip.pickupOtpAt && !trip.pickupOtpVerifiedAt
   const deliveryOtpPending = trip.stage === 'arrived_drop' && !!trip.deliveryOtpAt && !trip.deliveryOtpVerifiedAt
 

@@ -133,7 +133,14 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
         modelId,
         weight: Number(weight),
         distanceKm,
-        materialId: materials.find((m) => m.name === material)?.id ?? materials[0]?.id,
+        // Resolve the material explicitly — never silently fall back to the first
+        // material (which would publish the wrong cargo type on the load).
+        materialId: (() => {
+          if (material === 'Other') return materials[0]?.id
+          const match = materials.find((m) => m.name === material)
+          if (!match) throw new Error('Selected material is not available — pick another')
+          return match.id
+        })(),
         bodyType,
         loadingReq: loadingReq || undefined,
         specialReq: specialReq || undefined,

@@ -703,6 +703,7 @@ model Dispute {
   issueType    String?
   evidenceKeys String[]
   resolution   String?
+  outcome      String? // release | block | partial — gates payout after resolution
   status       String   @default("open")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

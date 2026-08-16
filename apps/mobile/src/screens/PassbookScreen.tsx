@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { StyleSheet, Text, View, FlatList, Pressable, Alert } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { WalletHeader, EmptyState } from '@wagon/components'
 import { api } from '../config'
 import { useI18n } from '@wagon/i18n'
+import { subscribeDataChanged } from '../lib/dataBus'
 
 interface PassbookEntry {
   id: string
@@ -41,8 +42,8 @@ export function PassbookScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    Promise.all([
+  const fetch = useCallback(() => {
+    return Promise.all([
       api.get<{ entries: PassbookEntry[]; balance: number }>('/payments/passbook'),
       api.get<{ balance: number; transactions: WalletTx[] }>('/payments/wallet').catch(() => ({ balance: 0, transactions: [] })),
     ])
@@ -55,6 +56,10 @@ export function PassbookScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load passbook'))
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => { fetch() }, [fetch])
+  // Re-sync whenever money changes anywhere in the app (captures, payouts, refunds).
+  useEffect(() => subscribeDataChanged('finance', () => fetch()), [fetch])
 
   const pending = entries.filter((e) => e.status === 'pending' || e.status === 'processing')
 

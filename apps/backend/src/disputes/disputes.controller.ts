@@ -32,7 +32,7 @@ export class DisputesController {
   @Patch(':id/resolve')
   @UseGuards(JwtAuthGuard)
   @Roles('admin')
-  resolve(@Param('id') id: string, @Body() body: { resolution: string }, @CurrentUser() user: User) {
-    return this.disputes.resolve(id, body.resolution, user)
+  resolve(@Param('id') id: string, @Body() body: { resolution: string; outcome?: 'release' | 'block' | 'partial' }, @CurrentUser() user: User) {
+    return this.disputes.resolve(id, body.resolution, user, body.outcome)
   }
 }

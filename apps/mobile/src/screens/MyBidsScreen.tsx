@@ -22,6 +22,7 @@ interface MyBid {
 interface Props {
   onBack: () => void
   onOpenLoad?: (load: Load) => void
+  onNegotiate?: (load: Load) => void
 }
 
 const TONE: Record<string, StatusTone> = {
@@ -35,7 +36,7 @@ const TONE: Record<string, StatusTone> = {
   expired: 'warning',
 }
 
-export function MyBidsScreen({ onBack, onOpenLoad }: Props) {
+export function MyBidsScreen({ onBack, onOpenLoad, onNegotiate }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
   const [bids, setBids] = useState<MyBid[]>([])
@@ -43,7 +44,7 @@ export function MyBidsScreen({ onBack, onOpenLoad }: Props) {
   const [refreshing, setRefreshing] = useState(false)
 
   const fetch = useCallback(() => {
-    api.get<{ bids: MyBid[] }>('/bidding/mine').then((res) => setBids(res.bids)).catch(() => {}).finally(() => setLoading(false))
+    return api.get<{ bids: MyBid[] }>('/bidding/mine').then((res) => setBids(res.bids)).catch(() => {}).finally(() => setLoading(false))
   }, [])
 
   useEffect(() => { fetch() }, [fetch])
@@ -54,7 +55,6 @@ export function MyBidsScreen({ onBack, onOpenLoad }: Props) {
       { text: 'Withdraw', style: 'destructive', onPress: () => api.post(`/bidding/bid/${bid.id}/withdraw`).then(() => { Alert.alert(t('ui.withdrawn'), 'Bid removed'); fetch() }).catch((e) => Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed')) },
     ])
   }
-
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top', 'left', 'right']}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
@@ -66,7 +66,7 @@ export function MyBidsScreen({ onBack, onOpenLoad }: Props) {
       <FlatList
         data={bids}
         keyExtractor={(b) => b.id}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetch(); setRefreshing(false) }} tintColor={theme.primary} colors={[theme.primary]} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetch().finally(() => setRefreshing(false)) }} tintColor={theme.primary} colors={[theme.primary]} />}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           loading ? <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
@@ -87,9 +87,14 @@ export function MyBidsScreen({ onBack, onOpenLoad }: Props) {
               </Text>
               <Text style={[styles.time, { color: theme.mutedForeground }]}>Bid {new Date(item.createdAt).toLocaleDateString('en-IN')}</Text>
             </Pressable>
-            {(item.status === 'pending' || item.status === 'shortlisted') && (
+            {item.status === 'pending' && (
               <Pressable style={[styles.withdraw, { borderColor: theme.danger + '55' }]} onPress={() => withdraw(item)}>
                 <Text style={{ color: theme.danger, fontWeight: '700', fontSize: 13 }}>{t('myBids.withdraw')}</Text>
+              </Pressable>
+            )}
+            {item.status === 'negotiating' && onNegotiate && (
+              <Pressable style={[styles.respond, { borderColor: theme.primary + '55' }]} onPress={() => onNegotiate(item.load)}>
+                <Text style={{ color: theme.primary, fontWeight: '700', fontSize: 13 }}>Respond to counteroffer →</Text>
               </Pressable>
             )}
           </View>
@@ -111,4 +116,5 @@ const styles = StyleSheet.create({
   meta: { fontSize: 12 },
   time: { fontSize: 11, opacity: 0.8 },
   withdraw: { borderWidth: 1, borderRadius: radius.md, paddingVertical: spacing.sm, alignItems: 'center', marginTop: spacing.xs },
+  respond: { borderWidth: 1, borderRadius: radius.md, paddingVertical: spacing.sm, alignItems: 'center', marginTop: spacing.xs },
 })

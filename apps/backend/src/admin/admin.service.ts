@@ -472,13 +472,30 @@ export class AdminService {
     if (trip.status === 'delivered' || trip.status === 'cancelled') {
       throw new BadRequestException('Trip is already delivered or cancelled')
     }
-    const updated = await this.prisma.trip.update({
-      where: { id: tripId },
-      data: { status: 'delivered', deliveredAt: new Date() },
-    })
-    await this.prisma.load.update({
-      where: { id: trip.loadId },
-      data: { status: 'delivered' },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const t = await tx.trip.update({
+        where: { id: tripId },
+        data: { status: 'delivered', deliveredAt: new Date() },
+      })
+      await tx.load.update({
+        where: { id: trip.loadId },
+        data: { status: 'delivered' },
+      })
+      // Without a confirmed POD, payout is permanently blocked (only the
+      // transporter can upload + supplier confirm). Admin force-complete records
+      // an admin-confirmed POD so captured money can actually be released.
+      const pod = await tx.proofOfDelivery.findUnique({ where: { tripId } })
+      if (pod) {
+        await tx.proofOfDelivery.update({
+          where: { id: pod.id },
+          data: { status: 'verified', consigneeConfirmed: true, consigneeConfirmedAt: new Date() },
+        })
+      } else {
+        await tx.proofOfDelivery.create({
+          data: { tripId, status: 'verified', consigneeConfirmed: true, consigneeConfirmedAt: new Date() },
+        })
+      }
+      return t
     })
     await this.syncShipmentFromLoad(trip.loadId, 'delivered').catch(() => {})
     await this.audit.log({
@@ -486,7 +503,7 @@ export class AdminService {
       action: 'trip.force_complete',
       resource: `trip:${tripId}`,
       before: { status: trip.status },
-      after: { status: updated.status },
+      after: { status: updated.status, podVerified: true },
     })
     return { trip: updated }
   }

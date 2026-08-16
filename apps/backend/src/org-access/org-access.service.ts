@@ -11,20 +11,32 @@ import type { User } from '@prisma/client'
 export class OrgAccessService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** All organizations the user is a member of. */
+  /** All organizations the user is a member of (deterministic: oldest first). */
   async userOrgs(user: User) {
     const members = await this.prisma.organizationMember.findMany({
       where: { userId: user.id },
       include: { organization: true },
+      orderBy: { createdAt: 'asc' },
     })
     return members.map((m) => m.organization)
   }
 
-  /** The user's first organization (legacy convenience — prefer memberOrgs). */
+  /** The user's first organization (legacy convenience — prefer memberOrgs).
+   *  Deterministic: prefers the org matching the user's role kind, else the
+   *  earliest membership, so money/org-binding writes never land on a DB-arbitrary org. */
   async primaryOrg(user: User) {
     const orgs = await this.userOrgs(user)
     if (orgs.length === 0) throw new ForbiddenException('User belongs to no organization')
-    return orgs[0]!
+    const ROLE_TO_KIND: Record<string, string> = {
+      supplier: 'shipper',
+      transporter: 'transporter',
+      forwarder: 'forwarder',
+      warehouse: 'warehouse',
+      carrier: 'carrier',
+    }
+    const kind = ROLE_TO_KIND[user.role]
+    const matching = kind ? orgs.find((o) => o.kind === kind) : undefined
+    return matching ?? orgs[0]!
   }
 
   /** Orgs of the user filtered by kind. */

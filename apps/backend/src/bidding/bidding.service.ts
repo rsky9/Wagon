@@ -95,7 +95,8 @@ export class BiddingService {
             pickupBy: input.pickupBy,
             etaHours: input.etaHours,
             validityHours: input.validityHours ?? 24,
-            status: 'pending',
+            // PRESERVE the supplier's decision state — a re-bid must not silently
+            // downgrade a shortlisted/negotiating bid back to pending.
           },
         })
       : await this.prisma.bid.create({

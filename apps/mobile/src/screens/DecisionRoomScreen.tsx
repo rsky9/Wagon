@@ -148,6 +148,15 @@ export function DecisionRoomScreen({ loadId, onBack, onConfirmed, onNegotiate }:
               {item.status === 'negotiating' && (
                 <ActionBtn label={t('decisionRoom.counter')} tone="primary" onPress={() => counter(item.id, item.amount)} theme={theme} />
               )}
+              {item.status === 'accepted' && (
+                <>
+                  <ActionBtn label={t('decisionRoom.confirm')} tone="brand" onPress={() => confirm(item.id, item.amount)} theme={theme} />
+                  <ActionBtn label={t('decisionRoom.reject')} tone="danger" onPress={() => reject(item.id)} theme={theme} />
+                </>
+              )}
+              {item.status === 'booking_pending' && (
+                <Text style={{ color: theme.warning, fontSize: 13, textAlign: 'center' }}>Awaiting transporter confirmation…</Text>
+              )}
             </View>
           </View>
         )}

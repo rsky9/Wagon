@@ -289,7 +289,7 @@ function BankRoute({ navigation }: any) {
 }
 
 function MyBidsRoute({ navigation }: any) {
-  return <MyBidsScreen onBack={() => navigation.goBack()} onOpenLoad={(load) => navigation.navigate('LoadDetail', { load })} />
+  return <MyBidsScreen onBack={() => navigation.goBack()} onOpenLoad={(load) => navigation.navigate('LoadDetail', { load })} onNegotiate={(load) => navigation.navigate('Negotiation', { loadId: load.id })} />
 }
 
 function FavoritesRoute({ navigation }: any) {

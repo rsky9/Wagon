@@ -454,6 +454,29 @@ export class FinanceService {
       }
       // The claimant cannot settle a claim they raised against themselves.
       if (payerId === input.payeeId) throw new BadRequestException('Claim settlement must have distinct payer and payee')
+      // One claim settlement per shipment (due or cleared) — a second would
+      // drain the policy beyond decideClaim's coverage cap.
+      const duplicateClaim = await this.prisma.settlement.findFirst({
+        where: { shipmentId: input.shipmentId, type: 'claim', status: { in: ['due', 'cleared'] } },
+      })
+      if (duplicateClaim) throw new BadRequestException('A claim settlement already exists on this shipment')
+      // Cap at the liable policy's remaining coverage when the insurer is the payer.
+      if (payerId) {
+        const insurerPolicy = await this.prisma.insurancePolicy.findFirst({
+          where: { shipmentId: input.shipmentId, insurerId: payerId },
+          select: { coverage: true },
+        })
+        if (insurerPolicy?.coverage != null) {
+          const paid = await this.prisma.settlement.aggregate({
+            where: { shipmentId: input.shipmentId, type: 'claim', payeeId: input.payeeId ?? undefined, status: { in: ['due', 'cleared'] } },
+            _sum: { amount: true },
+          })
+          const remaining = Math.max(0, insurerPolicy.coverage - (paid._sum.amount ?? 0))
+          if (input.amount != null && input.amount > remaining) {
+            throw new BadRequestException(`Claim settlement exceeds the insurer's remaining coverage ₹${remaining}`)
+          }
+        }
+      }
     }
     const settlement = await this.prisma.$transaction(async (tx) => {
       const created = await tx.settlement.create({
@@ -501,6 +524,11 @@ export class FinanceService {
     const memberOrgIds = await this.orgAccess.memberOrgIds(user)
     if (settlement.payerId && !memberOrgIds.includes(settlement.payerId)) {
       throw new ForbiddenException('Only the payer’s org can authorize clearing this settlement')
+    }
+    // A settlement with no payer (platform-funded) must not be cleared by any
+    // org member — only admins (via the admin clearSettlement) may collect it.
+    if (!settlement.payerId && user.role !== 'admin') {
+      throw new ForbiddenException('Only an administrator can clear a platform-funded settlement')
     }
     const amount = settlement.amount ?? 0
     if (amount <= 0) throw new BadRequestException('Settlement has no amount to collect')

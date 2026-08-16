@@ -84,6 +84,21 @@ export class PaymentsService implements OnModuleInit {
       }
     }
 
+    // Mutual exclusion: a trip is paid EITHER by a full escrow OR by the
+    // advance+balance split — never both (that would bill the supplier 2x).
+    const [anySplitSucceeded, anyEscrowSucceeded] = await Promise.all([
+      this.prisma.payment.findFirst({
+        where: { tripId, type: { in: ['advance', 'balance'] }, status: 'succeeded' },
+      }),
+      this.prisma.payment.findFirst({ where: { tripId, type: 'escrow', status: 'succeeded' } }),
+    ])
+    if (stage === 'escrow' && anySplitSucceeded) {
+      throw new BadRequestException('This trip is already being paid by the advance + balance split — escrow is not allowed')
+    }
+    if (stage !== 'escrow' && anyEscrowSucceeded) {
+      throw new BadRequestException('This trip is already paid by full escrow — split payments are not allowed')
+    }
+
     const idempotencyKey = stage === 'escrow' ? `escrow_${tripId}` : `${stage}_${tripId}`
     const existing = await this.prisma.payment.findUnique({ where: { idempotencyKey } })
     if (existing && existing.status === 'succeeded') {
@@ -252,16 +267,21 @@ export class PaymentsService implements OnModuleInit {
       throw new BadRequestException('Add your bank account (Settings → Bank) before payouts can be released')
     }
     // Freeze payouts while a dispute is open on this trip, or an approved claim
-    // settlement on the linked shipment is still unpaid.
+    // settlement on the linked shipment is still unpaid. A resolved dispute whose
+    // outcome blocks payout also keeps money frozen (refund/partial to supplier).
     const shipmentId = await this.shipmentIdFor(trip.loadId)
-    const [openDispute, unpaidClaimSettlement] = await Promise.all([
+    const [openDispute, blockingDispute, unpaidClaimSettlement] = await Promise.all([
       this.prisma.dispute.count({ where: { tripId, status: 'open' } }),
+      this.prisma.dispute.count({ where: { tripId, status: 'resolved', outcome: { in: ['block', 'partial'] } } }),
       shipmentId
         ? this.prisma.settlement.count({ where: { shipmentId, type: 'claim', status: 'due' } })
         : Promise.resolve(0),
     ])
     if (openDispute > 0) {
       throw new BadRequestException('Payout is frozen while a dispute is open on this trip')
+    }
+    if (blockingDispute > 0) {
+      throw new BadRequestException('Payout is frozen by the resolution of a dispute on this trip')
     }
     if (unpaidClaimSettlement > 0) {
       throw new BadRequestException('Payout is frozen while an approved claim settlement is unpaid')

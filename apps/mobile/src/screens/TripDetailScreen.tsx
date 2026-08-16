@@ -15,6 +15,7 @@ import { api } from '../config'
 import type { Load } from '@wagon/contracts'
 import { useI18n } from '@wagon/i18n'
 import { alertPrompt } from '../components/Prompt'
+import { notifyDataChanged } from '../lib/dataBus'
 import { useStepUp } from '../hooks/useStepUp'
 import { useAuth } from '../auth'
 interface TripInfo {
@@ -122,6 +123,8 @@ export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipme
       const amount = snapshot?.rate ?? trip.load.fareEstimate
       await api.post('/payments/escrow', { tripId: trip.id, amount }, { 'x-action-token': token })
       Alert.alert(t('ui.paid'), `Booking amount ${formatINR(amount)} captured`)
+      fetchTrip()
+      notifyDataChanged('finance')
     } catch (e) {
       Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Payment failed')
     } finally {
@@ -139,6 +142,8 @@ export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipme
     try {
       await api.post('/payments/escrow', { tripId: trip.id, amount, stage }, { 'x-action-token': token })
       Alert.alert(t('ui.paid'), `${stage === 'advance' ? 'Advance' : 'Balance'} ${formatINR(amount)} captured`)
+      fetchTrip()
+      notifyDataChanged('finance')
     } catch (e) {
       Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Payment failed')
     } finally {
@@ -174,6 +179,7 @@ export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipme
       await api.post(`/payments/pod/${trip.id}/confirm`)
       Alert.alert(t('ui.done'), 'Delivery confirmed — the transporter can now request payout')
       fetchTrip()
+      notifyDataChanged('finance')
     } catch (e) {
       Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to confirm delivery')
     } finally {
@@ -258,14 +264,14 @@ export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipme
         {trip.status === 'in_transit' && (
           <Button label={t('tripDetail.trackLive')} onPress={() => onTrack?.(trip.id)} />
         )}
-        {(trip.status === 'in_transit' || trip.status === 'accepted') && (
+        {isSupplier && (trip.status === 'in_transit' || trip.status === 'accepted') && (
           <Button label={t('tripDetail.enterPickupOtp')} onPress={() => verifyOtp('pickup')} variant="secondary" />
         )}
-        {trip.status === 'in_transit' && (
+        {isSupplier && trip.status === 'in_transit' && (
           <Button label={t('tripDetail.enterDeliveryOtp')} onPress={() => verifyOtp('delivery')} variant="secondary" />
         )}
 
-        {isSupplier && trip.status === 'delivered' && (
+        {isSupplier && trip.status === 'delivered' && trip.podUrl && (
           <Button label="Confirm delivery receipt" onPress={confirmPod} loading={confirming} variant="secondary" />
         )}
 
