@@ -10,6 +10,7 @@ import { alertPrompt } from '../components/Prompt'
 interface Props {
   onBack: () => void
   capabilities?: string[]
+  initialTab?: Tab
 }
 
 type Tab = 'listings' | 'requests' | 'carriers' | 'mine' | 'partners' | 'ai'
@@ -39,9 +40,9 @@ const KIND_ICON: Record<string, string> = {
 }
 const REQ_KINDS = ['transport', 'warehouse', 'forwarding', 'carrier', 'insurance']
 
-export function MarketScreen({ onBack, capabilities = [] }: Props) {
+export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings' }: Props) {
   const theme = useTheme()
-  const [tab, setTab] = useState<Tab>('listings')
+  const [tab, setTab] = useState<Tab>(initialTab)
   const [listings, setListings] = useState<MarketListing[]>([])
   const [myListings, setMyListings] = useState<MarketListing[]>([])
   const [requests, setRequests] = useState<MarketRequest[]>([])

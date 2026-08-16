@@ -205,11 +205,13 @@ export class GamificationService {
 
     for (const questId of toComplete) {
       const quest = (QUESTS[role] ?? []).find((q) => q.id === questId)
-      await this.prisma.userQuest.upsert({
-        where: { userId_questId: { userId: user.id, questId } },
-        update: { completedAt: new Date() },
-        create: { userId: user.id, questId, completedAt: new Date() },
+      // Atomic claim: only the first completion awards XP — concurrent state()
+      // calls must not double-mint (XP auto-converts to cash).
+      const claimed = await this.prisma.userQuest.updateMany({
+        where: { userId: user.id, questId, completedAt: null },
+        data: { completedAt: new Date() },
       })
+      if (claimed.count === 0) continue
       if (quest?.xp) {
         await this.prisma.user.update({ where: { id: user.id }, data: { xp: { increment: quest.xp } } })
       }

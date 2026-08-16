@@ -5,6 +5,7 @@ import { useI18n } from '@wagon/i18n'
 
 interface Props {
   balance: number
+  currency?: string
   hideable?: boolean
   primaryLabel?: string
   onPrimary?: () => void
@@ -14,9 +15,10 @@ interface Props {
 }
 
 /** Premium wallet balance header — always a dark navy card so white text stays readable in light & dark mode. */
-export function WalletHeader({ balance, hideable = true, primaryLabel, onPrimary, secondaryLabel, onSecondary, children }: Props) {
+export function WalletHeader({ balance, currency = 'INR', hideable = true, primaryLabel, onPrimary, secondaryLabel, onSecondary, children }: Props) {
   const [hidden, setHidden] = React.useState(false)
   const { t } = useI18n()
+  const sym = currency === 'INR' ? '₹' : currency === 'USD' ? '$' : currency === 'EUR' ? '€' : `${currency} `
 
   return (
     <View style={styles.wrap}>
@@ -30,7 +32,7 @@ export function WalletHeader({ balance, hideable = true, primaryLabel, onPrimary
         </View>
         <View style={styles.balanceRow}>
           <Text style={[styles.balance, hidden ? styles.hidden : null]} numberOfLines={1} adjustsFontSizeToFit>
-            {hidden ? '₹ ••••••' : balance < 0 ? `-₹${Math.abs(balance).toLocaleString('en-IN')}` : `₹${balance.toLocaleString('en-IN')}`}
+            {hidden ? `${sym}••••••` : balance < 0 ? `-${sym}${Math.abs(balance).toLocaleString('en-IN')}` : `${sym}${balance.toLocaleString('en-IN')}`}
           </Text>
           {hideable && (
             <Pressable onPress={() => setHidden((h) => !h)} hitSlop={8}>

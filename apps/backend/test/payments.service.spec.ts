@@ -27,7 +27,8 @@ describe('PaymentsService', () => {
       supplier: { findUnique: jest.fn() },
       transporter: { findUnique: jest.fn() },
       payment: { findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
-      user: { update: jest.fn() },
+      user: { update: jest.fn(), findUnique: jest.fn() },
+      walletTransaction: { create: jest.fn() },
       load: { update: jest.fn() },
       kycDocument: { count: jest.fn() },
       shipment: { findFirst: jest.fn() },
@@ -114,6 +115,7 @@ describe('PaymentsService', () => {
       prisma.shipment.findFirst.mockResolvedValue(null)
       prisma.settlement.count.mockResolvedValue(0)
       prisma.proofOfDelivery.findUnique.mockResolvedValue({ status: 'confirmed' })
+      prisma.user.findUnique.mockResolvedValue({ tripsCount: 10 })
       provider.payout.mockResolvedValue({ providerRef: 'ref', status: 'succeeded', paidAt: new Date() })
       prisma.payment.create.mockResolvedValue({ id: 'pay1', status: 'succeeded' })
 

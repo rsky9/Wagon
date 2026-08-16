@@ -408,6 +408,30 @@ A sixth deep audit of the money/settlement layer, deletion safety, and the least
 - **Placeholder addresses eliminated**: Shipments/Planning/Plan proposal require real origin/destination (no 'Origin'/'Destination' sentinels in production data).
 - **Claim approve asks for confirmation** (it mints a payable settlement); **bank-detail changes now step-up** (payout destination is a serious money action); Passbook "pending" excludes failed.
 
+### 10.8 Delivered: payout-honesty + driver-recovery + stale-state fixes
+
+A seventh deep audit of the money display, driver flows, and race-prone screens surfaced and fixed:
+
+**Money honesty**
+- **Approved claims can't double-payout a policy**: `decideClaim` rejects when a claim settlement already exists on the shipment, counts `due` settlements in the coverage aggregate, and only one open claim per shipment may exist at a time.
+- **Load detail hides quote amounts** from non-owners (was leaking every competing bid to any authenticated user).
+- **Refund failures are retried**: cancellation refunds run post-commit and a reconciliation sweep retries `failed` refunds every 60s — a provider failure never strands captured money.
+- **Payout cashback uses the fresh `tripsCount`** (was the stale JWT value → cash minted on later payouts).
+- **Home "pending payout" is net and gate-aware** (net − advance, delivered + no payout) instead of gross `booking.rate`.
+- **Driver earnings use the agreed booking rate** (not the fare estimate) for negotiated trips.
+- `updateShipment` reuses create-time validation (no negative weight/value or Invalid Date); `planning.decline` atomically clears `activePlanId` when declining the active plan.
+- **Hot-path indexes** added on Payment (tripId+status, type+status), Settlement (payerId, payeeId, type+status), Claim (claimantId, handlerId), Trip (status, driverId), InsurancePolicy (insurerId).
+
+**Driver recovery**
+- **Driver endpoints no longer self-lock**: `home`/`myTrips`/`earnings`/`uploadPod` resolve the driver without the availability filter, so toggling offline never breaks the dashboard; the toggle rolls back on failure; a missing driver profile shows an explicit "ask your transporter" state with a disabled switch.
+
+**Mobile stale-state / UX**
+- **LoadFeed no longer sends duplicate `truckType` params** (the tab overrides the persisted filter — was a 400 → silent stale-cache fallback).
+- **Pull-to-refresh spinner actually shows** on Home and Driver Home (fetch now returns a promise; refreshing cleared in `.finally`).
+- **TripDetail refetches when `tripId` changes** (deps fixed — a second deep-link could show the previous trip's money/status).
+- **Wallet "Withdraw" is honestly relabeled "Bank & payouts"** (no withdraw flow existed — the button just opened the bank editor).
+- **Home "Need" opens the Market requests tab** (was the same listings tab as "Offer"); dead duplicate block removed; WalletHeader takes a currency prop; Passbook shows a distinct **failed** payment state.
+
 ---
 
 ## Research sources

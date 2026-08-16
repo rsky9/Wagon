@@ -102,12 +102,23 @@ export class HomeService {
         // Money: pending payouts + collected earnings + wallet cash.
         const trips = await this.prisma.trip.findMany({
           where: { transporterId: transporter.id },
-          include: { payments: true, booking: true },
+          include: { payments: true, booking: true, load: true },
           orderBy: { createdAt: 'desc' },
         })
-        const payoutPending = trips
-          .filter((t) => t.status === 'delivered' && !t.payments.some((p) => p.type === 'payout' && p.status === 'succeeded'))
-          .reduce((s, t) => s + (t.booking?.rate ?? 0), 0)
+        // Pending payout = the NET amount still owed on delivered trips with no
+        // successful payout yet (mirrors releasePayout: net minus advance already
+        // released in a split path). Never the gross booking rate.
+        const payoutPending = trips.reduce((s, t) => {
+          if (t.status !== 'delivered') return s
+          if (t.payments.some((p) => p.type === 'payout' && p.status === 'succeeded')) return s
+          const base = t.booking?.rate ?? t.load?.fareEstimate ?? 0
+          const tds = Math.round(base * 0.02 * 100) / 100
+          const net = Math.round((base - tds) * 100) / 100
+          const advance = t.payments
+            .filter((p) => p.type === 'advance' && p.status === 'succeeded')
+            .reduce((a, p) => a + p.amount, 0)
+          return s + Math.max(0, Math.round((net - advance) * 100) / 100)
+        }, 0)
         const collected = trips.reduce(
           (s, t) => s + t.payments.filter((p) => p.type === 'payout' && p.status === 'succeeded').reduce((a, p) => a + p.amount, 0),
           0,

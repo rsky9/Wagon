@@ -76,9 +76,9 @@ export function PassbookScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
           <View style={styles.top}>
             <WalletHeader
               balance={balance}
-              primaryLabel={t("wallet.withdraw")}
+              primaryLabel={t("wallet.bank")}
               secondaryLabel={t("wallet.statement")}
-              onPrimary={onOpenBank ? () => onOpenBank() : () => Alert.alert(t('wallet.withdraw'), 'Add your bank details to receive payouts.', [{ text: 'OK' }])}
+              onPrimary={onOpenBank ? () => onOpenBank() : () => Alert.alert(t('wallet.bank'), 'Add your bank details to receive payouts.', [{ text: 'OK' }])}
               onSecondary={onOpenInvoices ? () => onOpenInvoices() : undefined}
             />
             {cashback > 0 && (
@@ -149,15 +149,16 @@ export function PassbookScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
 function EntryRow({ entry }: { entry: PassbookEntry }) {
   const theme = useTheme()
   const isCredit = entry.amount > 0
-  const isPending = entry.status !== 'succeeded'
+  const isPending = entry.status === 'pending' || entry.status === 'processing'
+  const isFailed = entry.status === 'failed'
   return (
     <View style={[styles.entry, { backgroundColor: theme.card, borderColor: theme.border }]}>
-      <View style={[styles.entryIcon, { backgroundColor: isCredit ? theme.success + '1A' : theme.danger + '1A' }]}>
-        <Text style={{ fontSize: 16 }}>{isCredit ? '↓' : isPending ? '⏳' : '↑'}</Text>
+      <View style={[styles.entryIcon, { backgroundColor: isCredit ? theme.success + '1A' : isFailed ? theme.danger + '2E' : theme.warning + '1A' }]}>
+        <Text style={{ fontSize: 16 }}>{isCredit ? '↓' : isFailed ? '✕' : isPending ? '⏳' : '↑'}</Text>
       </View>
       <View style={styles.entryBody}>
         <Text style={[styles.entryTitle, { color: theme.foreground }]}>
-          {entry.type === 'payout' ? 'Payout' : entry.type === 'escrow' ? 'Escrow payment' : 'Refund'}
+          {entry.type === 'payout' ? 'Payout' : entry.type === 'escrow' ? 'Escrow payment' : entry.type === 'refund' ? 'Refund' : 'Payment'}{isFailed ? ' — failed' : ''}
         </Text>
         <Text style={[styles.entryRoute, { color: theme.mutedForeground }]} numberOfLines={1}>
           {entry.route}

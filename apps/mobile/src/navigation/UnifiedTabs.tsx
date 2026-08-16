@@ -117,6 +117,7 @@ function HomeTab({ navigation }: any) {
       onOpenMarketplace={() => navigation.navigate('Marketplace')}
       onPostLoad={() => root?.navigate('PostLoadWizard')}
       onOpenMarket={() => root?.navigate('Market')}
+      onOpenMarketRequests={() => root?.navigate('Market', { initialTab: 'requests' } as never)}
       onOpenNotifications={() => root?.navigate('Notifications')}
       onOpenKyc={() => root?.navigate('Kyc')}
     />
@@ -205,19 +206,8 @@ function MarketplaceTab({ navigation }: any) {
     )
   }
 
-  if (isTransporter) {
-    return (
-      <LoadFeedScreen
-        onSelect={(load) => root?.navigate('LoadDetail', { load })}
-        onOpenTrips={() => navigation.navigate('Trips')}
-        onOpenKyc={() => root?.navigate('Kyc')}
-        filters={filters}
-        onOpenFilters={() => root?.navigate('Filters')}
-      />
-    )
-  }
-
-  // Enablement-only users (no supplier/transporter capability): cross-type market.
+  // Forwarder/warehouse/carrier/enablement-only users see the cross-type
+  // capability marketplace (road-load feed isn't actionable for them).
   return <MarketScreen onBack={() => navigation.navigate('Home')} capabilities={caps} />
 }
 

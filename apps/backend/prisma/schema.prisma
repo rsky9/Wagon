@@ -498,6 +498,8 @@ model Trip {
   @@index([loadId])
   @@index([transporterId])
   @@unique([loadId])
+  @@index([status])
+  @@index([driverId])
 }
 
 /// Proof of delivery: evidence that cargo reached the consignee. A photo +
@@ -628,6 +630,8 @@ model Payment {
   updatedAt       DateTime      @updatedAt
   @@index([tripId])
   @@index([settlementId])
+  @@index([tripId, status])
+  @@index([type, status])
 }
 
 model Notification {
@@ -1250,6 +1254,8 @@ model Claim {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   @@index([shipmentId])
+  @@index([claimantId])
+  @@index([handlerId])
 }
 
 /// An insurance policy covering a shipment, underwritten by a partner insurer.
@@ -1267,6 +1273,7 @@ model InsurancePolicy {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   @@index([shipmentId])
+  @@index([insurerId])
 }
 
 /// A settlement between two parties on a shipment (freight / advance / balance).
@@ -1287,6 +1294,9 @@ model Settlement {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   @@index([shipmentId])
+  @@index([payerId])
+  @@index([payeeId])
+  @@index([type, status])
 }
 
 /// A risk assessment of a shipment (score 0..1 + factors).

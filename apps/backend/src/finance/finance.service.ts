@@ -68,12 +68,13 @@ export class FinanceService {
     const shipment = await this.requireShipmentAccess(user, input.shipmentId)
     // Prevent stacking: once a claim on this shipment has been approved (and a
     // policy claimed / settlement minted), further claims are blocked so a policy
-    // can't be drained by repeated approvals.
-    const alreadyApproved = await this.prisma.claim.findFirst({
-      where: { shipmentId: input.shipmentId, status: 'approved' },
+    // can't be drained by repeated approvals. Also block a second OPEN claim on
+    // the same shipment — one in-flight claim at a time.
+    const existingClaim = await this.prisma.claim.findFirst({
+      where: { shipmentId: input.shipmentId, status: { in: ['filed', 'assessed', 'approved'] } },
     })
-    if (alreadyApproved) {
-      throw new BadRequestException('A claim on this shipment is already approved — no further claims')
+    if (existingClaim) {
+      throw new BadRequestException('A claim on this shipment is already open or approved — no further claims')
     }
     const org = await this.orgAccess.primaryOrg(user)
     const claim = await this.prisma.$transaction(async (tx) => {
@@ -157,6 +158,15 @@ export class FinanceService {
       // org that happened to decide the claim.
       if (decision === 'approved' && claim.amount) {
         const liableOrg = await this.resolveClaimPayer(claim.shipmentId)
+        // No double-payout: a claim settlement already exists (due or cleared)
+        // on this shipment -> reject. Two claims filed before either is decided
+        // must not both mint settlements against the same policy.
+        const existingSettlement = await tx.settlement.findFirst({
+          where: { shipmentId: claim.shipmentId, type: 'claim', status: { in: ['due', 'cleared'] } },
+        })
+        if (existingSettlement) {
+          throw new BadRequestException('A claim settlement already exists on this shipment')
+        }
         // If the insurer is liable, cap the payout at the policy's coverage so
         // a ₹10M claim can't be charged to a ₹1L policy.
         let payoutAmount = claim.amount
@@ -166,9 +176,9 @@ export class FinanceService {
             select: { coverage: true },
           })
           if (policy?.coverage != null) {
-            // Aggregate: subtract anything already paid out on this policy.
+            // Aggregate: subtract anything already paid (due OR cleared) on this policy.
             const paid = await tx.settlement.aggregate({
-              where: { shipmentId: claim.shipmentId, type: 'claim', payeeId: claim.claimantId ?? undefined, status: 'cleared' },
+              where: { shipmentId: claim.shipmentId, type: 'claim', payeeId: claim.claimantId ?? undefined, status: { in: ['due', 'cleared'] } },
               _sum: { amount: true },
             })
             const remaining = Math.max(0, policy.coverage - (paid._sum.amount ?? 0))

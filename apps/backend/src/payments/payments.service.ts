@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException, Inject } from '@nestjs/common'
+import { Injectable, BadRequestException, NotFoundException, Inject, OnModuleInit } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { NotificationsService } from '../notifications/notifications.service'
 import { OutboxRelay } from '../outbox/outbox-relay.service'
@@ -6,7 +6,7 @@ import { PAYMENT_PROVIDER, PaymentProvider } from './payment-provider.service'
 import type { User } from '@prisma/client'
 
 @Injectable()
-export class PaymentsService {
+export class PaymentsService implements OnModuleInit {
   // First-N-trips cashback: a % of the payout is credited to the transporter's Wagon Cash.
   private static readonly CASHBACK_FIRST_TRIPS = 3
   private static readonly CASHBACK_RATE = 0.05 // 5%
@@ -17,6 +17,17 @@ export class PaymentsService {
     private readonly outbox: OutboxRelay,
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
   ) {}
+
+  onModuleInit() {
+    // Periodically retry failed refunds so a provider failure during a cancel
+    // never strands captured money.
+    void (async () => {
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 60_000))
+        this.reconcileFailedRefunds().catch(() => undefined)
+      }
+    })()
+  }
 
   /** Supplier pays the escrow/booking amount for an accepted trip. Idempotent per trip. */
   /** Capture a payment (escrow full, or advance/balance split). Idempotent per (trip, stage). */
@@ -148,7 +159,11 @@ export class PaymentsService {
     for (const c of captures) {
       const refundKey = `refund_${c.idempotencyKey}`
       const existingRefund = await this.prisma.payment.findUnique({ where: { idempotencyKey: refundKey } })
-      if (existingRefund) continue
+      if (existingRefund?.status === 'succeeded') continue
+      // A failed refund is retryable: delete it and try again (idempotent key freed).
+      if (existingRefund?.status === 'failed') {
+        await this.prisma.payment.delete({ where: { id: existingRefund.id } })
+      }
       let refunded = false
       if (c.providerRef) {
         const result = await this.provider.refund({
@@ -176,6 +191,26 @@ export class PaymentsService {
       if (refunded) refundedCount++
     }
     return refundedCount
+  }
+
+  /**
+   * Reconciliation sweep: retry every failed refund (a provider failure during
+   * cancellation/load-cancel must not leave captured money stranded). Called
+   * periodically; idempotent per refund key.
+   */
+  async reconcileFailedRefunds(limit = 50): Promise<number> {
+    const failed = await this.prisma.payment.findMany({
+      where: { type: 'refund', status: 'failed' },
+      orderBy: { createdAt: 'asc' },
+      take: limit,
+    })
+    let retried = 0
+    for (const r of failed) {
+      if (!r.tripId) continue
+      const ok = await this.refundTripCaptures(r.tripId).catch(() => 0)
+      if (ok > 0) retried++
+    }
+    return retried
   }
 
   /** GST 5% / TDS 2% breakdown on the agreed rate. */
@@ -305,7 +340,10 @@ export class PaymentsService {
     })
 
     if (result.status === 'succeeded') {
-      const tripsDone = user.tripsCount
+      // Read the CURRENT tripsCount from the DB (the JWT value can be stale and
+      // would mint cashback on later payouts).
+      const fresh = await this.prisma.user.findUnique({ where: { id: user.id }, select: { tripsCount: true } })
+      const tripsDone = fresh?.tripsCount ?? 0
       await this.prisma.user.update({
         where: { id: user.id },
         data: { tripsCount: { increment: 1 } },

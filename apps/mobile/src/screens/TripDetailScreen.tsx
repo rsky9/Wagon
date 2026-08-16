@@ -78,7 +78,7 @@ export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipme
     api.get<{ shipmentId: string | null }>(`/loads/${loadId}`)
       .then((r) => setShipmentId(r.shipmentId))
       .catch(() => {})
-  }, [loadId])
+  }, [loadId, tripId])
 
   if (loading) {
     return (

@@ -442,9 +442,10 @@ function GlobalRoute({ navigation }: any) {
   return <GlobalScreen onBack={() => navigation.goBack()} />
 }
 
-function MarketRoute({ navigation }: any) {
+function MarketRoute({ navigation, route }: any) {
   const { session } = useAuth()
-  return <MarketScreen onBack={() => navigation.goBack()} capabilities={session?.profile?.capabilities ?? []} />
+  const initialTab = (route?.params as { initialTab?: 'listings' | 'requests' | 'carriers' | 'mine' | 'partners' | 'ai' } | undefined)?.initialTab
+  return <MarketScreen onBack={() => navigation.goBack()} capabilities={session?.profile?.capabilities ?? []} initialTab={initialTab} />
 }
 
 function IntegrationsRoute({ navigation }: any) {

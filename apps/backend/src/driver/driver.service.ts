@@ -6,13 +6,6 @@ import type { User } from '@prisma/client'
 export class DriverService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async driverFor(user: User) {
-    const driver = await this.prisma.driver.findFirst({
-      where: { mobile: user.mobile, status: true },
-    })
-    return driver
-  }
-
   /** Lookup without the availability filter — self-service (availability toggle)
    *  must work even when the driver has marked themself unavailable, otherwise
    *  an unavailable driver is permanently locked out. */
@@ -22,7 +15,7 @@ export class DriverService {
 
   /** Driver home: today's trips + assigned active trip. */
   async home(user: User) {
-    const driver = await this.driverFor(user)
+    const driver = await this.driverByMobile(user)
     if (!driver) {
       throw new BadRequestException('Driver profile not found. Ask your transporter to add you.')
     }
@@ -43,7 +36,7 @@ export class DriverService {
 
   /** All trips assigned to this driver. */
   async myTrips(user: User) {
-    const driver = await this.driverFor(user)
+    const driver = await this.driverByMobile(user)
     if (!driver) return { trips: [] }
     const trips = await this.prisma.trip.findMany({
       where: { driverId: driver.id },
@@ -67,13 +60,14 @@ export class DriverService {
   /** Driver earnings from delivered trips. Uses the driver's pay rate when set,
    *  else a default share (e.g. 25%) of the trip fare — NOT the full freight. */
   async earnings(user: User) {
-    const driver = await this.driverFor(user)
+    const driver = await this.driverByMobile(user)
     if (!driver) return { trips: 0, earned: 0 }
     const trips = await this.prisma.trip.findMany({
       where: { driverId: driver.id, status: 'delivered' },
-      include: { load: true },
+      include: { load: true, booking: true },
     })
-    const earned = trips.reduce((s, t) => s + this.driverPay(driver, t.load.fareEstimate), 0)
+    // Use the agreed booking rate when present (negotiated trips), not the estimate.
+    const earned = trips.reduce((s, t) => s + this.driverPay(driver, t.booking?.rate ?? t.load.fareEstimate), 0)
     return { trips: trips.length, earned, payRate: driver.payRate ?? null }
   }
 
@@ -84,7 +78,7 @@ export class DriverService {
 
   /** Driver uploads POD for a delivered trip they were assigned to. */
   async uploadPod(tripId: string, podUrl: string, user: User) {
-    const driver = await this.driverFor(user)
+    const driver = await this.driverByMobile(user)
     if (!driver) throw new BadRequestException('Driver profile not found')
     const trip = await this.prisma.trip.findUnique({ where: { id: tripId } })
     if (!trip) throw new BadRequestException('Trip not found')

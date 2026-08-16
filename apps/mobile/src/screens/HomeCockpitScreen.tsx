@@ -75,6 +75,7 @@ interface Props {
   onOpenMarketplace: () => void
   onPostLoad: () => void
   onOpenMarket?: () => void
+  onOpenMarketRequests?: () => void
   onOpenNotifications?: () => void
   onOpenKyc?: () => void
 }
@@ -105,7 +106,7 @@ const KIND_ICON: Record<string, string> = {
   transport: '🚚', warehouse: '🏭', forwarding: '📦', carrier: '🚢', insurance: '🛡️',
 }
 
-export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, onPostLoad, onOpenMarket, onOpenNotifications, onOpenKyc }: Props) {
+export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, onPostLoad, onOpenMarket, onOpenMarketRequests, onOpenNotifications, onOpenKyc }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
   const { session } = useAuth()
@@ -117,10 +118,12 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
   const [loading, setLoading] = useState(true)
 
   const fetch = useCallback(() => {
-    api.get<HomeSummary>('/home/summary').then(setData).catch(() => {}).finally(() => setLoading(false))
-    api.get<{ listings: unknown[] }>('/market/listings').then((r) => setMarketCounts((c) => ({ ...c, listings: r.listings.length }))).catch(() => {})
-    api.get<{ requests: unknown[] }>('/market/requests').then((r) => setMarketCounts((c) => ({ ...c, requests: r.requests.length }))).catch(() => {})
-    api.get<ForYou>('/market/for-you').then((r) => setForYou(r)).catch(() => {})
+    return Promise.all([
+      api.get<HomeSummary>('/home/summary').then(setData).catch(() => {}).finally(() => setLoading(false)),
+      api.get<{ listings: unknown[] }>('/market/listings').then((r) => setMarketCounts((c) => ({ ...c, listings: r.listings.length }))).catch(() => {}),
+      api.get<{ requests: unknown[] }>('/market/requests').then((r) => setMarketCounts((c) => ({ ...c, requests: r.requests.length }))).catch(() => {}),
+      api.get<ForYou>('/market/for-you').then((r) => setForYou(r)).catch(() => {}),
+    ])
   }, [])
   useEffect(() => { fetch() }, [fetch])
   // Shared refresh: re-sync money/alerts whenever trips or finance change
@@ -202,7 +205,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
 
       <ScrollView
         contentContainerStyle={styles.body}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetch(); setRefreshing(false) }} tintColor={theme.primary} colors={[theme.primary]} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetch().finally(() => setRefreshing(false)) }} tintColor={theme.primary} colors={[theme.primary]} />}
       >
         {loading && <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 40 }}>{t('common.loading')}</Text>}
 
@@ -219,7 +222,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
           <QuickAction icon="➕" label="Post load" onPress={onPostLoad} tone="orange" />
           <QuickAction icon="🔎" label="Find loads" onPress={onOpenMarketplace} tone="navy" />
           {onOpenMarket && <QuickAction icon="🏪" label="Offer" onPress={onOpenMarket} tone="blue" />}
-          {onOpenMarket && <QuickAction icon="📢" label="Need" onPress={onOpenMarket} tone="green" />}
+          {onOpenMarketRequests && <QuickAction icon="📢" label="Need" onPress={onOpenMarketRequests} tone="green" />}
         </View>
 
         {/* KPI hero grid */}

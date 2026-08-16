@@ -43,18 +43,36 @@ export function DriverHomeScreen({ onOpenTrip }: Props) {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [available, setAvailable] = useState(true)
+  const [missingProfile, setMissingProfile] = useState(false)
 
   const fetch = useCallback(() => {
-    api.get<DriverHome>('/driver/home').then((d) => { setData(d); setAvailable(d.available) }).catch(() => {}).finally(() => setLoading(false))
-    api.get<DriverEarnings>('/driver/earnings').then(setEarnings).catch(() => {})
+    setMissingProfile(false)
+    return Promise.all([
+      api.get<DriverHome>('/driver/home')
+        .then((d) => { setData(d); setAvailable(d.available) })
+        .catch((e) => {
+          // 400 "Driver profile not found": the transporter hasn't added this
+          // driver yet — show an explicit onboarding state instead of an empty feed.
+          if (e instanceof Error && /driver profile not found/i.test(e.message)) setMissingProfile(true)
+        })
+        .finally(() => setLoading(false)),
+      api.get<DriverEarnings>('/driver/earnings').then(setEarnings).catch(() => {}),
+    ])
   }, [])
 
   useEffect(() => { fetch() }, [fetch])
   useEffect(() => subscribeDataChanged('trips', () => fetch()), [fetch])
 
   const toggleAvailability = async (v: boolean) => {
+    if (missingProfile) return
+    const prev = available
     setAvailable(v)
-    await api.patch('/driver/availability', { available: v }).catch(() => {})
+    try {
+      await api.patch('/driver/availability', { available: v })
+    } catch {
+      // Revert on failure so the switch never lies about online state.
+      setAvailable(prev)
+    }
   }
 
   return (
@@ -70,10 +88,10 @@ export function DriverHomeScreen({ onOpenTrip }: Props) {
         <View style={{ flex: 1 }}>
           <Text style={[styles.availTitle, { color: theme.foreground }]}>{t('driver.availableForTrips')}</Text>
           <Text style={[styles.availSub, { color: theme.mutedForeground }]}>
-            {available ? 'Transporters can assign you loads' : 'You are offline'}
+            {missingProfile ? 'Ask your transporter to add your mobile number' : available ? 'Transporters can assign you loads' : 'You are offline'}
           </Text>
         </View>
-        <Switch value={available} onValueChange={toggleAvailability} trackColor={{ true: theme.primary, false: theme.border }} thumbColor="#fff" />
+        <Switch value={available && !missingProfile} onValueChange={toggleAvailability} disabled={missingProfile} trackColor={{ true: theme.primary, false: theme.border }} thumbColor="#fff" />
       </View>
 
       {earnings && (
@@ -92,7 +110,7 @@ export function DriverHomeScreen({ onOpenTrip }: Props) {
       <FlatList
         data={data?.todayTrips ?? []}
         keyExtractor={(t) => t.id}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetch(); setRefreshing(false) }} tintColor={theme.primary} colors={[theme.primary]} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetch().finally(() => setRefreshing(false)) }} tintColor={theme.primary} colors={[theme.primary]} />}
         contentContainerStyle={styles.list}
         ListHeaderComponent={
           data?.activeTrip ? (

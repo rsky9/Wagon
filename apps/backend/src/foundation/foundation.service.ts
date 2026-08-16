@@ -220,8 +220,22 @@ export class FoundationService {
     for (const key of ['commodity', 'description', 'weightKg', 'volumeM3', 'pieces', 'value', 'mode']) {
       if (key in input && input[key] !== undefined) data[key] = input[key]
     }
-    if ('pickupWindow' in input && input.pickupWindow !== undefined) data.pickupWindow = new Date(input.pickupWindow as string)
-    if ('deliveryWindow' in input && input.deliveryWindow !== undefined) data.deliveryWindow = new Date(input.deliveryWindow as string)
+    // Reuse create-time validation so negative weight/value or invalid dates can't
+    // corrupt rows via the update path.
+    if (data.weightKg != null && Number(data.weightKg) <= 0) throw new BadRequestException('weightKg must be positive')
+    if (data.volumeM3 != null && Number(data.volumeM3) <= 0) throw new BadRequestException('volumeM3 must be positive')
+    if (data.pieces != null && Number(data.pieces) <= 0) throw new BadRequestException('pieces must be positive')
+    if (data.value != null && Number(data.value) < 0) throw new BadRequestException('value cannot be negative')
+    if ('pickupWindow' in input && input.pickupWindow !== undefined) {
+      const d = new Date(input.pickupWindow as string)
+      if (Number.isNaN(d.getTime())) throw new BadRequestException('Invalid pickupWindow')
+      data.pickupWindow = d
+    }
+    if ('deliveryWindow' in input && input.deliveryWindow !== undefined) {
+      const d = new Date(input.deliveryWindow as string)
+      if (Number.isNaN(d.getTime())) throw new BadRequestException('Invalid deliveryWindow')
+      data.deliveryWindow = d
+    }
     if ('mode' in data) this.validateMode(data.mode as string)
     const updated = await this.prisma.shipment.update({ where: { id }, data: data as never })
     return { shipment: updated }

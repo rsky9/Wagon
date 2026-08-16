@@ -49,7 +49,7 @@ export function FinanceScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
         contentContainerStyle={styles.list}
         ListHeaderComponent={
           <View>
-            <WalletHeader balance={balance} primaryLabel="Withdraw" onPrimary={onOpenBank} secondaryLabel="Statement" onSecondary={onOpenInvoices} />
+            <WalletHeader balance={balance} primaryLabel={t('wallet.bank')} onPrimary={onOpenBank} secondaryLabel={t('wallet.statement')} onSecondary={onOpenInvoices} />
             <View style={styles.statsRow}>
               <Stat label={t('wallet.earnings')} value={formatINR(earnings)} color={theme.success} theme={theme} />
               <Stat label={t('wallet.pendingPayout')} value={formatINR(pending)} color={theme.warning} theme={theme} />

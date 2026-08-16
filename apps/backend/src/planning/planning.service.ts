@@ -182,18 +182,26 @@ export class PlanningService {
     return { plan: tx }
   }
 
-  /** Decline a plan (also unselects it if it was selected). */
+  /** Decline a plan (also unselects it if it was the active one). */
   async decline(planId: string, user: User) {
     const { plan, shipment } = await this.requirePlanAccess(user, planId)
-    if (plan.status === 'declined') throw new BadRequestException('Plan already declined')
     const updated = await this.prisma.$transaction(async (tx) => {
-      const changed = await tx.plan.update({ where: { id: planId }, data: { status: 'declined' } })
-      if (plan.status === 'selected') {
-        await tx.shipment.update({
-          where: { id: plan.shipmentId },
-          data: { activePlanId: null },
-        })
+      // Atomic: only a proposed/selected plan may be declined (a concurrent
+      // select can't then flip it behind us).
+      const claimed = await tx.plan.updateMany({
+        where: { id: planId, status: { in: ['proposed', 'selected'] } },
+        data: { status: 'declined' },
+      })
+      if (claimed.count === 0) {
+        throw new BadRequestException('Plan already declined or not in a declineable state')
       }
+      // Clear the shipment's active plan if this WAS it (stale selected status
+      // must not leave activePlanId pointing at a declined plan).
+      const active = await tx.shipment.findUnique({ where: { id: plan.shipmentId }, select: { activePlanId: true } })
+      if (active?.activePlanId === planId) {
+        await tx.shipment.update({ where: { id: plan.shipmentId }, data: { activePlanId: null } })
+      }
+      const changed = await tx.plan.findUniqueOrThrow({ where: { id: planId } })
       await this.outbox.emit(tx as never, {
         eventType: 'SHIPMENT',
         eventCode: 'PLAN_DECLINED',

@@ -297,15 +297,18 @@ export class LoadsService {
     if (!load) {
       throw new NotFoundException('Load not found')
     }
-    // Mask contact details unless the caller is the load's supplier (or a transporter
-    // who has been awarded the trip), to avoid leaking PII to any authenticated user.
-    let visible = load
+    // Mask contact details AND competitor quote amounts unless the caller is the
+    // load's supplier (or a transporter awarded the trip) — competitive info must
+    // never leak to any authenticated user.
     const isOwner = user ? (await this.isSupplier(user))?.id === load.supplierId : false
     const isAssigned = user
       ? await this.prisma.trip.findFirst({ where: { loadId: id, transporter: { userId: user.id } } })
       : null
-    if (!isOwner && !isAssigned) {
+    const canSeeSensitive = isOwner || !!isAssigned
+    let visible: Record<string, unknown> = { ...load }
+    if (!canSeeSensitive) {
       visible = { ...load, contactName: null, contactPhone: null }
+      delete visible.quotes
     }
     // Enablement linkage: the canonical shipment projected from this load.
     const shipment = await this.prisma.shipment.findFirst({ where: { ref: id } })

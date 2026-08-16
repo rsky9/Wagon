@@ -55,8 +55,10 @@ export function LoadFeedScreen({ onSelect, onOpenTrips, onOpenKyc, filters, onOp
     setError(null)
     try {
       const params: string[] = []
-      if (filter !== 'all') params.push(`truckType=${filter}`)
-      if (filters?.truckType) params.push(`truckType=${filters.truckType}`)
+      // The active tab (open/container/trailer) takes precedence over a persisted
+      // truckType filter — never send duplicate truckType params (backend 400s).
+      const tt = filter !== 'all' ? filter : filters?.truckType
+      if (tt) params.push(`truckType=${tt}`)
       if (filters?.modelId) params.push(`modelId=${filters.modelId}`)
       if (filters?.materialId) params.push(`materialId=${filters.materialId}`)
       if (filters?.minWeight !== undefined) params.push(`minWeight=${filters.minWeight}`)

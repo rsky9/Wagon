@@ -7,7 +7,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { NotificationsService } from '../notifications/notifications.service'
 import { ShipmentProjector } from '../shipments/shipment-projector.service'
 import { MarketService } from '../market/market.service'
-import { PAYMENT_PROVIDER, PaymentProvider } from '../payments/payment-provider.service'
+import { PaymentsService } from '../payments/payments.service'
 import type { User, TripStage } from '@prisma/client'
 
 @Injectable()
@@ -19,7 +19,7 @@ export class TripsService {
     private readonly shipments: ShipmentProjector,
     private readonly market: MarketService,
     @Inject(REDIS) private readonly redis: Redis,
-    @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
+    private readonly payments: PaymentsService,
   ) {}
 
   async quote(loadId: string, amount: number, user: User) {
@@ -462,45 +462,12 @@ export class TripsService {
       if (trip.load.status !== 'delivered' && trip.load.status !== 'completed') {
         await tx.load.update({ where: { id: trip.loadId }, data: { status: 'posted' } })
       }
-      // Reverse any captured escrow/advance/balance so the supplier gets their
-      // money back (a refund Payment row per captured stage). The refund is a
-      // real provider call so captured money actually returns to the payer.
-      const captures = await tx.payment.findMany({
-        where: { tripId, type: { in: ['escrow', 'advance', 'balance'] }, status: 'succeeded' },
-      })
-      for (const c of captures) {
-        const refundKey = `refund_${c.idempotencyKey}`
-        const existingRefund = await tx.payment.findUnique({ where: { idempotencyKey: refundKey } })
-        if (existingRefund) continue
-        // Only make the provider call once the idempotency slot is free.
-        let refunded = false
-        if (c.providerRef) {
-          const result = await this.provider.refund({
-            amount: c.amount,
-            currency: c.currency ?? 'INR',
-            reference: refundKey,
-            originalProviderRef: c.providerRef,
-            metadata: { tripId, originalIdempotencyKey: c.idempotencyKey ?? '' },
-          })
-          refunded = result.status === 'succeeded'
-        } else {
-          // Legacy captures without a provider ref have no money to reverse.
-          refunded = true
-        }
-        await tx.payment.create({
-          data: {
-            tripId,
-            type: 'refund',
-            amount: c.amount,
-            method: c.method,
-            providerRef: refunded ? `refund-${c.providerRef ?? tripId}` : `refund-failed-${c.providerRef ?? tripId}`,
-            idempotencyKey: refundKey,
-            status: refunded ? 'succeeded' : 'failed',
-          },
-        })
-      }
       return t
     })
+    // Refund AFTER the cancel commits (provider calls are slow/fallible and must
+    // not hold the DB transaction). Failed refunds are recorded and retried by a
+    // reconciliation sweep (see refundPendingFailures).
+    await this.payments.refundTripCaptures(tripId)
 
     // Notify the counterparty.
     const counterparty = isTransporter
