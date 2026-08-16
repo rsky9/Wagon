@@ -120,6 +120,29 @@ export class TripsService {
         const created = await tx.trip.create({
           data: { loadId, transporterId: transporter.id },
         })
+        // Bind the agreed rate BEFORE deleting the quotes: the winning quote's
+        // amount becomes the booking snapshot, so escrow/payout never fall back
+        // to the fare estimate for a direct accept.
+        const winning = await tx.quote.findFirst({
+          where: { loadId, transporterId: transporter.id, status: { in: ['pending', 'accepted'] } },
+          orderBy: { amount: 'asc' },
+        })
+        const agreedRate = winning?.amount ?? load.fareEstimate
+        await tx.bookingSnapshot.create({
+          data: {
+            tripId: created.id,
+            rate: agreedRate,
+            advanceAmount: load.advanceAmount ?? null,
+            balanceAmount: load.advanceAmount != null && load.fareEstimate != null ? Math.max(0, load.fareEstimate - load.advanceAmount) : null,
+            paymentTerms: load.paymentTerms ?? null,
+            conditions: load.extraCharges ?? null,
+            truckId: null,
+            driverId: null,
+            supplierConfirmed: true,
+            transporterConfirmed: true,
+            confirmedAt: new Date(),
+          },
+        })
         await tx.load.update({ where: { id: loadId }, data: { status: 'accepted' } })
         await tx.quote.deleteMany({ where: { loadId } })
         return created
@@ -308,6 +331,10 @@ export class TripsService {
       })
       if (isDelivered) {
         await tx.load.update({ where: { id: trip.loadId }, data: { status: 'delivered' } })
+      } else if (next === 'loaded') {
+        // Keep load.status in sync with trip.status so load-detail/feed logic
+        // never shows 'accepted' while the cargo is already in transit.
+        await tx.load.update({ where: { id: trip.loadId }, data: { status: 'in_transit' } })
       }
       return t
     })
@@ -507,7 +534,7 @@ export class TripsService {
             { load: { supplierId: supplier?.id ?? '__none__' } },
           ],
         },
-        include: { load: { include: { material: true } }, booking: true },
+        include: { load: { include: { material: true } }, booking: true, pod: true },
         orderBy: { createdAt: 'desc' },
       })
       return { trips }
@@ -516,7 +543,7 @@ export class TripsService {
       const transporter = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
       const trips = await this.prisma.trip.findMany({
         where: { transporterId: transporter?.id },
-        include: { load: { include: { material: true } }, booking: true },
+        include: { load: { include: { material: true } }, booking: true, pod: true },
         orderBy: { createdAt: 'desc' },
       })
       return { trips }
@@ -525,7 +552,7 @@ export class TripsService {
       const supplier = await this.prisma.supplier.findUnique({ where: { userId: user.id } })
       const trips = await this.prisma.trip.findMany({
         where: { load: { supplierId: supplier?.id } },
-        include: { load: { include: { material: true } }, booking: true },
+        include: { load: { include: { material: true } }, booking: true, pod: true },
         orderBy: { createdAt: 'desc' },
       })
       return { trips }
@@ -536,7 +563,7 @@ export class TripsService {
     if (driver) {
       const trips = await this.prisma.trip.findMany({
         where: { driverId: driver.id },
-        include: { load: { include: { material: true } }, booking: true },
+        include: { load: { include: { material: true } }, booking: true, pod: true },
         orderBy: { createdAt: 'desc' },
       })
       return { trips }

@@ -432,6 +432,26 @@ A seventh deep audit of the money display, driver flows, and race-prone screens 
 - **Wallet "Withdraw" is honestly relabeled "Bank & payouts"** (no withdraw flow existed — the button just opened the bank editor).
 - **Home "Need" opens the Market requests tab** (was the same listings tab as "Offer"); dead duplicate block removed; WalletHeader takes a currency prop; Passbook shows a distinct **failed** payment state.
 
+### 10.9 Delivered: rate-binding + payout-release + delivery-confirmation
+
+An eighth deep audit of the bidding→trips→payments chain and the classic delivery flow surfaced and fixed the last money-loop dead-ends:
+
+**Money moves on the agreed number, and nobody is short-paid**
+- **Direct accepts now bind the agreed rate**: the winning quote's amount becomes a `BookingSnapshot` on the trip (before quotes are cleared), so escrow/payout never fall back to the fare estimate for a direct accept.
+- **Split-path advance no longer short-pays the transporter**: the advance is collected from the supplier but was never disbursed — the final payout is now the FULL net (the advance isn't silently deducted), matching what the supplier actually paid (advance + balance = agreed rate).
+- **Admin cancel-load is complete**: it cancels active trips, refunds captured escrow/advance/balance, resets bids, and notifies the transporter (was leaving escrow stranded and a transporter hauling on a cancelled load).
+- **Refund exceptions always persist a `failed` row** (a thrown provider error can no longer strand money invisibly — the reconciliation sweep retries it).
+- **Admin claim decisions are guarded**: coverage-capped and no-double-settlement, matching the org path.
+- Bids are **reset to withdrawn** on load cancel; `confirmBooking` rejects non-`posted` loads; `expireStaleLoads` protects `negotiating` bids; the stage machine flips `load.status` to `in_transit` on loading; payout + tracking-arrival events now carry the correct shipmentId through the outbox.
+
+**Mobile — the delivery/payout loop now closes**
+- **Supplier "Confirm delivery receipt"** unlocks payout (a pending POD previously blocked it forever, and the transporter had no recovery). Transporter surfaces now show "waiting for consignee confirmation" instead of a doomed payout button.
+- **Onboarding gate consults the backend** (a skipped user is re-prompted until their profile is complete — no more permanent lockout).
+- **TripDetail shows a booking-terms error + retry** instead of silently paying the fare estimate and getting rejected.
+- **"My loads" uses `?mine=true`** so a both-capability user sees their own loads, not the whole network feed.
+- **Driver-only sessions** hide the transporter-only POD/payout actions (no more 403 dead-ends); **cancelled/unknown-stage trips** don't show a bogus "Mark next"; OTP generation shows the code only in dev builds.
+- Home supplier money includes split-path payments; EnablementFinance actions are busy-guarded; Driver Home shows a retry on network errors.
+
 ---
 
 ## Research sources

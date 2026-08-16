@@ -611,11 +611,23 @@ export function MobileNavigator() {
       AsyncStorage.getItem('wagon_role'),
       AsyncStorage.getItem('wagon_onboarded'),
       AsyncStorage.getItem('wagon_capabilities'),
-    ]).then(([l, fr, role, onboarded, caps]) => {
+    ]).then(async ([l, fr, role, onboarded, caps]) => {
       if (l) setLang(l as LanguageCode)
       setFirstRun(fr === null)
       setNeedRole(role === null && !caps)
-      setShowOnboarding(onboarded === null)
+      // Onboarding gate is the BACKEND status, not a one-shot flag: a skipped
+      // user whose profile is still incomplete must be re-prompted (the backend
+      // rejects posting/quoting/accepting until onboarding completes).
+      let shouldOnboard = onboarded === null
+      if (auth.session && caps) {
+        try {
+          const st = await api.get<{ onboarded: boolean }>('/onboarding/status')
+          shouldOnboard = st.onboarded === false
+        } catch {
+          shouldOnboard = onboarded === null
+        }
+      }
+      setShowOnboarding(shouldOnboard)
     })
   }, [])
 

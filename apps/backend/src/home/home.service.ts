@@ -45,9 +45,9 @@ export class HomeService {
             where: { supplierId: supplier.id, status: { in: ['completed', 'delivered'] } },
           }),
         ])
-        // Money: escrow paid out + wallet.
+        // Money: total paid out (escrow OR advance+balance split) + wallet.
         const escrowPaid = await this.prisma.payment.aggregate({
-          where: { type: 'escrow', status: 'succeeded', trip: { load: { supplierId: supplier.id } } },
+          where: { type: { in: ['escrow', 'advance', 'balance'] }, status: 'succeeded', trip: { load: { supplierId: supplier.id } } },
           _sum: { amount: true },
         })
         result.supplier = {
@@ -106,18 +106,14 @@ export class HomeService {
           orderBy: { createdAt: 'desc' },
         })
         // Pending payout = the NET amount still owed on delivered trips with no
-        // successful payout yet (mirrors releasePayout: net minus advance already
-        // released in a split path). Never the gross booking rate.
+        // successful payout yet (mirrors releasePayout: the transporter is paid
+        // the FULL net — the split-path advance is never separately disbursed).
         const payoutPending = trips.reduce((s, t) => {
           if (t.status !== 'delivered') return s
           if (t.payments.some((p) => p.type === 'payout' && p.status === 'succeeded')) return s
           const base = t.booking?.rate ?? t.load?.fareEstimate ?? 0
           const tds = Math.round(base * 0.02 * 100) / 100
-          const net = Math.round((base - tds) * 100) / 100
-          const advance = t.payments
-            .filter((p) => p.type === 'advance' && p.status === 'succeeded')
-            .reduce((a, p) => a + p.amount, 0)
-          return s + Math.max(0, Math.round((net - advance) * 100) / 100)
+          return s + Math.max(0, Math.round((base - tds) * 100) / 100)
         }, 0)
         const collected = trips.reduce(
           (s, t) => s + t.payments.filter((p) => p.type === 'payout' && p.status === 'succeeded').reduce((a, p) => a + p.amount, 0),

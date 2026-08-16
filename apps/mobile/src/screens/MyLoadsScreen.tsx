@@ -49,7 +49,7 @@ export function MyLoads({ onPostLoad, onLogout, onSelectLoad, onOpenKyc, onOpenD
   const fetchLoads = useCallback(async () => {
     setError(null)
     try {
-      const res = await api.get<{ items: Load[] }>('/loads')
+      const res = await api.get<{ items: Load[] }>('/loads?mine=true')
       setLoads(res.items)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load your loads')

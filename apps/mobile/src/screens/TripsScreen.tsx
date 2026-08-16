@@ -25,6 +25,7 @@ interface TripInfo {
   id: string
   status: string
   podUrl?: string | null
+  pod?: { status?: string } | null
   load: Load
 }
 
@@ -281,7 +282,12 @@ function TripCard({
             {trip.status === 'delivered' && !trip.podUrl && (
               <Button label="Upload POD" onPress={() => onUploadPod(trip)} loading={busy} size="md" />
             )}
-            {trip.status === 'delivered' && trip.podUrl && (
+            {trip.status === 'delivered' && trip.podUrl && trip.pod?.status && trip.pod.status !== 'confirmed' && trip.pod.status !== 'verified' && (
+              <Text style={{ color: theme.warning, fontSize: 12, textAlign: 'center' }}>
+                Awaiting consignee confirmation — payout unlocks after
+              </Text>
+            )}
+            {trip.status === 'delivered' && trip.podUrl && (!trip.pod?.status || trip.pod.status === 'confirmed' || trip.pod.status === 'verified') && (
               <Button label="Request payout" onPress={() => onPayout(trip)} loading={busy} size="md" />
             )}
             {trip.status === 'delivered' && onReturnLoads && (

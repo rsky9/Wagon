@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { AuditService } from '../audit/audit.service'
 import { UploadsService } from '../uploads/uploads.service'
 import { NotificationsService } from '../notifications/notifications.service'
+import { PaymentsService } from '../payments/payments.service'
 import { PAYMENT_PROVIDER, PaymentProvider } from '../payments/payment-provider.service'
 import type { User } from '@prisma/client'
 
@@ -13,6 +14,7 @@ export class AdminService {
     private readonly audit: AuditService,
     private readonly uploads: UploadsService,
     private readonly notifications: NotificationsService,
+    private readonly paymentsService: PaymentsService,
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
   ) {}
 
@@ -419,17 +421,46 @@ export class AdminService {
     if (['cancelled', 'completed', 'delivered'].includes(load.status)) {
       throw new BadRequestException('Cannot cancel a completed or cancelled load')
     }
-    const updated = await this.prisma.load.update({
-      where: { id: loadId },
-      data: { status: 'cancelled', cancelReason: reason?.trim() || 'Cancelled by admin' },
+    // Cancel any active trips and REFUND captured money — mirroring the supplier
+    // cancel path, so an admin-cancelled load never strands escrow or leaves a
+    // transporter hauling on a cancelled load.
+    const activeTrips = await this.prisma.trip.findMany({
+      where: { loadId, status: { in: ['accepted', 'in_transit'] } },
+      include: { transporter: { include: { user: true } } },
+    })
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const cancelled = await tx.load.update({
+        where: { id: loadId },
+        data: { status: 'cancelled', cancelReason: reason?.trim() || 'Cancelled by admin' },
+      })
+      if (activeTrips.length > 0) {
+        await tx.trip.updateMany({
+          where: { loadId, status: { in: ['accepted', 'in_transit'] } },
+          data: { status: 'cancelled' },
+        })
+      }
+      // Reset any committed bids so the truck/load can be re-booked later.
+      await tx.bid.updateMany({ where: { loadId }, data: { status: 'withdrawn' } })
+      return cancelled
     })
     await this.audit.log({
       actorId: actor.id,
       action: 'load.cancel',
       resource: `load:${loadId}`,
       before: { status: load.status },
-      after: { status: updated.status, reason },
+      after: { status: updated.status, reason, tripsCancelled: activeTrips.length },
     })
+    for (const trip of activeTrips) {
+      await this.paymentsService.refundTripCaptures(trip.id).catch(() => {})
+      await this.notifications.create({
+        userId: trip.transporter.userId,
+        type: 'trip_cancelled',
+        title: 'Load cancelled by admin',
+        body: `Your trip on load #${loadId.slice(-6)} was cancelled by an administrator: ${reason?.trim() || 'policy'}`,
+        data: { tripId: trip.id, loadId },
+        category: 'trips',
+      }).catch(() => {})
+    }
     // Keep the canonical Shipment in sync (mirrors ShipmentProjector.syncFromLoad).
     await this.syncShipmentFromLoad(loadId, 'cancelled').catch(() => {})
     return { load: updated }
@@ -816,13 +847,39 @@ export class AdminService {
           ? null
           : await tx.carrierBooking.findFirst({ where: { shipmentId: claim.shipmentId }, select: { carrierId: true } })
         const liableOrg = policy?.insurerId ?? booking?.carrierId ?? null
+        // Same integrity guards as the org path: no double-settlement and the
+        // payout is capped at the liable policy's remaining coverage.
+        const existingSettlement = await tx.settlement.findFirst({
+          where: { shipmentId: claim.shipmentId, type: 'claim', status: { in: ['due', 'cleared'] } },
+        })
+        if (existingSettlement) {
+          throw new BadRequestException('A claim settlement already exists on this shipment')
+        }
+        let payoutAmount = claim.amount
+        if (liableOrg) {
+          const insurerPolicy = await tx.insurancePolicy.findFirst({
+            where: { shipmentId: claim.shipmentId, insurerId: liableOrg },
+            select: { coverage: true },
+          })
+          if (insurerPolicy?.coverage != null) {
+            const paid = await tx.settlement.aggregate({
+              where: { shipmentId: claim.shipmentId, type: 'claim', payeeId: claim.claimantId ?? undefined, status: { in: ['due', 'cleared'] } },
+              _sum: { amount: true },
+            })
+            const remaining = Math.max(0, insurerPolicy.coverage - (paid._sum.amount ?? 0))
+            payoutAmount = Math.min(claim.amount, remaining)
+          }
+        }
+        if (payoutAmount <= 0) {
+          throw new BadRequestException('Policy coverage on this shipment is exhausted — no further payout')
+        }
         await tx.settlement.create({
           data: {
             shipmentId: claim.shipmentId,
             payerId: liableOrg ?? undefined,
             payeeId: claim.claimantId ?? undefined,
             type: 'claim',
-            amount: claim.amount,
+            amount: payoutAmount,
             currency: claim.currency,
             status: 'due',
           },

@@ -20,6 +20,7 @@ export function EnablementFinanceScreen({ onBack }: Props) {
   const [reason, setReason] = useState('damage')
   const [amount, setAmount] = useState('')
   const [filing, setFiling] = useState(false)
+  const [busyId, setBusyId] = useState<string | null>(null)
 
   const fetch = useCallback(() => {
     Promise.all([
@@ -42,12 +43,20 @@ export function EnablementFinanceScreen({ onBack }: Props) {
   const firstShipment = claims[0]?.shipmentId
 
   const assess = (c: Claim) => {
+    if (busyId) return
+    setBusyId(c.id)
     api.post(`/finance/claims/${c.id}/assess`, { recommendedAmount: c.amount })
       .then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
+      .finally(() => setBusyId(null))
   }
   const decide = (c: Claim, decision: 'approved' | 'rejected') => {
-    const run = () => api.post(`/finance/claims/${c.id}/decide`, { decision })
-      .then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
+    const run = () => {
+      if (busyId) return
+      setBusyId(c.id)
+      api.post(`/finance/claims/${c.id}/decide`, { decision })
+        .then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
+        .finally(() => setBusyId(null))
+    }
     if (decision === 'approved') {
       // Approving a claim mints a payable settlement — confirm before committing.
       Alert.alert('Approve claim?', `Approving this claim creates a payable settlement of ${c.currency ?? 'INR'} ${c.amount ?? 0} to the claimant.`, [
@@ -59,9 +68,12 @@ export function EnablementFinanceScreen({ onBack }: Props) {
     }
   }
   const assessRisk = (sid: string) => {
+    if (busyId) return
+    setBusyId(sid)
     api.post(`/finance/risk/${sid}/assess`)
       .then((r) => Alert.alert('Risk score', `Band: ${(r as any).assessment?.band ?? 'n/a'}`))
       .then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
+      .finally(() => setBusyId(null))
   }
 
   return (
@@ -118,17 +130,17 @@ export function EnablementFinanceScreen({ onBack }: Props) {
                   {(c.status === 'filed' || c.status === 'assessed') && (
                     <View style={styles.claimActions}>
                       {c.status === 'filed' && (
-                        <Pressable style={[styles.smallBtn, { backgroundColor: theme.warning }]} onPress={() => assess(c)}>
+                        <Pressable style={[styles.smallBtn, { backgroundColor: theme.warning, opacity: busyId ? 0.5 : 1 }]} onPress={() => assess(c)} disabled={!!busyId}>
                           <Text style={styles.smallBtnText}>Assess</Text>
                         </Pressable>
                       )}
-                      <Pressable style={[styles.smallBtn, { backgroundColor: theme.success }]} onPress={() => decide(c, 'approved')}>
+                      <Pressable style={[styles.smallBtn, { backgroundColor: theme.success, opacity: busyId ? 0.5 : 1 }]} onPress={() => decide(c, 'approved')} disabled={!!busyId}>
                         <Text style={styles.smallBtnText}>Approve</Text>
                       </Pressable>
-                      <Pressable style={[styles.smallBtn, { backgroundColor: theme.danger }]} onPress={() => decide(c, 'rejected')}>
+                      <Pressable style={[styles.smallBtn, { backgroundColor: theme.danger, opacity: busyId ? 0.5 : 1 }]} onPress={() => decide(c, 'rejected')} disabled={!!busyId}>
                         <Text style={styles.smallBtnText}>Reject</Text>
                       </Pressable>
-                      <Pressable style={[styles.smallBtn, { backgroundColor: '#F97316' }]} onPress={() => assessRisk(c.shipmentId)}>
+                      <Pressable style={[styles.smallBtn, { backgroundColor: '#F97316', opacity: busyId ? 0.5 : 1 }]} onPress={() => assessRisk(c.shipmentId)} disabled={!!busyId}>
                         <Text style={styles.smallBtnText}>Risk</Text>
                       </Pressable>
                     </View>

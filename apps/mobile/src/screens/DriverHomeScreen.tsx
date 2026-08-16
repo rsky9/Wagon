@@ -44,9 +44,11 @@ export function DriverHomeScreen({ onOpenTrip }: Props) {
   const [refreshing, setRefreshing] = useState(false)
   const [available, setAvailable] = useState(true)
   const [missingProfile, setMissingProfile] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const fetch = useCallback(() => {
     setMissingProfile(false)
+    setLoadError(null)
     return Promise.all([
       api.get<DriverHome>('/driver/home')
         .then((d) => { setData(d); setAvailable(d.available) })
@@ -54,6 +56,7 @@ export function DriverHomeScreen({ onOpenTrip }: Props) {
           // 400 "Driver profile not found": the transporter hasn't added this
           // driver yet — show an explicit onboarding state instead of an empty feed.
           if (e instanceof Error && /driver profile not found/i.test(e.message)) setMissingProfile(true)
+          else setLoadError(e instanceof Error ? e.message : 'Could not load driver home')
         })
         .finally(() => setLoading(false)),
       api.get<DriverEarnings>('/driver/earnings').then(setEarnings).catch(() => {}),
@@ -93,6 +96,15 @@ export function DriverHomeScreen({ onOpenTrip }: Props) {
         </View>
         <Switch value={available && !missingProfile} onValueChange={toggleAvailability} disabled={missingProfile} trackColor={{ true: theme.primary, false: theme.border }} thumbColor="#fff" />
       </View>
+
+      {loadError && !missingProfile && (
+        <View style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.sm }}>
+          <Text style={{ color: theme.danger, fontSize: 13, textAlign: 'center' }}>{loadError}</Text>
+          <Pressable style={{ marginTop: 6, padding: spacing.sm, backgroundColor: theme.muted, borderRadius: radius.md, alignSelf: 'center' }} onPress={() => { setLoading(true); fetch() }}>
+            <Text style={{ color: theme.foreground, fontWeight: '700' }}>Retry</Text>
+          </Pressable>
+        </View>
+      )}
 
       {earnings && (
         <View style={[styles.earningsCard, { backgroundColor: theme.card, borderColor: theme.border }]}>

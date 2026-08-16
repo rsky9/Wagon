@@ -166,14 +166,20 @@ export class PaymentsService implements OnModuleInit {
       }
       let refunded = false
       if (c.providerRef) {
-        const result = await this.provider.refund({
-          amount: c.amount,
-          currency: c.currency ?? 'INR',
-          reference: refundKey,
-          originalProviderRef: c.providerRef,
-          metadata: { tripId, originalIdempotencyKey: c.idempotencyKey ?? '' },
-        })
-        refunded = result.status === 'succeeded'
+        try {
+          const result = await this.provider.refund({
+            amount: c.amount,
+            currency: c.currency ?? 'INR',
+            reference: refundKey,
+            originalProviderRef: c.providerRef,
+            metadata: { tripId, originalIdempotencyKey: c.idempotencyKey ?? '' },
+          })
+          refunded = result.status === 'succeeded'
+        } catch {
+          // A THROWN provider error must still record a failed refund row so the
+          // reconciliation sweep can retry it — never swallow the money.
+          refunded = false
+        }
       } else {
         refunded = true
       }
@@ -312,11 +318,11 @@ export class PaymentsService implements OnModuleInit {
     const base = trip.booking?.rate ?? trip.load.fareEstimate ?? 0
     const tax = PaymentsService.taxBreakdown(base)
     const net = Math.round((base - tax.tdsAmount) * 100) / 100
-    // Full-escrow path: the transporter is paid the full net.
-    // Split path: the advance was already released at pickup, so the final
-    // payout is the net minus the advance already received.
-    const advanceAmt = advance?.amount ?? 0
-    const payoutAmount = escrow ? net : Math.max(0, Math.round((net - advanceAmt) * 100) / 100)
+    // The transporter is paid the FULL net. The split path collects advance +
+    // balance from the supplier (which together equal the agreed rate), but the
+    // advance is never separately disbursed to the transporter — so subtracting
+    // it here would short-pay them by exactly the advance.
+    const payoutAmount = net
 
     const result = await this.provider.payout({
       amount: payoutAmount,
@@ -371,13 +377,14 @@ export class PaymentsService implements OnModuleInit {
       }
     }
 
-    // Canonical event: payout released.
+    // Canonical event: payout released. Shipment refs are load ids — resolve by
+    // the trip's load so the event links to the right shipment.
     await this.outbox.emit(await this.tx(), {
       eventType: 'FINANCE',
       eventCode: 'PAYOUT_RELEASED',
       entityType: 'trip',
       entityId: tripId,
-      shipmentId: await this.shipmentIdFor(tripId),
+      shipmentId: await this.shipmentIdFor(trip.loadId),
       actorId: user.id,
       payload: { tripId, amount: payment.amount, providerRef: payment.providerRef },
     })

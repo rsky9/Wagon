@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   StyleSheet,
   Text,
@@ -52,11 +52,13 @@ export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipme
   const [snapshot, setSnapshot] = useState<{ rate: number; advanceAmount?: number | null; balanceAmount?: number | null; paymentTerms?: string | null } | null>(null)
   const [loading, setLoading] = useState(true)
   const [paying, setPaying] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const [snapshotError, setSnapshotError] = useState<string | null>(null)
   const [rating, setRating] = useState(0)
   const [ewb, setEwb] = useState<string | null>(null)
   const [shipmentId, setShipmentId] = useState<string | null>(null)
 
-  useEffect(() => {
+  const fetchTrip = useCallback(() => {
     api
       .get<{ trips: TripInfo[] }>('/trips/mine')
       .then((res) => {
@@ -66,8 +68,10 @@ export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipme
           : res.trips.find((x) => x.load.id === loadId)
         setTrip(t ?? null)
         if (t) {
+          setSnapshotError(null)
           api.get<{ snapshot: { rate: number; advanceAmount?: number | null; balanceAmount?: number | null; paymentTerms?: string | null } }>(`/bidding/trip/${t.id}/booking`)
-            .then((r) => setSnapshot(r.snapshot)).catch(() => {})
+            .then((r) => setSnapshot(r.snapshot))
+            .catch(() => setSnapshotError('Could not load the booking terms'))
         }
         if (t?.rating) setRating(t.rating)
         if (t?.load.ewbNumber) setEwb(t.load.ewbNumber)
@@ -79,6 +83,8 @@ export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipme
       .then((r) => setShipmentId(r.shipmentId))
       .catch(() => {})
   }, [loadId, tripId])
+
+  useEffect(() => { fetchTrip() }, [fetchTrip])
 
   if (loading) {
     return (
@@ -101,7 +107,7 @@ export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipme
     )
   }
 
-  const canPay = isSupplier && (trip.status === 'accepted' || trip.status === 'in_transit') && !paying
+  const canPay = isSupplier && (trip.status === 'accepted' || trip.status === 'in_transit') && !paying && !snapshotError
   const canRate = trip.status === 'delivered' && !trip.rating
 
   const payEscrow = async () => {
@@ -157,6 +163,21 @@ export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipme
       Alert.alert(t('ui.ewb'), `Generated ${res.ewbNumber}`)
     } catch (e) {
       Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to generate EWB')
+    }
+  }
+
+  // Supplier confirms the delivered goods were received — this is what unlocks
+  // the transporter's payout (a pending POD blocks it forever otherwise).
+  const confirmPod = async () => {
+    setConfirming(true)
+    try {
+      await api.post(`/payments/pod/${trip.id}/confirm`)
+      Alert.alert(t('ui.done'), 'Delivery confirmed — the transporter can now request payout')
+      fetchTrip()
+    } catch (e) {
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to confirm delivery')
+    } finally {
+      setConfirming(false)
     }
   }
 
@@ -242,6 +263,19 @@ export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipme
         )}
         {trip.status === 'in_transit' && (
           <Button label={t('tripDetail.enterDeliveryOtp')} onPress={() => verifyOtp('delivery')} variant="secondary" />
+        )}
+
+        {isSupplier && trip.status === 'delivered' && (
+          <Button label="Confirm delivery receipt" onPress={confirmPod} loading={confirming} variant="secondary" />
+        )}
+
+        {snapshotError && isSupplier && (trip.status === 'accepted' || trip.status === 'in_transit') && (
+          <View style={{ alignItems: 'center', gap: spacing.sm, marginVertical: spacing.sm }}>
+            <Text style={{ color: theme.danger, fontSize: 13, textAlign: 'center' }}>{snapshotError}</Text>
+            <Pressable style={{ padding: spacing.sm, backgroundColor: theme.muted, borderRadius: radius.md }} onPress={() => { setLoading(true); fetchTrip() }}>
+              <Text style={{ color: theme.foreground, fontWeight: '700' }}>Retry</Text>
+            </Pressable>
+          </View>
         )}
 
         {canPay && (

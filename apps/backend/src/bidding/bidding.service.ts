@@ -331,6 +331,10 @@ export class BiddingService {
     const load = await this.loadFor(loadId)
     const supplier = await this.supplierFor(user)
     if (!supplier || load.supplierId !== supplier.id) throw new BadRequestException('Only the load owner can confirm')
+    // A cancelled/expired load must not be resurrected via a stale bid.
+    if (load.status !== 'posted') {
+      throw new BadRequestException('Load is not open for booking')
+    }
     const bid = await this.prisma.bid.findUnique({ where: { id: bidId } })
     if (!bid || bid.loadId !== loadId) throw new NotFoundException('Bid not found')
     if (bid.status !== 'accepted' && bid.status !== 'shortlisted') {

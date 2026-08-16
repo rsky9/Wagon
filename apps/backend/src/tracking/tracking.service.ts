@@ -3,6 +3,7 @@ import Redis from 'ioredis'
 import { REDIS } from '../redis/redis.module'
 import { PrismaService } from '../prisma/prisma.service'
 import { TrackingGateway } from './tracking.gateway'
+import { OutboxRelay } from '../outbox/outbox-relay.service'
 import type { User } from '@prisma/client'
 
 @Injectable()
@@ -13,6 +14,7 @@ export class TrackingService {
     private readonly prisma: PrismaService,
     @Inject(forwardRef(() => TrackingGateway)) private readonly gateway: TrackingGateway,
     @Inject(REDIS) private readonly redis: Redis,
+    private readonly outbox: OutboxRelay,
   ) {}
 
   /** Transporter shares a live location point for an in-transit trip. */
@@ -61,21 +63,27 @@ export class TrackingService {
     if (zone !== 'none' && !(await this.redis.get(arrivedKey))) {
       await this.redis.set(arrivedKey, '1', 'EX', 86400)
       const eventCode = zone === 'pickup' ? 'ARRIVED_AT_PICKUP' : 'ARRIVED_AT_DROP'
-      await this.prisma.logisticsEvent.create({
-        data: {
+      // Emit through the transactional outbox (webhook fan-out + canonical
+      // shipment link) instead of a bare logistics row.
+      await this.outbox.emit(
+        {
+          logisticsEvent: { create: (args: { data: Record<string, unknown> }) => this.prisma.logisticsEvent.create({ data: args.data as never }) },
+          outboxMessage: { create: (args: { data: Record<string, unknown> }) => this.prisma.outboxMessage.create({ data: args.data as never }) },
+        },
+        {
           eventType: 'EXECUTION',
           eventCode,
           classifier: 'ACT',
           entityType: 'trip',
           entityId: tripId,
-          shipmentId: null,
+          shipmentId: load ? await this.shipmentIdFor(trip.loadId) : null,
           occurredAt: new Date(),
           source: 'gps',
           actorId: user.id,
           location: zone === 'pickup' ? load?.pickupAddr ?? null : load?.dropAddr ?? null,
           payload: { tripId, loadId: trip.loadId, lat, lng },
         },
-      })
+      )
       // Notify the counterparty of arrival.
       const supplier = await this.prisma.supplier.findUnique({ where: { id: load?.supplierId ?? '' } })
       if (supplier) {
@@ -107,6 +115,11 @@ export class TrackingService {
     })
 
     return { location: record, zone, etaMinutes }
+  }
+
+  private async shipmentIdFor(loadId: string): Promise<string | null> {
+    const s = await this.prisma.shipment.findFirst({ where: { ref: loadId } })
+    return s?.id ?? null
   }
 
   private distanceKm(lat1: number, lng1: number, lat2: number, lng2: number) {

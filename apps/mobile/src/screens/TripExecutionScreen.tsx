@@ -8,12 +8,14 @@ import { uploadToPresignedUrl } from '@wagon/api-client'
 import { api } from '../config'
 import { useI18n } from '@wagon/i18n'
 import { useStepUp } from '../hooks/useStepUp'
+import { useAuth } from '../auth'
 
 interface TripDetail {
   id: string
   stage: string
   status: string
   podUrl?: string | null
+  pod?: { status?: string } | null
   pickupOtpAt?: string | null
   pickupOtpVerifiedAt?: string | null
   deliveryOtpAt?: string | null
@@ -62,6 +64,11 @@ const TONE: Record<string, StatusTone> = {
 export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
+  const { session } = useAuth()
+  const caps = session?.profile.capabilities?.length ? session.profile.capabilities : [session?.profile.role ?? '']
+  // Drivers execute trips but don't upload POD or request payout — those are
+  // transporter actions (driver endpoints 403 on the transporter-only routes).
+  const isDriverOnly = caps.includes('driver') && !caps.includes('transporter')
   const [trip, setTrip] = useState<TripDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -114,8 +121,13 @@ export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
   const generateOtp = async (kind: 'pickup' | 'delivery') => {
     setBusy(true)
     try {
-      const res = await api.post<{ devCode: string }>(`/trips/${tripId}/otp/${kind}`)
-      Alert.alert(`${kind} OTP`, `Share this code with the supplier: ${res.devCode}`, [
+      const res = await api.post<{ devCode?: string }>(`/trips/${tripId}/otp/${kind}`)
+      // In production the backend never returns the code — the supplier gets it
+      // via notification. Only show the code in dev/mock builds.
+      const msg = res.devCode
+        ? `Share this code with the supplier: ${res.devCode}`
+        : 'Verification code sent to the supplier via notification.'
+      Alert.alert(`${kind} OTP`, msg, [
         { text: "I've shared it", onPress: () => fetch() },
       ])
     } catch (e) { Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed') } finally { setBusy(false) }
@@ -185,7 +197,7 @@ export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
           {onExceptions && (
             <Button label={t('tripExec.reportIssue')} onPress={onExceptions} variant="ghost" />
           )}
-          {!isDelivered && (
+          {!isDelivered && currentIdx >= 0 && trip.status !== 'cancelled' && (
             <Button label={`Mark ${STAGE_FLOW[currentIdx + 1]?.label ?? 'next'} →`} onPress={advance} loading={busy} />
           )}
           {needsPickupOtp && (
@@ -210,11 +222,24 @@ export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
               <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 4 }}>
                 POD: {trip.podUrl ? 'Uploaded' : 'Not uploaded'}
               </Text>
+              {isDriverOnly ? (
+                <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 4 }}>
+                  The transporter handles the delivery proof and payout for this trip.
+                </Text>
+              ) : (
+              <>
               {!trip.podUrl && (
                 <Button label="Upload delivery proof" onPress={uploadPod} loading={busy} variant="secondary" />
               )}
-              {trip.podUrl && (
+              {trip.podUrl && trip.pod?.status && trip.pod.status !== 'confirmed' && trip.pod.status !== 'verified' && (
+                <Text style={{ color: theme.warning, fontSize: 13, textAlign: 'center', marginTop: 4 }}>
+                  POD uploaded — waiting for the consignee to confirm receipt (payout unlocks after)
+                </Text>
+              )}
+              {trip.podUrl && (!trip.pod?.status || trip.pod.status === 'confirmed' || trip.pod.status === 'verified') && (
                 <Button label="Request payout →" onPress={requestPayout} loading={busy} />
+              )}
+              </>
               )}
             </View>
           )}

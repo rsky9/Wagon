@@ -57,6 +57,7 @@ interface ListLoadsQuery {
   q?: string
   page?: number
   pageSize?: number
+  mine?: boolean
 }
 
 const VALID_TRUCK_TYPES = ['open', 'container', 'trailer'] as const
@@ -203,10 +204,12 @@ export class LoadsService {
       ]
     }
 
-    // Suppliers see their own loads; transporters see the open feed.
+    // Suppliers see their own loads; transporters see the open feed. A `mine`
+    // flag forces the caller's own loads (e.g. a both-capability user on the
+    // "My loads" surface must never see the whole network feed).
     const isSupplier = (user.capabilities?.includes('supplier') as boolean) || user.role === 'supplier'
     const isTransporter = (user.capabilities?.includes('transporter') as boolean) || user.role === 'transporter'
-    if (isSupplier && !isTransporter) {
+    if ((isSupplier && !isTransporter) || query.mine) {
       const supplier = await this.prisma.supplier.findUnique({ where: { userId: user.id } })
       where.supplierId = supplier?.id
     }
@@ -391,6 +394,9 @@ export class LoadsService {
           data: { status: 'cancelled' },
         })
       }
+      // Reset committed bids so the truck isn't blocked forever and the load can
+      // be re-posted later.
+      await tx.bid.updateMany({ where: { loadId: id }, data: { status: 'withdrawn' } })
       return { cancelled, trips }
     })
 
@@ -459,7 +465,7 @@ export class LoadsService {
     if (!sweep.length) return
     // Only expire loads with no accepted bid; keep ones that have shortlist activity.
     const accepted = await this.prisma.bid.findMany({
-      where: { loadId: { in: sweep.map((l) => l.id) }, status: { in: ['accepted', 'booking_pending', 'shortlisted'] } },
+      where: { loadId: { in: sweep.map((l) => l.id) }, status: { in: ['accepted', 'booking_pending', 'shortlisted', 'negotiating'] } },
       select: { loadId: true },
     })
     const protectedIds = new Set(accepted.map((b) => b.loadId))
