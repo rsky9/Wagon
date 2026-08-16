@@ -321,6 +321,35 @@ A third deep audit of the enablement/marketplace layer surfaced and fixed cross-
 - ShipmentDetail: proper error + retry state (was an infinite "Loading…"); Profile KYC row no longer crashes on missing `kycStatus`; Settings biometric toggle verifies device enrollment before enabling.
 - **Data-bus refresh**: Home and Driver hub re-sync automatically when trips/finance change anywhere in the app.
 
+### 10.5 Delivered: money-route soundness + session integrity
+
+A fourth deep audit of money routes, sessions and mobile flows surfaced and fixed:
+
+**Money routes (never collect-less / never double-collect / never write-off)**
+- **Split-path escrow is now exact**: advance must equal the agreed advance; balance must complete the agreed rate to the rupee. Payout refuses unless the split path collected the FULL agreed rate (previously a ₹1 balance unlocked the full payout — the platform's shortfall).
+- **Refunds are real provider calls**: cancel-trip, admin refund, and **load-cancel** now invoke `provider.refund()` (idempotent, per-capture, failure-recorded) instead of minting fake `succeeded` rows. `PaymentProvider` gained `refund` (mock + Razorpay).
+- **Admin settlement-clear gates on success**: a failed capture stays `due` and is retryable (was written off as paid forever).
+- **Claim settlements charge the liable org** (active insurer, else the booked carrier) — never the org that merely decided/reviewed the claim.
+- **`createSettlement` bounds freight/commission obligations**: one per (shipment, type, payer, payee) and capped at the agreed booking rate — no minting unlimited duplicates.
+- **Carrier-service booking is atomic**: slots decrement via conditional `updateMany({ availableSlots: { gt: 0 } })` so concurrent bookings can't oversell.
+- **Insurance `issuePolicy` verifies the insurer org** (member + carrier/broker/other kind) unless the shipment owner self-covers.
+
+**Sessions & auth**
+- **Refresh-token reuse now revokes the whole family** (was a plain 401; the legitimate rotated pair kept working after theft).
+- `/trips/accept` honors the **bidding deadline + invite shortlist** (was a direct bypass of the marketplace gates).
+- **`setCapabilities` no longer 500s** on forwarder/warehouse/carrier-first selection (role derived only from UserRole-valid capabilities).
+- **AI recommendations are org-scoped** for request/service entity types (was leaking every user's market/carrier agent output).
+- **Market quote without a listing** now requires a matching-kind org (no silent primaryOrg fallback that let any org quote any demand kind).
+- **Webhook SSRF**: private/reserved IP ranges and cloud-metadata hosts are always blocked (localhost still allowed in dev for local test receivers).
+- **Chat threads** now return `otherUserId` so report/block/call work from the chat list.
+
+**Mobile**
+- **Session fix**: unified `wagon.session` storage key (was two keys — restored sessions always held a revoked old refresh token → permanent dead session after cold restart); a permanently-dead refresh now forces logout instead of sitting logged-in-but-erroring.
+- **Tracking socket**: re-auths with the current access token and is torn down on logout (was a singleton frozen on the previous user's token → cross-account live-tracking leak).
+- **Escrow pays the agreed booking rate** (snapshot), not the fare estimate — negotiated trips can now actually pay.
+- **Wallet negatives render correctly** (`-₹…`); ShipmentDetail propose-plan / forward-order / file-claim prompt for real values (were hardcoded ₹1000s creating fake ledger rows).
+- Deep-linked loads' **Bid button works** (was a no-op); PostLoadWizard **blocks publish on geocode failure** (was silently substituting Hyderabad→Chennai coords); KYC quest XP only on **identity approval** (was any single doc); invoices fetch in parallel; Bank screen has loading/error/retry.
+
 ---
 
 ## Research sources

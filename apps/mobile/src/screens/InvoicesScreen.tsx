@@ -33,13 +33,12 @@ export function InvoicesScreen({ onBack }: Props) {
 
   const fetch = useCallback(() => {
     api.get<{ trips: TripRef[] }>('/trips/mine').then(async (res) => {
-      const rows: InvoiceRow[] = []
-      for (const t of res.trips) {
-        try {
-          const inv = await api.get<{ invoice: InvoiceRow }>(`/payments/invoice/${t.id}`)
-          rows.push(inv.invoice)
-        } catch { /* skip */ }
-      }
+      const results = await Promise.allSettled(
+        res.trips.map((t) => api.get<{ invoice: InvoiceRow }>(`/payments/invoice/${t.id}`)),
+      )
+      const rows = results
+        .filter((r): r is PromiseFulfilledResult<{ invoice: InvoiceRow }> => r.status === 'fulfilled')
+        .map((r) => r.value.invoice)
       setInvoices(rows)
     }).catch(() => {}).finally(() => setLoading(false))
   }, [])

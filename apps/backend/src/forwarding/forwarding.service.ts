@@ -438,7 +438,9 @@ export class ForwardingService {
       findMany: (args: { where: { consolidationId: string }; include: { shipment: boolean } }) => Promise<
         { shipment: { weightKg: number | null; volumeM3: number | null; pieces: number | null } | null }[]
       >
-      updateMany: (args: { where: { consolidationId: string }; data: { cargoWeightKg: number; cargoVolumeM3: number; cargoPieces: number } }) => Promise<unknown>
+    }
+    consolidation: {
+      update: (args: { where: { id: string }; data: { cargoWeightKg: number; cargoVolumeM3: number; cargoPieces: number } }) => Promise<unknown>
     }
   }, consolidationId: string) {
     const orders = await tx.forwardOrder.findMany({
@@ -453,7 +455,8 @@ export class ForwardingService {
       }),
       { cargoWeightKg: 0, cargoVolumeM3: 0, cargoPieces: 0 },
     )
-    await tx.forwardOrder.updateMany({ where: { consolidationId }, data: totals })
+    // Totals live on the Consolidation, not the ForwardOrder.
+    await tx.consolidation.update({ where: { id: consolidationId }, data: totals })
   }
 
   /** Mark a consolidation ready for booking once it has orders. */

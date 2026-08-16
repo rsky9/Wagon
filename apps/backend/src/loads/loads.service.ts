@@ -4,6 +4,7 @@ import { AlertsService } from '../alerts/alerts.service'
 import { NotificationsService } from '../notifications/notifications.service'
 import { ShipmentProjector } from '../shipments/shipment-projector.service'
 import { MarketService } from '../market/market.service'
+import { PaymentsService } from '../payments/payments.service'
 import type { User } from '@prisma/client'
 import type { Load } from '@wagon/contracts'
 
@@ -68,6 +69,7 @@ export class LoadsService {
     private readonly notifications: NotificationsService,
     private readonly shipments: ShipmentProjector,
     private readonly market: MarketService,
+    private readonly payments: PaymentsService,
   ) {}
 
   async create(input: CreateLoadInput, user: User) {
@@ -394,6 +396,12 @@ export class LoadsService {
         data: { tripId: trip.id, loadId: id },
         category: 'trips',
       })
+    }
+
+    // Refund any captured escrow/advance/balance on the cancelled trips so the
+    // supplier's money actually returns (real provider refund, idempotent).
+    for (const trip of trips) {
+      await this.payments.refundTripCaptures(trip.id).catch(() => {})
     }
 
     await this.shipments.syncFromLoad(id, 'cancelled', 'LOAD_CANCELLED', 'EXCEPTION', user.id)

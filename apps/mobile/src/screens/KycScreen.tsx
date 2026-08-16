@@ -78,7 +78,6 @@ export function KycScreen({ onBack }: Props) {
         type: asset.mimeType ?? 'image/jpeg',
       })
       Alert.alert(t('ui.submitted'), `${kind} submitted for review`)
-      completeQuestWithXp('kyc', 60)
       fetchDocs()
     } catch (e) {
       Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Upload failed')
@@ -86,6 +85,14 @@ export function KycScreen({ onBack }: Props) {
       setUploading(null)
     }
   }
+
+  // Only award the KYC quest XP once identity is ACTUALLY verified (pan+aadhar
+  // approved), never for a single document upload.
+  useEffect(() => {
+    const identity = ['pan', 'aadhar']
+    const approvedAll = identity.every((k) => docs.some((d) => d.kind === k && d.status === 'approved'))
+    if (approvedAll) void completeQuestWithXp('kyc', 60)
+  }, [docs])
 
   const statusFor = (kind: string) => docs.find((d) => d.kind === kind)?.status
 

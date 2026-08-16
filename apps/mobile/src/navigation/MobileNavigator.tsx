@@ -226,13 +226,13 @@ function LoadDetailRoute({ route, navigation }: NativeStackScreenProps<RootStack
   const deepId = (route.params as { id?: string })?.id
   if (!load && deepId) {
     // Deep link by id: fetch the full load, then render the real detail screen.
-    return <LoadByIdScreen loadId={deepId} onBack={() => navigation.goBack()} onAccepted={() => navigation.navigate('UnifiedTabs', { screen: 'Trips' } as never)} onOpenBid={() => undefined} />
+    return <LoadByIdScreen loadId={deepId} onBack={() => navigation.goBack()} onAccepted={() => navigation.navigate('UnifiedTabs', { screen: 'Trips' } as never)} onOpenBid={(load) => navigation.navigate('BidForm', { load })} />
   }
   if (!load) return null
   return <LoadDetailScreen load={load} onBack={() => navigation.goBack()} onAccepted={() => navigation.navigate('UnifiedTabs', { screen: 'Trips' } as never)} onOpenBid={() => navigation.navigate('BidForm', { load })} />
 }
 
-function LoadByIdScreen({ loadId, onBack, onAccepted, onOpenBid }: { loadId: string; onBack: () => void; onAccepted: () => void; onOpenBid: () => void }) {
+function LoadByIdScreen({ loadId, onBack, onAccepted, onOpenBid }: { loadId: string; onBack: () => void; onAccepted: () => void; onOpenBid: (load: Load) => void }) {
   const [load, setLoad] = useState<Load | null>(null)
   const [failed, setFailed] = useState(false)
   useEffect(() => {
@@ -254,7 +254,7 @@ function LoadByIdScreen({ loadId, onBack, onAccepted, onOpenBid }: { loadId: str
       </View>
     )
   }
-  return <LoadDetailScreen load={load} onBack={onBack} onAccepted={onAccepted} onOpenBid={onOpenBid} />
+  return <LoadDetailScreen load={load} onBack={onBack} onAccepted={onAccepted} onOpenBid={() => onOpenBid(load)} />
 }
 
 function TripDetailRoute({ route, navigation }: NativeStackScreenProps<RootStackParamList, 'TripDetail'>) {
@@ -521,7 +521,7 @@ function ChatListRoute({ navigation }: any) {
   return (
     <ChatListScreen
       onBack={() => navigation.goBack()}
-      onOpenThread={(t) => navigation.navigate('Chat', { contactName: t.otherName ?? 'Trip', contactPhone: '', tripId: t.tripId })}
+      onOpenThread={(t) => navigation.navigate('Chat', { contactName: t.otherName ?? 'Trip', contactPhone: '', contactId: t.otherUserId ?? undefined, tripId: t.tripId })}
     />
   )
 }

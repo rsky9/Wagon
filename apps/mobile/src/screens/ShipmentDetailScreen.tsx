@@ -58,13 +58,30 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
   }
 
   const proposePlan = () => {
-    action('propose', () => api.post('/planning/plans', {
-      shipmentId,
-      legs: [{ mode: 'road', origin: 'Origin', destination: 'Destination', cost: 1000, etaHours: 24 }],
-    }), 'Plan proposed')
+    alertPrompt('Propose plan', 'Est. cost (₹) per leg', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Propose', onPress: (cost?: string) => {
+        const c = cost ? Number(cost) : NaN
+        if (!c || c <= 0) { Alert.alert('Valid cost required'); return }
+        action('propose', () => api.post('/planning/plans', {
+          shipmentId,
+          legs: [{ mode: 'road', origin: 'Origin', destination: 'Destination', cost: c, etaHours: 24 }],
+        }), 'Plan proposed')
+      } },
+    ])
   }
   const createOrder = () => {
-    action('order', () => api.post('/forwarding/orders', { shipmentId, buyAmount: 1000, sellAmount: 1200 }), 'Forward order created')
+    alertPrompt('Create forward order', 'Sell amount (₹)',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Create', onPress: (sell?: string) => {
+          const s = Number(sell)
+          if (!s || s <= 0) { Alert.alert('Valid amount required'); return }
+          action('order', () => api.post('/forwarding/orders', { shipmentId, buyAmount: s * 0.8, sellAmount: s }), 'Forward order created')
+        } },
+      ],
+      'numeric',
+    )
   }
   const quoteCover = (planId: string) => {
     setCoverPlanId(planId)
@@ -86,7 +103,17 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
   }
 
   const fileClaim = () => {
-    action('claim', () => api.post('/finance/claims', { shipmentId, reason: 'damage', amount: 1000 }), 'Claim filed')
+    alertPrompt('File claim', 'Claim amount (₹)',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'File', onPress: (amt?: string) => {
+          const a = Number(amt)
+          if (!a || a <= 0) { Alert.alert('Valid amount required'); return }
+          action('claim', () => api.post('/finance/claims', { shipmentId, reason: 'damage', amount: a }), 'Claim filed')
+        } },
+      ],
+      'numeric',
+    )
   }
   const bookCarrier = () => {
     // Real carrier selection: pick a live market service, then book it against

@@ -1,8 +1,9 @@
 import { useSyncExternalStore } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { setAccessToken, setTokens, getRefreshToken, getDeviceId } from './config'
+import { setAccessToken, setTokens, getRefreshToken, getDeviceId, SESSION_KEY, setOnRefreshFailure } from './config'
 import { api } from './config'
 import { registerForPushNotifications } from './push'
+import { resetTrackingSocket } from './socket'
 
 export interface Session {
   accessToken: string
@@ -28,8 +29,6 @@ interface AuthState {
   error: string | null
   devCode: string | null
 }
-
-const SESSION_KEY = 'wagon_session'
 
 // ---- Shared module-level store (single source of truth) ----
 let state: AuthState = {
@@ -113,6 +112,9 @@ export const authActions = {
     if (refresh) {
       api.post('/auth/logout', { refreshToken: refresh }).catch(() => {})
     }
+    // Drop the tracking socket so a future login never reuses the old user's
+    // authenticated session (cross-account data leak).
+    resetTrackingSocket()
     setAccessToken(null)
     setTokens(null, null)
     setState({ session: null, otpRequested: false, devCode: null, error: null })
@@ -169,6 +171,15 @@ export const authActions = {
 
 export function useAuth() {
   restoreSession()
+  // A permanently-dead refresh token (revoked/rotated) must drop the session,
+  // otherwise the app sits logged-in-but-erroring forever.
+  setOnRefreshFailure(() => {
+    setAccessToken(null)
+    setTokens(null, null)
+    resetTrackingSocket()
+    setState({ session: null, error: 'Session expired. Please sign in again.' })
+    AsyncStorage.removeItem(SESSION_KEY).catch(() => {})
+  })
   const s = useSyncExternalStore(subscribe, getSnapshot)
   return {
     ...s,

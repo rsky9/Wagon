@@ -413,6 +413,15 @@ export class AiService {
         ? await this.prisma.load.findMany({ where: { supplierId: supplier.id }, select: { id: true } })
         : []
       orgWhere = { entityId: { in: loads.map((l) => l.id) } }
+    } else {
+      // request/service/market recommendations: scope by org membership so one
+      // user's market/carrier agent output never leaks to another org.
+      const orgIds = await this.orgAccess.memberOrgIds(user)
+      const memberIds = await this.prisma.organizationMember.findMany({
+        where: { organizationId: { in: orgIds } },
+        select: { userId: true },
+      })
+      orgWhere = { createdBy: { in: memberIds.map((m) => m.userId) } }
     }
     const recommendations = await this.prisma.aiRecommendation.findMany({
       where: {

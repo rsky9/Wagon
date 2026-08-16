@@ -24,8 +24,11 @@ export function BankScreen({ onBack }: Props) {
   const [ifsc, setIfsc] = useState('')
   const [holder, setHolder] = useState('')
   const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const fetch = () => {
+    setError(null)
     api.get<{ bank: BankInfo | null }>('/auth/bank').then((res) => {
       setBank(res.bank)
       if (res.bank) {
@@ -33,7 +36,8 @@ export function BankScreen({ onBack }: Props) {
         setIfsc(res.bank.ifsc ?? '')
         setHolder(res.bank.holder ?? '')
       }
-    }).catch(() => {})
+    }).catch((e) => setError(e instanceof Error ? e.message : 'Failed to load bank details'))
+      .finally(() => setLoading(false))
   }
 
   useEffect(() => { fetch() }, [])
@@ -64,6 +68,18 @@ export function BankScreen({ onBack }: Props) {
       </View>
 
       <View style={styles.body}>
+        {loading ? (
+          <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 40 }}>{t('common.loading')}</Text>
+        ) : error ? (
+          <View style={{ alignItems: 'center', gap: spacing.md, marginTop: 40 }}>
+            <Text style={{ color: theme.foreground, fontWeight: '800' }}>Could not load bank details</Text>
+            <Text style={{ color: theme.mutedForeground, textAlign: 'center' }}>{error}</Text>
+            <Pressable style={{ padding: spacing.md, backgroundColor: '#F97316', borderRadius: radius.md }} onPress={() => { setLoading(true); fetch() }}>
+              <Text style={{ color: '#fff', fontWeight: '800' }}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : (
+        <>
         <View style={[styles.info, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <Text style={{ color: theme.mutedForeground, fontSize: 13, lineHeight: 19 }}>
             Your payout details are used to settle trips. They're stored securely and only shown to you.
@@ -81,6 +97,8 @@ export function BankScreen({ onBack }: Props) {
         </Field>
 
         <Button label={t('bank.save')} onPress={save} loading={saving} />
+        </>
+        )}
       </View>
     </SafeAreaView>
   )

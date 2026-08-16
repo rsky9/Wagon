@@ -101,8 +101,11 @@ export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipme
   const payEscrow = async () => {
     setPaying(true)
     try {
-      await api.post('/payments/escrow', { tripId: trip.id, amount: trip.load.fareEstimate })
-      Alert.alert(t('ui.paid'), `Booking amount ${formatINR(trip.load.fareEstimate)} captured`)
+      // Pay the AGREED booking rate (the snapshot), not the estimated fare —
+      // the backend rejects any amount that differs from the locked rate.
+      const amount = snapshot?.rate ?? trip.load.fareEstimate
+      await api.post('/payments/escrow', { tripId: trip.id, amount })
+      Alert.alert(t('ui.paid'), `Booking amount ${formatINR(amount)} captured`)
     } catch (e) {
       Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Payment failed')
     } finally {
@@ -147,7 +150,7 @@ export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipme
       <ScrollView contentContainerStyle={styles.body}>
         <View style={styles.topRow}>
           <Text style={[styles.fare, { color: theme.foreground }, { fontVariant: ['tabular-nums'] }]}>
-            {formatINR(trip.load.fareEstimate)}
+            {formatINR(snapshot?.rate ?? trip.load.fareEstimate)}
           </Text>
           <StatusChip label={trip.status.replace('_', ' ')} tone={TONE[trip.status]} />
         </View>
@@ -216,7 +219,7 @@ export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipme
 
         {canPay && (
           <Button
-            label={`Pay booking amount · ${formatINR(trip.load.fareEstimate)}`}
+            label={`Pay booking amount · ${formatINR(snapshot?.rate ?? trip.load.fareEstimate)}`}
             onPress={payEscrow}
             loading={paying}
           />

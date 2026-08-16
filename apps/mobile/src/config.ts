@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 export const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:4020/api/v1'
 
-const SESSION_KEY = 'wagon.session'
+export const SESSION_KEY = 'wagon.session'
 
 export interface StoredSession {
   accessToken: string
@@ -50,6 +50,12 @@ export async function getDeviceId(): Promise<string> {
 /** Single-flight refresh so parallel 401s share one refresh call. */
 let refreshing: Promise<boolean> | null = null
 
+/** Registered by the auth module: called when a refresh permanently fails. */
+let onRefreshFailure: (() => void) | null = null
+export function setOnRefreshFailure(fn: () => void) {
+  onRefreshFailure = fn
+}
+
 async function refreshAccessToken(): Promise<boolean> {
   const refresh = getRefreshToken()
   if (!refresh) return false
@@ -62,7 +68,10 @@ async function refreshAccessToken(): Promise<boolean> {
           body: JSON.stringify({ refreshToken: refresh, deviceId: await getDeviceId() }),
         })
         if (!res.ok) {
+          // Permanent session death (revoked/rotated token): clear persisted
+          // state and force the app back to login.
           await AsyncStorage.removeItem(SESSION_KEY).catch(() => {})
+          onRefreshFailure?.()
           return false
         }
         const data = await res.json()
@@ -78,6 +87,7 @@ async function refreshAccessToken(): Promise<boolean> {
         }
         return Boolean(accessToken)
       } catch {
+        // Transient network error: keep the session so we can retry later.
         return false
       } finally {
         refreshing = null

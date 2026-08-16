@@ -26,11 +26,26 @@ export interface PayoutResult {
   paidAt: Date
 }
 
+export interface RefundInput {
+  amount: number
+  currency: string
+  reference: string
+  originalProviderRef?: string
+  metadata?: Record<string, string>
+}
+
+export interface RefundResult {
+  providerRef: string
+  status: 'succeeded' | 'failed'
+  refundedAt: Date
+}
+
 export const PAYMENT_PROVIDER = Symbol('PAYMENT_PROVIDER')
 
 export interface PaymentProvider {
   capture(input: CaptureInput): Promise<CaptureResult>
   payout(input: PayoutInput): Promise<PayoutResult>
+  refund(input: RefundInput): Promise<RefundResult>
 }
 
 /**
@@ -59,5 +74,15 @@ export class MockPaymentProvider implements PaymentProvider {
       return { providerRef: `mock_${input.reference}`, status: 'failed', paidAt: new Date() }
     }
     return { providerRef: `mock_${input.reference}`, status: 'succeeded', paidAt: new Date() }
+  }
+
+  async refund(input: RefundInput): Promise<RefundResult> {
+    this.logger.log(
+      `[mock-payment] REFUND ${input.amount}${input.currency} ref=${input.reference} original=${input.originalProviderRef ?? 'n/a'}`,
+    )
+    if (input.amount <= 0) {
+      return { providerRef: `mock_${input.reference}`, status: 'failed', refundedAt: new Date() }
+    }
+    return { providerRef: `mock_${input.reference}`, status: 'succeeded', refundedAt: new Date() }
   }
 }

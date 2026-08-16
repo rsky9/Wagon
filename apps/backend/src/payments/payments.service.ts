@@ -42,28 +42,34 @@ export class PaymentsService {
       throw new BadRequestException('Escrow only valid for accepted/in-transit trips')
     }
 
-    // Enforce split terms: advance can't exceed the agreed advance amount.
+    // Enforce split terms: advance must match the agreed advance amount exactly.
     if (stage === 'advance') {
-      const advanceCap = trip.booking?.advanceAmount ?? trip.load.advanceAmount ?? null
-      if (advanceCap != null && amount > advanceCap) {
-        throw new BadRequestException(`Advance cannot exceed the agreed ₹${advanceCap}`)
+      const advanceAgreed = trip.booking?.advanceAmount ?? trip.load.advanceAmount ?? null
+      if (advanceAgreed != null && Math.abs(amount - advanceAgreed) > 0.001) {
+        throw new BadRequestException(`Advance must equal the agreed ₹${advanceAgreed}`)
       }
     }
 
     // Money-in must match money-out: a full escrow must equal the agreed rate.
     if (stage === 'escrow') {
       const agreed = trip.booking?.rate ?? trip.load.fareEstimate ?? null
-      if (agreed != null && amount !== agreed) {
+      if (agreed != null && Math.abs(amount - agreed) > 0.001) {
         throw new BadRequestException(`Escrow must equal the agreed rate ₹${agreed}`)
       }
     }
-    // Split path: the balance must make advance + balance >= the agreed rate.
+    // Split path: the balance must complete the agreed rate exactly
+    // (advance + balance === agreed), so the platform never under-collects.
     if (stage === 'balance') {
       const agreed = trip.booking?.rate ?? trip.load.fareEstimate ?? null
       const advance = await this.prisma.payment.findFirst({ where: { tripId, type: 'advance', status: 'succeeded' } })
       const advanceAmt = advance?.amount ?? 0
-      if (agreed != null && advanceAmt + amount > agreed) {
-        throw new BadRequestException(`Advance (₹${advanceAmt}) + balance (₹${amount}) exceeds the agreed rate ₹${agreed}`)
+      if (agreed != null) {
+        const remaining = Math.round((agreed - advanceAmt) * 100) / 100
+        if (Math.abs(amount - remaining) > 0.001) {
+          throw new BadRequestException(
+            `Balance must complete the agreed rate: ₹${remaining} more is owed (advance ₹${advanceAmt} of ₹${agreed})`,
+          )
+        }
       }
     }
 
@@ -129,6 +135,49 @@ export class PaymentsService {
     return { payment, alreadyCaptured: false }
   }
 
+  /**
+   * Refund every captured escrow/advance/balance for a trip, idempotently and
+   * via the real payment provider. Used on trip cancellation and admin refunds
+   * so captured money actually returns to the payer.
+   */
+  async refundTripCaptures(tripId: string, options?: { tx?: unknown }): Promise<number> {
+    const captures = await this.prisma.payment.findMany({
+      where: { tripId, type: { in: ['escrow', 'advance', 'balance'] }, status: 'succeeded' },
+    })
+    let refundedCount = 0
+    for (const c of captures) {
+      const refundKey = `refund_${c.idempotencyKey}`
+      const existingRefund = await this.prisma.payment.findUnique({ where: { idempotencyKey: refundKey } })
+      if (existingRefund) continue
+      let refunded = false
+      if (c.providerRef) {
+        const result = await this.provider.refund({
+          amount: c.amount,
+          currency: c.currency ?? 'INR',
+          reference: refundKey,
+          originalProviderRef: c.providerRef,
+          metadata: { tripId, originalIdempotencyKey: c.idempotencyKey ?? '' },
+        })
+        refunded = result.status === 'succeeded'
+      } else {
+        refunded = true
+      }
+      await this.prisma.payment.create({
+        data: {
+          tripId,
+          type: 'refund',
+          amount: c.amount,
+          method: c.method,
+          providerRef: refunded ? `refund-${c.providerRef ?? tripId}` : `refund-failed-${c.providerRef ?? tripId}`,
+          idempotencyKey: refundKey,
+          status: refunded ? 'succeeded' : 'failed',
+        },
+      })
+      if (refunded) refundedCount++
+    }
+    return refundedCount
+  }
+
   /** GST 5% / TDS 2% breakdown on the agreed rate. */
   private static taxBreakdown(base: number) {
     const gstRate = 0.05
@@ -155,14 +204,11 @@ export class PaymentsService {
     if (trip.status !== 'delivered') {
       throw new BadRequestException('Payout requires trip to be delivered')
     }
-    // Payouts land in a bank account: an admin-verified bank KYC document (or a
-    // legacy bankAccount+IFSC on the transporter profile) is required so money
-    // never moves to an unverified destination.
-    const bankVerified = await this.prisma.kycDocument.count({
-      where: { userId: user.id, kind: 'bank', status: 'approved' },
-    })
-    if (bankVerified === 0 && !(transporter.bankAccount && transporter.ifsc)) {
-      throw new BadRequestException('Verify a bank document (KYC) before payouts can be released')
+    // Payouts land in a bank account: a real destination (bankAccount + IFSC)
+    // must be on the transporter profile — a verified bank KYC doc alone can't
+    // move money, because there's no account/IFSC on it.
+    if (!(transporter.bankAccount && transporter.ifsc)) {
+      throw new BadRequestException('Add your bank account (Settings → Bank) before payouts can be released')
     }
     // Freeze payouts while a dispute is open on this trip, or an approved claim
     // settlement on the linked shipment is still unpaid.
@@ -189,7 +235,7 @@ export class PaymentsService {
       throw new BadRequestException('Delivery proof not yet confirmed by the consignee')
     }
 
-    // Full escrow OR (advance + balance) must be captured; both are valid paths.
+    // Full escrow OR a complete (advance + balance) capture is required.
     const escrow = await this.prisma.payment.findFirst({
       where: { tripId, type: 'escrow', status: 'succeeded' },
     })
@@ -197,8 +243,25 @@ export class PaymentsService {
       this.prisma.payment.findFirst({ where: { tripId, type: 'advance', status: 'succeeded' } }),
       this.prisma.payment.findFirst({ where: { tripId, type: 'balance', status: 'succeeded' } }),
     ])
-    if (!escrow && !(advance && balance)) {
-      throw new BadRequestException('Capture the escrow (or advance + balance) before payout')
+    const agreed = trip.booking?.rate ?? trip.load.fareEstimate ?? null
+    if (escrow) {
+      if (agreed != null && Math.abs(escrow.amount - agreed) > 0.001) {
+        throw new BadRequestException(`Escrow (₹${escrow.amount}) does not match the agreed rate ₹${agreed}`)
+      }
+    } else {
+      if (!advance || !balance) {
+        throw new BadRequestException('Capture the escrow (or advance + balance) before payout')
+      }
+      // The split path must have collected the FULL agreed rate — the platform
+      // never pays out more than it collected.
+      if (agreed != null) {
+        const collected = Math.round((advance.amount + balance.amount) * 100) / 100
+        if (Math.abs(collected - agreed) > 0.001) {
+          throw new BadRequestException(
+            `Split collection (₹${collected}) does not cover the agreed rate ₹${agreed} — capture the remaining balance first`,
+          )
+        }
+      }
     }
 
     const idempotencyKey = `payout_${tripId}`

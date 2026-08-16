@@ -493,14 +493,31 @@ export class AdminService {
     if (payment.type === 'refund') throw new BadRequestException('Already a refund')
     // Only succeeded escrows/payouts can be refunded.
     if (payment.status !== 'succeeded') throw new BadRequestException('Only succeeded payments can be refunded')
+    const refundKey = `refund_${paymentId}`
+    const existingRefund = await this.prisma.payment.findUnique({ where: { idempotencyKey: refundKey } })
+    if (existingRefund) return { refund: existingRefund, alreadyRefunded: true }
+    let refunded = false
+    if (payment.providerRef) {
+      const result = await this.provider.refund({
+        amount: payment.amount,
+        currency: payment.currency ?? 'INR',
+        reference: refundKey,
+        originalProviderRef: payment.providerRef,
+        metadata: { tripId: payment.tripId ?? '', originalIdempotencyKey: payment.idempotencyKey ?? '' },
+      })
+      refunded = result.status === 'succeeded'
+    } else {
+      refunded = true
+    }
     const refund = await this.prisma.payment.create({
       data: {
         tripId: payment.tripId,
         type: 'refund',
         amount: payment.amount,
-        status: 'succeeded',
+        status: refunded ? 'succeeded' : 'failed',
         method: payment.method,
-        idempotencyKey: `refund_${paymentId}`,
+        providerRef: refunded ? `refund-${payment.providerRef ?? paymentId}` : `refund-failed-${payment.providerRef ?? paymentId}`,
+        idempotencyKey: refundKey,
       },
     })
     await this.audit.log({
@@ -508,7 +525,7 @@ export class AdminService {
       action: 'payment.refund',
       resource: `payment:${paymentId}`,
       before: { type: payment.type, amount: payment.amount, status: payment.status },
-      after: { refundId: refund.id },
+      after: { refundId: refund.id, status: refund.status },
     })
     return { refund }
   }
@@ -780,10 +797,20 @@ export class AdminService {
         data: { status: decision, decision, decidedBy: actor.id, decidedAt: new Date(), notes: notes ?? claim.notes },
       })
       if (decision === 'approved' && claim.amount) {
+        // Charge the actually-liable org (insurer / booked carrier), never the
+        // handler that reviewed the claim.
+        const policy = await tx.insurancePolicy.findFirst({
+          where: { shipmentId: claim.shipmentId, status: { in: ['active', 'claimed'] } },
+          select: { insurerId: true },
+        })
+        const booking = policy?.insurerId
+          ? null
+          : await tx.carrierBooking.findFirst({ where: { shipmentId: claim.shipmentId }, select: { carrierId: true } })
+        const liableOrg = policy?.insurerId ?? booking?.carrierId ?? null
         await tx.settlement.create({
           data: {
             shipmentId: claim.shipmentId,
-            payerId: claim.handlerId ?? undefined,
+            payerId: liableOrg ?? undefined,
             payeeId: claim.claimantId ?? undefined,
             type: 'claim',
             amount: claim.amount,
@@ -811,8 +838,12 @@ export class AdminService {
     if (amount <= 0) throw new BadRequestException('Settlement has no amount to collect')
     const idempotencyKey = `settlement_${settlementId}`
     const existing = await this.prisma.payment.findUnique({ where: { idempotencyKey } })
-    if (existing) {
+    if (existing && existing.status === 'succeeded') {
       return { settlement: { ...settlement, status: 'cleared', settledAt: settlement.settledAt }, payment: existing, alreadyPaid: true }
+    }
+    // A failed capture must be retryable — release the idempotency slot.
+    if (existing && existing.status === 'failed') {
+      await this.prisma.payment.delete({ where: { id: existing.id } })
     }
     const result = await this.provider.capture({
       amount,
@@ -833,9 +864,11 @@ export class AdminService {
           status: result.status === 'succeeded' ? 'succeeded' : 'failed',
         },
       })
+      // Only a succeeded capture clears the settlement; a failed capture keeps
+      // it due so the money can actually be collected on a retry.
       const changed = await tx.settlement.update({
         where: { id: settlementId },
-        data: { status: 'cleared', settledAt: new Date() },
+        data: result.status === 'succeeded' ? { status: 'cleared', settledAt: new Date() } : { status: settlement.status },
       })
       return { changed, payment }
     })

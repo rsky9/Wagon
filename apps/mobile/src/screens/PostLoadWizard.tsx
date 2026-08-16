@@ -101,17 +101,25 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
     setSubmitting(true)
     try {
       // Geocode pickup/drop to real coordinates; compute distance from the route.
-      let pickupLat = 17.385, pickupLng = 78.487, dropLat = 13.083, dropLng = 80.27
+      // Never publish with wrong coordinates — block if geocoding fails.
+      let pickupLat: number | null = null, pickupLng: number | null = null, dropLat: number | null = null, dropLng: number | null = null
       let distanceKm = Number(distance)
       const [gPick, gDrop] = await Promise.all([
         api.get<{ found: boolean; coords: [number, number] | null }>(`/reference/geocode?q=${encodeURIComponent(pickup)}`),
         api.get<{ found: boolean; coords: [number, number] | null }>(`/reference/geocode?q=${encodeURIComponent(drop)}`),
       ])
-      if (gPick.found && gPick.coords) { pickupLat = gPick.coords[0]; pickupLng = gPick.coords[1] }
-      if (gDrop.found && gDrop.coords) { dropLat = gDrop.coords[0]; dropLng = gDrop.coords[1] }
+      if (!gPick.found || !gPick.coords || !gDrop.found || !gDrop.coords) {
+        const missing = [gPick.found ? null : 'pickup', gDrop.found ? null : 'drop'].filter(Boolean).join(' and ')
+        throw new Error(`Could not geocode the ${missing} address. Please use a more specific place name.`)
+      }
+      pickupLat = gPick.coords[0]; pickupLng = gPick.coords[1]
+      dropLat = gDrop.coords[0]; dropLng = gDrop.coords[1]
       if (!distanceKm || distanceKm <= 0) {
         const dist = await api.get<{ found: boolean; distanceKm: number | null }>(`/reference/distance?from=${encodeURIComponent(pickup)}&to=${encodeURIComponent(drop)}`)
         if (dist.found && dist.distanceKm) distanceKm = dist.distanceKm
+      }
+      if (!distanceKm || distanceKm <= 0) {
+        throw new Error('Could not estimate the route distance — please enter it manually')
       }
 
       await api.post('/loads', {
@@ -124,7 +132,7 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
         truckType,
         modelId,
         weight: Number(weight),
-        distanceKm: distanceKm || 100,
+        distanceKm,
         materialId: materials.find((m) => m.name === material)?.id ?? materials[0]?.id,
         bodyType,
         loadingReq: loadingReq || undefined,

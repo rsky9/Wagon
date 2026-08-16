@@ -5,6 +5,8 @@ import {
   CaptureResult,
   PayoutInput,
   PayoutResult,
+  RefundInput,
+  RefundResult,
   PaymentProvider,
 } from './payment-provider.service'
 
@@ -93,6 +95,36 @@ export class RazorpayPaymentProvider implements PaymentProvider {
     } catch (e) {
       this.logger.error(`Razorpay payout failed: ${e instanceof Error ? e.message : e}`)
       return { providerRef: `rzp_fail_${input.reference}`, status: 'failed', paidAt: new Date() }
+    }
+  }
+
+  /** Refund a captured payment (payment-id based for orders). */
+  async refund(input: RefundInput): Promise<RefundResult> {
+    try {
+      const paymentId = input.originalProviderRef && input.originalProviderRef.startsWith('pay_')
+        ? input.originalProviderRef
+        : undefined
+      // If we only have an order id, try the refund via the payments list is
+      // not possible; fall back to a payment-id-less refund which Razorpay
+      // requires a payment_id for — surface as failed so it can be retried
+      // with a captured payment id.
+      if (!paymentId) {
+        this.logger.warn(`Razorpay refund requires a payment id, got ${input.originalProviderRef ?? 'none'}`)
+        return { providerRef: `rzp_refund_fail_${input.reference}`, status: 'failed', refundedAt: new Date() }
+      }
+      const refund = await this.call('/refunds', 'POST', {
+        payment_id: paymentId,
+        amount: Math.round(input.amount * 100),
+        notes: input.metadata ?? {},
+      })
+      return {
+        providerRef: String(refund.id ?? `rzp_refund_${input.reference}`),
+        status: 'succeeded',
+        refundedAt: new Date(),
+      }
+    } catch (e) {
+      this.logger.error(`Razorpay refund failed: ${e instanceof Error ? e.message : e}`)
+      return { providerRef: `rzp_refund_fail_${input.reference}`, status: 'failed', refundedAt: new Date() }
     }
   }
 }

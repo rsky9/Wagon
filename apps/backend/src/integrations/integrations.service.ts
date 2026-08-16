@@ -9,6 +9,23 @@ import type { User } from '@prisma/client'
 const CONNECTOR_KINDS = ['tms', 'erp', 'carrier_api', 'tracking', 'customs']
 const SSRF_BLOCKED = ['127.0.0.1', '::1', '0.0.0.0', '169.254.169.254', 'metadata.google.internal', '[::1]']
 
+/** True when a host resolves to (or literally is) a private/reserved range. */
+function isPrivateHost(host: string): boolean {
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (ipv4) {
+    const [a, b] = [Number(ipv4[1]), Number(ipv4[2])]
+    if (a === 10) return true
+    if (a === 172 && b >= 16 && b <= 31) return true
+    if (a === 192 && b === 168) return true
+    if (a === 127) return true
+    if (a === 0) return true
+    if (a === 169 && b === 254) return true
+    if (a >= 224) return true
+    return false
+  }
+  return false
+}
+
 /** HMAC-style sha256 hex for machine credential verification (not reversible). */
 export function sha256(input: string) {
   return createHash('sha256').update(input).digest('hex')
@@ -99,18 +116,25 @@ export class IntegrationsService {
 
   private validateWebhookUrl(url: string) {
     if (!/^https?:\/\//.test(url)) throw new BadRequestException('Webhook URL must be http(s)')
-    const host = (() => {
-      try {
-        return new URL(url).hostname.toLowerCase()
-      } catch {
-        throw new BadRequestException('Invalid webhook URL')
-      }
-    })()
+    let parsed: URL
+    try {
+      parsed = new URL(url)
+    } catch {
+      throw new BadRequestException('Invalid webhook URL')
+    }
+    const host = parsed.hostname.toLowerCase()
     const isProd = this.config.get('NODE_ENV') === 'production'
-    // In dev, localhost is allowed so integrations can be tested against local receivers.
-    const blocked = isProd ? [...SSRF_BLOCKED, 'localhost'] : SSRF_BLOCKED
-    if (blocked.includes(host) || (!isProd && (host.endsWith('.local') || host.endsWith('.internal')))) {
+    // Cloud-metadata + loopback aliases are ALWAYS blocked (SSRF), in dev too.
+    if (SSRF_BLOCKED.includes(host)) {
       throw new BadRequestException('Webhook URL host not allowed')
+    }
+    // localhost is allowed in dev (local test receivers) but blocked in prod.
+    if (isProd && (host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal'))) {
+      throw new BadRequestException('Webhook URL host not allowed')
+    }
+    // Private/reserved IP ranges are always an SSRF risk.
+    if (isPrivateHost(host)) {
+      throw new BadRequestException('Webhook URL host must be publicly reachable')
     }
   }
 

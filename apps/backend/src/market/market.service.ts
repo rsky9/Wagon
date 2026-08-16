@@ -653,11 +653,16 @@ export class MarketService {
         transport: ['transporter', 'shipper'],
       }
       const candidateKinds = kindToOrgKind[request.kind]
-      org = await this.orgAccess.primaryOrg(user)
-      if (candidateKinds) {
-        const matched = await this.orgAccess.orgsOfKind(user, candidateKinds)
-        if (matched.length > 0) org = { id: matched[0]!.id }
+      // No silent fallback to an arbitrary org: quoting a demand kind requires
+      // an org of the matching kind (warehouse demand ← warehouse org, etc.).
+      if (!candidateKinds) {
+        throw new BadRequestException(`No org-kind mapping for demand kind ${request.kind}`)
       }
+      const matched = await this.orgAccess.orgsOfKind(user, candidateKinds)
+      if (matched.length === 0) {
+        throw new BadRequestException(`You need a ${candidateKinds.join('/')} org to quote this ${request.kind} demand`)
+      }
+      org = { id: matched[0]!.id }
     }
     if (request.requesterOrgId === org.id) throw new BadRequestException('Cannot quote your own request')
     const quote = await this.prisma.marketQuote.create({
@@ -1217,14 +1222,26 @@ export class MarketService {
         some: { organizationId: orgId },
       })
       const [tripTx, bookingTx, settlementTx] = await Promise.all([
+        // A delivered trip where the two orgs were the two parties (either side
+        // as supplier or transporter) — symmetric so supplier→transporter and
+        // transporter→supplier ratings both work.
         tx.trip.findFirst({
           where: {
-            status: { in: ['delivered'] },
-            OR: [
-              { transporter: { user: { memberships: memberFilter(giver.id) } } },
-              { load: { supplier: { user: { memberships: memberFilter(giver.id) } } } },
+            status: 'delivered',
+            AND: [
+              {
+                OR: [
+                  { transporter: { user: { memberships: memberFilter(giver.id) } } },
+                  { load: { supplier: { user: { memberships: memberFilter(giver.id) } } } },
+                ],
+              },
+              {
+                OR: [
+                  { transporter: { user: { memberships: memberFilter(subject.id) } } },
+                  { load: { supplier: { user: { memberships: memberFilter(subject.id) } } } },
+                ],
+              },
             ],
-            load: { supplier: { user: { memberships: memberFilter(subject.id) } } },
           },
         }),
         tx.carrierBooking.findFirst({
@@ -1359,13 +1376,19 @@ export class MarketService {
     const service = await this.prisma.carrierService.findUnique({ where: { id: serviceId } })
     if (!service) throw new NotFoundException('Service not found')
     if (service.status !== 'active') throw new BadRequestException('Service is not active')
-    if (service.availableSlots <= 0) throw new BadRequestException('Service is sold out')
     const org = await this.orgAccess.primaryOrg(user)
     const updated = await this.prisma.$transaction(async (tx) => {
-      const next = await tx.carrierService.update({
-        where: { id: serviceId },
-        data: { availableSlots: { decrement: 1 }, ...(service.availableSlots - 1 <= 0 ? { status: 'sold_out' } : {}) },
+      // Atomic slot claim: only a row with slots remaining may be decremented,
+      // so concurrent bookings can never oversell past totalSlots.
+      const claimed = await tx.carrierService.updateMany({
+        where: { id: serviceId, status: 'active', availableSlots: { gt: 0 } },
+        data: { availableSlots: { decrement: 1 } },
       })
+      if (claimed.count === 0) throw new BadRequestException('Service is sold out')
+      const next = await tx.carrierService.findUniqueOrThrow({ where: { id: serviceId } })
+      const updatedService = next.availableSlots <= 0
+        ? await tx.carrierService.update({ where: { id: serviceId }, data: { status: 'sold_out' } })
+        : next
       // Operational bridge: create a canonical Shipment + CarrierBooking so the
       // booking flows into the forwarding/execution model, not just the market.
       const shipment = await tx.shipment.create({
@@ -1393,7 +1416,7 @@ export class MarketService {
           status: 'confirmed',
         },
       })
-      return next
+      return updatedService
     })
     await this.outbox.emit(await this.tx(), {
       eventType: 'MARKET',

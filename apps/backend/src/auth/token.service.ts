@@ -63,8 +63,14 @@ export class TokenService {
   async refresh(refreshToken: string, deviceId?: string, userAgent?: string) {
     const hash = this.hashToken(refreshToken)
     const session = await this.prisma.refreshToken.findUnique({ where: { tokenHash: hash } })
-    if (!session || session.revokedAt || session.expiresAt < new Date()) {
+    if (!session || session.expiresAt < new Date()) {
       throw new UnauthorizedException('Invalid or expired refresh token')
+    }
+    // Reuse of an already-rotated/revoked token is a theft signal: revoke the
+    // whole session family so the legitimate rotated pair also dies.
+    if (session.revokedAt) {
+      await this.revokeFamily(session.userId)
+      throw new UnauthorizedException('Refresh token reuse detected')
     }
     // Device binding: if the session is bound and the device differs, revoke.
     if (session.deviceId && deviceId && session.deviceId !== deviceId) {

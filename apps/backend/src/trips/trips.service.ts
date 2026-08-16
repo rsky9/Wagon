@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { NotificationsService } from '../notifications/notifications.service'
 import { ShipmentProjector } from '../shipments/shipment-projector.service'
 import { MarketService } from '../market/market.service'
+import { PAYMENT_PROVIDER, PaymentProvider } from '../payments/payment-provider.service'
 import type { User, TripStage } from '@prisma/client'
 
 @Injectable()
@@ -18,6 +19,7 @@ export class TripsService {
     private readonly shipments: ShipmentProjector,
     private readonly market: MarketService,
     @Inject(REDIS) private readonly redis: Redis,
+    @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
   ) {}
 
   async quote(loadId: string, amount: number, user: User) {
@@ -73,9 +75,24 @@ export class TripsService {
     if (load.status === 'accepted' || load.status === 'in_transit' || load.status === 'delivered') {
       throw new BadRequestException('Load already assigned')
     }
+    if (load.status !== 'posted') {
+      throw new BadRequestException('Load is not open for acceptance')
+    }
+    // Enforce the bidding deadline: direct acceptance must respect the same
+    // window the marketplace enforces.
+    if (load.biddingDeadline && new Date(load.biddingDeadline) < new Date()) {
+      throw new BadRequestException('Bidding window has closed')
+    }
     const transporter = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
     if (!transporter) {
       throw new BadRequestException('Transporter profile not found — complete onboarding first')
+    }
+    // Invite-only loads: direct acceptance must not bypass the supplier's
+    // shortlist — only shortlisted transporters may accept.
+    if (load.commercialModel === 'invite' && !load.shortlistedTransporters.includes('*')) {
+      if (!load.shortlistedTransporters.includes(transporter.id)) {
+        throw new BadRequestException('Invite-only load — you are not shortlisted')
+      }
     }
     const transporterUser = await this.prisma.user.findUnique({ where: { id: user.id }, select: { transporterVerified: true } })
     if (!transporterUser?.transporterVerified) {
@@ -437,7 +454,8 @@ export class TripsService {
         await tx.load.update({ where: { id: trip.loadId }, data: { status: 'posted' } })
       }
       // Reverse any captured escrow/advance/balance so the supplier gets their
-      // money back (a refund Payment row per captured stage).
+      // money back (a refund Payment row per captured stage). The refund is a
+      // real provider call so captured money actually returns to the payer.
       const captures = await tx.payment.findMany({
         where: { tripId, type: { in: ['escrow', 'advance', 'balance'] }, status: 'succeeded' },
       })
@@ -445,15 +463,30 @@ export class TripsService {
         const refundKey = `refund_${c.idempotencyKey}`
         const existingRefund = await tx.payment.findUnique({ where: { idempotencyKey: refundKey } })
         if (existingRefund) continue
+        // Only make the provider call once the idempotency slot is free.
+        let refunded = false
+        if (c.providerRef) {
+          const result = await this.provider.refund({
+            amount: c.amount,
+            currency: c.currency ?? 'INR',
+            reference: refundKey,
+            originalProviderRef: c.providerRef,
+            metadata: { tripId, originalIdempotencyKey: c.idempotencyKey ?? '' },
+          })
+          refunded = result.status === 'succeeded'
+        } else {
+          // Legacy captures without a provider ref have no money to reverse.
+          refunded = true
+        }
         await tx.payment.create({
           data: {
             tripId,
             type: 'refund',
             amount: c.amount,
             method: c.method,
-            providerRef: `refund-${c.providerRef ?? tripId}`,
+            providerRef: refunded ? `refund-${c.providerRef ?? tripId}` : `refund-failed-${c.providerRef ?? tripId}`,
             idempotencyKey: refundKey,
-            status: 'succeeded',
+            status: refunded ? 'succeeded' : 'failed',
           },
         })
       }

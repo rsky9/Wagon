@@ -10,6 +10,7 @@ interface ChatThread {
   tripId: string
   route: string
   otherName: string
+  otherUserId?: string | null
   lastMessage: string | null
   lastAt: string | null
   messageCount: number

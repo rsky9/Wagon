@@ -30,7 +30,7 @@ export function WalletHeader({ balance, hideable = true, primaryLabel, onPrimary
         </View>
         <View style={styles.balanceRow}>
           <Text style={[styles.balance, hidden ? styles.hidden : null]} numberOfLines={1} adjustsFontSizeToFit>
-            {hidden ? '₹ ••••••' : `₹${balance.toLocaleString('en-IN')}`}
+            {hidden ? '₹ ••••••' : balance < 0 ? `-₹${Math.abs(balance).toLocaleString('en-IN')}` : `₹${balance.toLocaleString('en-IN')}`}
           </Text>
           {hideable && (
             <Pressable onPress={() => setHidden((h) => !h)} hitSlop={8}>

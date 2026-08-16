@@ -31,13 +31,30 @@ export class FinanceService {
     }
   }
 
+  /**
+   * Resolve who is liable for a claim on a shipment: the insurer of an active
+   * policy if one exists, else the carrier booked on the shipment, else null
+   * (platform-funded). Never the org that merely decided/reviewed the claim.
+   */
+  private async resolveClaimPayer(shipmentId: string): Promise<string | null> {
+    const policy = await this.prisma.insurancePolicy.findFirst({
+      where: { shipmentId, status: { in: ['active', 'claimed'] } },
+      select: { insurerId: true },
+    })
+    if (policy?.insurerId) return policy.insurerId
+    const booking = await this.prisma.carrierBooking.findFirst({
+      where: { shipmentId },
+      select: { carrierId: true },
+    })
+    return booking?.carrierId ?? null
+  }
+
   /** Assert the caller can access a shipment (for claims/policies/settlements/risk). */
   private async requireShipmentAccess(user: User, shipmentId: string) {
     return this.orgAccess.assertShipmentAccess(user, shipmentId)
   }
 
-  private async requireClaimAccess(user: User, claimId: string) {
-    const claim = await this.prisma.claim.findUnique({ where: { id: claimId } })
+  private async requireClaimAccess(user: User, claimId: string) {    const claim = await this.prisma.claim.findUnique({ where: { id: claimId } })
     if (!claim) throw new NotFoundException('Claim not found')
     await this.requireShipmentAccess(user, claim.shipmentId)
     return claim
@@ -126,12 +143,15 @@ export class FinanceService {
         where: { id: claimId },
         data: { status: decision, decision, decidedBy: org.id, handlerId: org.id, decidedAt: new Date(), notes: notes ?? claim.notes },
       })
-      // Approved claim -> auto-create a settlement payable to the claimant.
+      // Approved claim -> auto-create a settlement payable to the claimant,
+      // charged to the actually-liable org (insurer / booked carrier), not the
+      // org that happened to decide the claim.
       if (decision === 'approved' && claim.amount) {
+        const liableOrg = await this.resolveClaimPayer(claim.shipmentId)
         await tx.settlement.create({
           data: {
             shipmentId: claim.shipmentId,
-            payerId: org.id,
+            payerId: liableOrg ?? undefined,
             payeeId: claim.claimantId ?? undefined,
             type: 'claim',
             amount: claim.amount,
@@ -194,10 +214,30 @@ export class FinanceService {
     if (input.coverage != null && input.coverage <= 0) throw new BadRequestException('Coverage must be positive')
     // Only an insurer/carrier org can underwrite policies — unless the caller is the
     // shipment owner buying cover for themselves (plan-cover acceptance), in which
-    // case the insurer org is supplied by the marketplace plan.
-    const org = input.insurerOrgId
-      ? { id: input.insurerOrgId }
-      : await this.orgAccess.requireOrgOfKind(user, ['carrier', 'broker', 'other'])
+    // case the insurer org is their own org.
+    let org: { id: string }
+    if (input.insurerOrgId) {
+      const insurerOrg = await this.prisma.organization.findUnique({ where: { id: input.insurerOrgId } })
+      if (!insurerOrg) throw new NotFoundException('Insurer org not found')
+      // Self-cover: the shipment owner may underwrite cover on their own cargo.
+      if (input.insurerOrgId === shipment.ownerOrgId) {
+        if (!(await this.orgAccess.isMember(user, input.insurerOrgId))) {
+          throw new ForbiddenException('Not a member of the insurer org')
+        }
+      } else {
+        // Third-party insurer: must be a carrier/broker/other org and the caller
+        // a member — prevents forging policies under arbitrary orgs.
+        if (!['carrier', 'broker', 'other'].includes(insurerOrg.kind)) {
+          throw new ForbiddenException('Insurer org must be a carrier/broker/other')
+        }
+        if (!(await this.orgAccess.isMember(user, input.insurerOrgId))) {
+          throw new ForbiddenException('Not a member of the insurer org')
+        }
+      }
+      org = { id: input.insurerOrgId }
+    } else {
+      org = await this.orgAccess.requireOrgOfKind(user, ['carrier', 'broker', 'other'])
+    }
     const policy = await this.prisma.$transaction(async (tx) => {
       const created = await tx.insurancePolicy.create({
         data: {
@@ -314,6 +354,36 @@ export class FinanceService {
     }
     if (!(payerId && memberOrgIds.includes(payerId)) && !(input.payeeId && memberOrgIds.includes(input.payeeId))) {
       throw new ForbiddenException('A settlement must involve one of your organizations')
+    }
+    // Integrity: never mint unbounded/duplicate obligations. A freight/commission
+    // settlement may only exist once per (shipment, type, payer, payee) and its
+    // amount is capped at the shipment's agreed rate.
+    if (['freight', 'commission'].includes(input.type)) {
+      const duplicate = await this.prisma.settlement.findFirst({
+        where: {
+          shipmentId: input.shipmentId,
+          type: input.type,
+          payerId,
+          payeeId: input.payeeId ?? null,
+          status: { in: ['due', 'cleared'] },
+        },
+      })
+      if (duplicate) throw new BadRequestException(`A ${input.type} settlement already exists for this pair on this shipment`)
+      // Cap at the agreed booking rate: the shipment's ref is often the source
+      // load id (transport shipments projected from loads).
+      let cap: number | null = null
+      const sourceLoad = await this.prisma.load.findUnique({ where: { id: shipment.ref } })
+      if (sourceLoad) {
+        const booking = await this.prisma.bookingSnapshot.findFirst({
+          where: { trip: { loadId: sourceLoad.id } },
+          orderBy: { confirmedAt: 'desc' },
+          select: { rate: true },
+        })
+        cap = booking?.rate ?? sourceLoad.fareEstimate ?? null
+      }
+      if (cap != null && input.amount != null && input.amount > cap) {
+        throw new BadRequestException(`Settlement cannot exceed the agreed rate ₹${cap}`)
+      }
     }
     const settlement = await this.prisma.$transaction(async (tx) => {
       const created = await tx.settlement.create({

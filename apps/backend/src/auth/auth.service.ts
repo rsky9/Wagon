@@ -97,8 +97,13 @@ export class AuthService {
     if (clean.length === 0 || clean.some((c) => !valid.includes(c))) {
       throw new BadRequestException('Invalid capabilities')
     }
-    // Keep the primary role in sync for backward-compat with guards.
-    const primary = valid.includes(clean[0] as string) ? (clean[0] as User['role']) : user.role
+    // Keep the primary role in sync for backward-compat with guards — but only
+    // from the subset that maps to a valid UserRole (supplier|transporter|driver).
+    // forwarder/warehouse/carrier live purely in `capabilities`; the role enum
+    // has no such values, so writing them to `role` would throw a Prisma error.
+    const ROLE_CAPABILITIES = ['supplier', 'transporter', 'driver']
+    const primaryCap = clean.find((c) => ROLE_CAPABILITIES.includes(c))
+    const primary = (primaryCap ?? user.role) as User['role']
     const updated = await this.prisma.user.update({
       where: { id: user.id },
       data: {
