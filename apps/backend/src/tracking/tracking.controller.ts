@@ -14,10 +14,10 @@ export class TrackingController {
   @Roles('transporter')
   ingest(
     @Param('tripId') tripId: string,
-    @Body() body: { lat: number; lng: number; speedKmh?: number },
+    @Body() body: { lat: number; lng: number; speedKmh?: number; simulated?: boolean },
     @CurrentUser() user: User,
   ) {
-    return this.tracking.ingest(tripId, body.lat, body.lng, body.speedKmh, user)
+    return this.tracking.ingest(tripId, body.lat, body.lng, body.speedKmh, user, body.simulated === true)
   }
 
   @Get(':tripId')

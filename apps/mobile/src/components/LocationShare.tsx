@@ -14,11 +14,15 @@ interface Props {
   tripId: string
 }
 
+// Simulated tracking is ONLY allowed for explicit dev/demo builds — never for
+// production, where a fabricated truck position would mislead the supplier.
+const ALLOW_SIMULATED = process.env.EXPO_PUBLIC_ALLOW_SIMULATED_TRACKING === 'true'
+
 /**
  * Continuously shares the device's location with the backend while an
- * in-transit trip is active. If location permission is unavailable (e.g.
- * simulator), falls back to simulated movement along a plausible route so
- * tracking still works in demos.
+ * in-transit trip is active. When location permission is unavailable it only
+ * falls back to simulated movement in dev/demo builds, and every simulated
+ * point is tagged `simulated` so the supplier UI can render it as such.
  */
 export function LocationShare({ tripId }: Props) {
   const theme = useTheme()
@@ -42,15 +46,16 @@ export function LocationShare({ tripId }: Props) {
     let watch: Location.LocationSubscription | null = null
     let timer: ReturnType<typeof setInterval> | null = null
 
-    const send = async (lat: number, lng: number, speed?: number | null) => {
+    const send = async (lat: number, lng: number, speed?: number | null, simulated = false) => {
       try {
         await api.post(`/tracking/${tripId}/location`, {
           lat,
           lng,
           speedKmh: speed,
+          simulated,
         })
         if (!cancelled) {
-          setLastSent(`${lat.toFixed(4)}, ${lng.toFixed(4)}`)
+          setLastSent(`${lat.toFixed(4)}, ${lng.toFixed(4)}${simulated ? ' (simulated)' : ''}`)
           setError(null)
         }
       } catch (e) {
@@ -64,7 +69,7 @@ export function LocationShare({ tripId }: Props) {
       timer = setInterval(() => {
         const pt = SIM_ROUTE[simIndex.current % SIM_ROUTE.length]
         simIndex.current += 1
-        void send(pt[0], pt[1], 45 + (simIndex.current % 3) * 8)
+        void send(pt[0], pt[1], 45 + (simIndex.current % 3) * 8, true)
       }, 3000)
     }
 
@@ -73,7 +78,11 @@ export function LocationShare({ tripId }: Props) {
       if (cancelled) return
       if (status !== 'granted') {
         setPermission('denied')
-        startSimulation()
+        if (ALLOW_SIMULATED) {
+          startSimulation()
+        } else {
+          setError('Location permission denied — live tracking is off.')
+        }
         return
       }
       setPermission('granted')
@@ -99,7 +108,9 @@ export function LocationShare({ tripId }: Props) {
             ? 'Requesting location…'
             : permission === 'granted'
               ? 'Sharing live location'
-              : 'Simulated tracking (no permission)'}
+              : ALLOW_SIMULATED
+                ? 'Simulated tracking (no permission)'
+                : 'Location permission denied'}
         </Text>
       </View>
       {lastSent && <Text style={[styles.last, { color: theme.mutedForeground }]}>Last update: {lastSent}</Text>}

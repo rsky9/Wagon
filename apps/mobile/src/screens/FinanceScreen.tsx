@@ -33,7 +33,7 @@ export function FinanceScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
   }, [])
 
   const earnings = entries.filter((e) => e.type === 'payout' && e.status === 'succeeded').reduce((s, e) => s + e.amount, 0)
-  const pending = entries.filter((e) => e.status !== 'succeeded').reduce((s, e) => s + Math.abs(e.amount), 0)
+  const pending = entries.filter((e) => e.status === 'pending' || e.status === 'processing').reduce((s, e) => s + Math.abs(e.amount), 0)
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>

@@ -16,7 +16,7 @@ export class TrackingService {
   ) {}
 
   /** Transporter shares a live location point for an in-transit trip. */
-  async ingest(tripId: string, lat: number, lng: number, speedKmh: number | undefined, user: User) {
+  async ingest(tripId: string, lat: number, lng: number, speedKmh: number | undefined, user: User, simulated = false) {
     if (!isFinite(lat) || !isFinite(lng)) {
       throw new BadRequestException('Invalid coordinates')
     }
@@ -41,7 +41,7 @@ export class TrackingService {
     }
 
     const record = await this.prisma.tripLocation.create({
-      data: { tripId, lat, lng, speedKmh: speedKmh ?? null },
+      data: { tripId, lat, lng, speedKmh: speedKmh ?? null, simulated },
     })
 
     // Geofence evaluation: distance from pickup/drop.

@@ -102,26 +102,34 @@ export class GamificationService {
     const fresh = eligible - user.xpConverted
     if (fresh <= 0) return
     const amount = Math.round(fresh * XP_CASH_RATE * 100) / 100
-    await this.prisma.user.update({
-      where: { id: userId },
+    // Atomic: only convert the portion of XP not yet converted, and only once
+    // per concurrent caller — a conditional update prevents double-award.
+    const changed = await this.prisma.user.updateMany({
+      where: { id: userId, xpConverted: { lt: eligible } },
       data: { cashbackBalance: { increment: amount }, xpConverted: eligible },
     })
+    if (changed.count === 0) return
     await this.prisma.walletTransaction.create({
       data: { userId, kind: 'xp_conversion', amount, note: `${fresh} XP converted to cash` },
     })
   }
 
-  /** Explicitly complete a quest (idempotent). Awards XP + badge. */
+  /** Explicitly complete a quest (idempotent). Awards XP + badge ONCE. */
   async completeQuest(questId: string, user: User) {
     const role = user.role === 'supplier' ? 'supplier' : 'transporter'
     const quest = (QUESTS[role] ?? []).find((q) => q.id === questId)
     if (!quest) throw new NotFoundException('Quest not found')
 
-    await this.prisma.userQuest.upsert({
-      where: { userId_questId: { userId: user.id, questId } },
-      update: { completedAt: new Date() },
-      create: { userId: user.id, questId, completedAt: new Date() },
+    // Atomic claim: only the first completion awards XP/badge — a repeat call
+    // (or a concurrent double-fire) must not re-mint.
+    const claimed = await this.prisma.userQuest.updateMany({
+      where: { userId: user.id, questId, completedAt: null },
+      data: { completedAt: new Date() },
     })
+    if (claimed.count === 0) {
+      // Already completed — idempotent no-op (still return the fresh state).
+      return this.state(user)
+    }
     await this.prisma.user.update({ where: { id: user.id }, data: { xp: { increment: quest.xp } } })
     if (quest.badge) {
       await this.prisma.userBadge.upsert({
@@ -147,6 +155,11 @@ export class GamificationService {
     if (!supplier?.onboarded && !transporter?.onboarded) {
       throw new BadRequestException('Complete onboarding first')
     }
+    // Idempotent: the badge may only be awarded once — no repeat XP minting.
+    const existingBadge = await this.prisma.userBadge.findUnique({
+      where: { userId_badgeId: { userId: user.id, badgeId: badge } },
+    })
+    if (existingBadge) return this.state(user)
     await this.prisma.user.update({ where: { id: user.id }, data: { xp: { increment: amount } } })
     await this.prisma.userBadge.upsert({
       where: { userId_badgeId: { userId: user.id, badgeId: badge } },

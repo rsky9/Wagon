@@ -39,8 +39,9 @@ export function createApiClient({ baseUrl, getToken, onUnauthorized }: ApiClient
     if (res.status === 401 && onUnauthorized) {
       const refreshed = await onUnauthorized()
       if (refreshed) {
-        // Retry once with the rotated access token.
-        const retryHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+        // Retry once with the rotated access token, KEEPING any step-up /
+        // action headers (x-action-token) that guard money actions.
+        const retryHeaders: Record<string, string> = { ...headers }
         const newToken = getToken?.()
         if (newToken) retryHeaders.Authorization = `Bearer ${newToken}`
         const retry = await fetch(`${baseUrl}${path}`, {

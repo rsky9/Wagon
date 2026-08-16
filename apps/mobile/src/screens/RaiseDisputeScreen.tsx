@@ -17,6 +17,7 @@ export function RaiseDisputeScreen({ onBack, onSubmitted }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
   const [tripId, setTripId] = useState('')
+  const [type, setType] = useState('')
   const [subject, setSubject] = useState('')
   const [evidence, setEvidence] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -27,12 +28,14 @@ export function RaiseDisputeScreen({ onBack, onSubmitted }: Props) {
   }
 
   const submit = async () => {
-    if (!tripId.trim() || !subject.trim()) { Alert.alert(t('ui.required'), 'Enter trip ID and describe the issue'); return }
+    if (!tripId.trim() || !type.trim()) { Alert.alert(t('ui.required'), 'Enter trip ID and pick an issue type'); return }
+    if (!subject.trim()) { Alert.alert(t('ui.required'), 'Describe the issue'); return }
     setSubmitting(true)
     try {
       await api.post('/disputes', {
         tripId: tripId.trim(),
         subject: subject.trim(),
+        issueType: type.trim(),
         evidenceKeys: evidence.trim() ? [evidence.trim()] : undefined,
       })
       Alert.alert(t('ui.raised'), 'Our team will review the dispute with the full trip timeline.', [{ text: 'OK', onPress: onSubmitted }])
@@ -60,16 +63,16 @@ export function RaiseDisputeScreen({ onBack, onSubmitted }: Props) {
 
         <Field label={t('raiseDispute.issueType')} theme={theme}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-            {TYPES.map((t) => (
-              <Pressable key={t} onPress={() => setSubject(t)} style={{ borderRadius: radius.full, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: subject === t ? theme.primary : theme.background, borderColor: subject === t ? theme.primary : theme.border }}>
-                <Text style={{ color: subject === t ? '#fff' : theme.mutedForeground, fontSize: 12, fontWeight: '600' }}>{t}</Text>
+            {TYPES.map((tt) => (
+              <Pressable key={tt} onPress={() => setType(tt)} style={{ borderRadius: radius.full, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: type === tt ? theme.primary : theme.background, borderColor: type === tt ? theme.primary : theme.border }}>
+                <Text style={{ color: type === tt ? '#fff' : theme.mutedForeground, fontSize: 12, fontWeight: '600' }}>{tt}</Text>
               </Pressable>
             ))}
           </View>
         </Field>
 
         <Field label={t('raiseDispute.description')} theme={theme}>
-          <TextInput style={[inputStyle, { minHeight: 80, textAlignVertical: 'top' }]} value={subject && !TYPES.includes(subject) ? subject : ''} onChangeText={setSubject} placeholder={t('raiseDispute.describe')} multiline placeholderTextColor={theme.mutedForeground + '88'} />
+          <TextInput style={[inputStyle, { minHeight: 80, textAlignVertical: 'top' }]} value={subject} onChangeText={setSubject} placeholder={t('raiseDispute.describe')} multiline placeholderTextColor={theme.mutedForeground + '88'} />
         </Field>
 
         <Field label={t('raiseDispute.evidence')} theme={theme}>

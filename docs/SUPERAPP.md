@@ -350,6 +350,35 @@ A fourth deep audit of money routes, sessions and mobile flows surfaced and fixe
 - **Wallet negatives render correctly** (`-₹…`); ShipmentDetail propose-plan / forward-order / file-claim prompt for real values (were hardcoded ₹1000s creating fake ledger rows).
 - Deep-linked loads' **Bid button works** (was a no-op); PostLoadWizard **blocks publish on geocode failure** (was silently substituting Hyderabad→Chennai coords); KYC quest XP only on **identity approval** (was any single doc); invoices fetch in parallel; Bank screen has loading/error/retry.
 
+### 10.6 Delivered: mint-proof economy + money-loop repair + tracking honesty
+
+A fifth deep audit of the economy, money loop, and tracking surfaced and fixed:
+
+**Economy / mint-proofing**
+- **Gamification XP/cash can no longer be minted**: quest completion awards XP only on the *first* completion (atomic `updateMany` claim); the onboarding badge award is idempotent; `convertXpToCash` uses a conditional update so concurrent `state()` calls can't double-convert XP→cash.
+- **Outbox relay actually retries**: `failed` messages are reclaimed and re-delivered (were parked forever); enqueue happens **before** the row is marked published so a crash re-delivers instead of losing the event (at-least-once).
+
+**Security**
+- **Webhook SSRF at delivery**: every dispatch resolves the host and rejects private/reserved IPs (v4 + v6, DNS-rebinding guard) and **never follows redirects** (a public URL can't 302 to `169.254.169.254`).
+- **Masked-number leak fixed**: the relay number is now an opaque hash of the user id — the old format revealed 6 digits of the target's real mobile.
+- `trips.accept` surfaces the unique-constraint race as a clean "already assigned" error (was an unhandled 500).
+
+**Data integrity**
+- **Plan `select` is race-safe** (atomic claim; two concurrent selects can't both win).
+- **Cargo split enforces conservation**: parts must be positive and sum to the parent's weight/pieces; already-split units can't be split again.
+- **Notification unread count is the real total** (was counting only within the last 50).
+- Chat threads capped at 50 trips + composite `(tripId, createdAt)` index (was an unbounded N+1).
+- Market `decompose` validates every leg's origin up front (was a 500 on a missing origin).
+
+**Mobile — the core money loop is repaired**
+- **Escrow/advance/balance payments now step-up** (fresh action OTP + optional biometric) as the backend requires, and the pay button is **supplier-gated** — previously the only money-in path failed 100% and payouts were permanently frozen.
+- **Split payments are payable**: when a booking has advance/balance terms, the screen shows stage-specific "Pay advance" / "Pay balance" buttons.
+- **api-client retries keep `x-action-token`** on the 401→refresh path (a step-up'd money action no longer loses its token and fails with "session expired").
+- **Tracking honesty**: simulated points are tagged `simulated` end-to-end (the supplier sees "SIMULATED", not LIVE) and simulation is gated behind an explicit dev flag; LocationShare only mounts for the assigned transporter.
+- **Drivers can execute trips**: `/trips/mine` now returns driver-assigned trips.
+- **Passbook is role-aware**: suppliers see escrow/advance/balance as out and refunds as in; transporters see payouts as in — no more cross-side negative balances. Transporter trip money shows the **agreed booking rate**, not the fare estimate.
+- Raise-Dispute splits issue-type from description; Finance "pending" excludes failed; KYC quest XP fires once per session; negotiation accept asks for confirmation; OTP error uses the right i18n key.
+
 ---
 
 ## Research sources

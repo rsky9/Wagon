@@ -403,12 +403,29 @@ export class FoundationService {
       throw new ForbiddenException('No access to this cargo unit')
     }
     if (!parts.length) throw new BadRequestException('Need at least one part')
+    // Conservation + sanity: no zero/negative parts, no grandchildren, and the
+    // parts must sum back to the parent's weight/pieces (epsilon for floats).
+    if (unit.status === 'split' || unit.status === 'consolidated') {
+      throw new BadRequestException(`Cannot split a ${unit.status} unit`)
+    }
+    const EPS = 1e-6
+    const sumWeight = parts.reduce((s, p) => s + (p.weightKg ?? 0), 0)
+    const sumPieces = parts.reduce((s, p) => s + (p.pieces ?? 0), 0)
+    if (parts.some((p) => (p.weightKg != null && p.weightKg <= 0) || (p.volumeM3 != null && p.volumeM3 <= 0) || (p.pieces != null && p.pieces <= 0))) {
+      throw new BadRequestException('Every part must be positive')
+    }
+    if (unit.weightKg != null && Math.abs(sumWeight - unit.weightKg) > EPS) {
+      throw new BadRequestException(`Parts must sum to the parent weight ${unit.weightKg} kg (got ${Math.round(sumWeight * 100) / 100})`)
+    }
+    if (unit.pieces != null && Math.abs(sumPieces - unit.pieces) > EPS) {
+      throw new BadRequestException(`Parts must sum to the parent piece count ${unit.pieces} (got ${Math.round(sumPieces)})`)
+    }
     const children = await this.prisma.$transaction(async (tx) => {
       const created = []
       for (const part of parts) {
         created.push(await tx.cargoUnit.create({
           data: {
-            ref: `CU-${Date.now().toString(36).toUpperCase()}`,
+            ref: `CU-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`,
             kind: unit.kind,
             weightKg: part.weightKg ?? null,
             volumeM3: part.volumeM3 ?? null,

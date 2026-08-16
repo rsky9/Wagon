@@ -62,7 +62,7 @@ export class OutboxRelay implements OnModuleInit {
         UPDATE "OutboxMessage" SET status = 'publishing', attempts = attempts + 1, "claimedAt" = now()
         WHERE id IN (
           SELECT id FROM "OutboxMessage"
-          WHERE status = 'pending' AND ("nextRetryAt" IS NULL OR "nextRetryAt" <= now())
+          WHERE status IN ('pending', 'failed') AND ("nextRetryAt" IS NULL OR "nextRetryAt" <= now())
           ORDER BY "createdAt" ASC
           LIMIT ${BATCH_SIZE}
           FOR UPDATE SKIP LOCKED
@@ -82,13 +82,15 @@ export class OutboxRelay implements OnModuleInit {
     for (const msg of batch) {
       // Per-message error isolation: one failure must not strand the batch.
       try {
-        // 1. Mark the ledger row published (crash-safe: event is durably recorded).
+        // 1. Fan out to webhooks FIRST (idempotent by outbox message id), so a
+        //    crash after this point leaves the row 'publishing' — which the
+        //    stale-claim sweep reclaims and re-delivers (at-least-once).
+        await this.webhooks?.enqueue(msg.eventType, msg.payload, msg.orgId, msg.id)
+        // 2. Only mark the ledger row published once delivery is enqueued.
         await this.prisma.outboxMessage.update({
           where: { id: msg.id },
           data: { status: 'published', publishedAt: new Date() },
         })
-        // 2. Fan out to webhooks (idempotent by outbox message id).
-        await this.webhooks?.enqueue(msg.eventType, msg.payload, msg.orgId, msg.id)
         this.logger.log(`[outbox] ${msg.aggregateType}:${msg.aggregateId} → ${msg.eventType}`)
       } catch (e) {
         const error = e instanceof Error ? e.message : String(e)

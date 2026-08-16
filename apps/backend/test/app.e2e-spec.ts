@@ -1168,7 +1168,7 @@ describe('Wagon API (e2e)', () => {
         .set('Authorization', `Bearer ${trToken}`)
         .send({ targetUserId: drvUserId })
         .expect(201)
-      expect(res.body.maskedNumber).toMatch(/^9180/)
+      expect(res.body.maskedNumber).toMatch(/^91\d{8}$/)
     })
 
     it('rejects masked number for self', async () => {

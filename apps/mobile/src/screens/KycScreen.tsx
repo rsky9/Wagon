@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   StyleSheet,
   Text,
@@ -87,11 +87,16 @@ export function KycScreen({ onBack }: Props) {
   }
 
   // Only award the KYC quest XP once identity is ACTUALLY verified (pan+aadhar
-  // approved), never for a single document upload.
+  // approved), never for a single document upload. Fires once per session.
+  const kycQuestAwarded = useRef(false)
   useEffect(() => {
+    if (kycQuestAwarded.current) return
     const identity = ['pan', 'aadhar']
     const approvedAll = identity.every((k) => docs.some((d) => d.kind === k && d.status === 'approved'))
-    if (approvedAll) void completeQuestWithXp('kyc', 60)
+    if (approvedAll) {
+      kycQuestAwarded.current = true
+      void completeQuestWithXp('kyc', 60)
+    }
   }, [docs])
 
   const statusFor = (kind: string) => docs.find((d) => d.kind === kind)?.status

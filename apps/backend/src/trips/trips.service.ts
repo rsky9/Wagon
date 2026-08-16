@@ -112,16 +112,25 @@ export class TripsService {
       throw new BadRequestException('You cannot accept your own load')
     }
 
-    const trip = await this.prisma.$transaction(async (tx) => {
-      const existing = await tx.trip.findUnique({ where: { loadId } })
-      if (existing) throw new BadRequestException('Load already assigned to a trip')
-      const created = await tx.trip.create({
-        data: { loadId, transporterId: transporter.id },
+    let trip: { id: string }
+    try {
+      trip = await this.prisma.$transaction(async (tx) => {
+        const existing = await tx.trip.findUnique({ where: { loadId } })
+        if (existing) throw new BadRequestException('Load already assigned to a trip')
+        const created = await tx.trip.create({
+          data: { loadId, transporterId: transporter.id },
+        })
+        await tx.load.update({ where: { id: loadId }, data: { status: 'accepted' } })
+        await tx.quote.deleteMany({ where: { loadId } })
+        return created
       })
-      await tx.load.update({ where: { id: loadId }, data: { status: 'accepted' } })
-      await tx.quote.deleteMany({ where: { loadId } })
-      return created
-    })
+    } catch (e: unknown) {
+      // Concurrent accepts race on the unique Trip.loadId — surface cleanly.
+      if ((e as { code?: string })?.code === 'P2002') {
+        throw new BadRequestException('Load already assigned to a trip')
+      }
+      throw e
+    }
 
     const supplier = await this.prisma.supplier.findUnique({
       where: { id: load.supplierId },
@@ -531,7 +540,7 @@ export class TripsService {
             { load: { supplierId: supplier?.id ?? '__none__' } },
           ],
         },
-        include: { load: { include: { material: true } } },
+        include: { load: { include: { material: true } }, booking: true },
         orderBy: { createdAt: 'desc' },
       })
       return { trips }
@@ -540,7 +549,7 @@ export class TripsService {
       const transporter = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
       const trips = await this.prisma.trip.findMany({
         where: { transporterId: transporter?.id },
-        include: { load: { include: { material: true } } },
+        include: { load: { include: { material: true } }, booking: true },
         orderBy: { createdAt: 'desc' },
       })
       return { trips }
@@ -549,7 +558,18 @@ export class TripsService {
       const supplier = await this.prisma.supplier.findUnique({ where: { userId: user.id } })
       const trips = await this.prisma.trip.findMany({
         where: { load: { supplierId: supplier?.id } },
-        include: { load: { include: { material: true } } },
+        include: { load: { include: { material: true } }, booking: true },
+        orderBy: { createdAt: 'desc' },
+      })
+      return { trips }
+    }
+    // Driver-only users (matched by mobile on the Driver table): their assigned
+    // trips must surface so the driver can execute them.
+    const driver = await this.prisma.driver.findFirst({ where: { mobile: user.mobile } })
+    if (driver) {
+      const trips = await this.prisma.trip.findMany({
+        where: { driverId: driver.id },
+        include: { load: { include: { material: true } }, booking: true },
         orderBy: { createdAt: 'desc' },
       })
       return { trips }

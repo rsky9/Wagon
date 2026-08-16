@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common'
+import { createHash } from 'node:crypto'
 import { PrismaService } from '../prisma/prisma.service'
 import type { User } from '@prisma/client'
 
@@ -54,8 +55,11 @@ export class TrustService {
     }
     const target = await this.prisma.user.findUnique({ where: { id: targetUserId } })
     if (!target) throw new NotFoundException('User not found')
-    // Masked relay number (mock). In production this would route via a telephony relay.
-    const masked = `9180${String(target.id.length % 10)}${target.mobile.slice(-6)}`
-    return { maskedNumber: masked, expiresIn: 300 }
+    // Opaque relay number derived from the target's id — NEVER reveals digits of
+    // the real mobile. In production this routes via a telephony relay; the mock
+    // maps back to the user server-side.
+    const digest = createHash('sha256').update(`relay:${targetUserId}`).digest('hex')
+    const digits = (parseInt(digest.slice(0, 8), 16) % 1000000).toString().padStart(6, '0')
+    return { maskedNumber: `9170${digits}`, expiresIn: 300 }
   }
 }

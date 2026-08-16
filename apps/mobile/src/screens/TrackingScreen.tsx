@@ -25,6 +25,7 @@ interface LocationPoint {
   lat: number
   lng: number
   speedKmh?: number | null
+  simulated?: boolean
   recordedAt: string
 }
 
@@ -114,7 +115,9 @@ export function TrackingScreen({ tripId, onBack }: Props) {
             <View style={styles.liveRow}>
               <View style={[styles.liveDot, { backgroundColor: connected ? theme.success : theme.warning }]} />
               <Text style={[styles.liveLabel, { color: connected ? theme.success : theme.warning }]}>
-                {connected ? 'LIVE' : 'LAST UPDATE ' + new Date(latest.recordedAt).toLocaleTimeString()}
+                {latest.simulated
+                  ? 'SIMULATED'
+                  : connected ? 'LIVE' : 'LAST UPDATE ' + new Date(latest.recordedAt).toLocaleTimeString()}
               </Text>
             </View>
             <Text style={[styles.coords, { color: theme.foreground }, { fontVariant: ['tabular-nums'] }]}>

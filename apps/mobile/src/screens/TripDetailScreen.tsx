@@ -15,6 +15,8 @@ import { api } from '../config'
 import type { Load } from '@wagon/contracts'
 import { useI18n } from '@wagon/i18n'
 import { alertPrompt } from '../components/Prompt'
+import { useStepUp } from '../hooks/useStepUp'
+import { useAuth } from '../auth'
 interface TripInfo {
   id: string
   status: string
@@ -42,6 +44,10 @@ const TONE: Record<string, StatusTone> = {
 export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipment }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
+  const { session } = useAuth()
+  const caps = session?.profile.capabilities?.length ? session.profile.capabilities : [session?.profile.role ?? '']
+  const { stepUp } = useStepUp()
+  const isSupplier = caps.includes('supplier')
   const [trip, setTrip] = useState<TripInfo | null>(null)
   const [snapshot, setSnapshot] = useState<{ rate: number; advanceAmount?: number | null; balanceAmount?: number | null; paymentTerms?: string | null } | null>(null)
   const [loading, setLoading] = useState(true)
@@ -95,17 +101,38 @@ export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipme
     )
   }
 
-  const canPay = (trip.status === 'accepted' || trip.status === 'in_transit') && !paying
+  const canPay = isSupplier && (trip.status === 'accepted' || trip.status === 'in_transit') && !paying
   const canRate = trip.status === 'delivered' && !trip.rating
 
   const payEscrow = async () => {
+    // Releasing a payment is a serious money action — verify identity with a
+    // fresh OTP (+ biometric when enabled) before the backend will accept it.
+    const token = await stepUp('capture_escrow')
+    if (!token) return
     setPaying(true)
     try {
       // Pay the AGREED booking rate (the snapshot), not the estimated fare —
       // the backend rejects any amount that differs from the locked rate.
       const amount = snapshot?.rate ?? trip.load.fareEstimate
-      await api.post('/payments/escrow', { tripId: trip.id, amount })
+      await api.post('/payments/escrow', { tripId: trip.id, amount }, { 'x-action-token': token })
       Alert.alert(t('ui.paid'), `Booking amount ${formatINR(amount)} captured`)
+    } catch (e) {
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Payment failed')
+    } finally {
+      setPaying(false)
+    }
+  }
+
+  // Split-payment path: pay the advance or the balance stage (each verified
+  // with a fresh action OTP). The backend requires advance+balance to complete
+  // the agreed rate before payout.
+  const payStage = async (stage: 'advance' | 'balance', amount: number) => {
+    const token = await stepUp('capture_escrow')
+    if (!token) return
+    setPaying(true)
+    try {
+      await api.post('/payments/escrow', { tripId: trip.id, amount, stage }, { 'x-action-token': token })
+      Alert.alert(t('ui.paid'), `${stage === 'advance' ? 'Advance' : 'Balance'} ${formatINR(amount)} captured`)
     } catch (e) {
       Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Payment failed')
     } finally {
@@ -137,7 +164,7 @@ export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipme
     alertPrompt(`Enter ${kind} OTP`, `Ask the transporter for the ${kind} code`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Verify', onPress: (code?: string) => {
       api.post(`/trips/${trip.id}/otp/${kind}/verify`, { code: code ?? '' })
         .then(() => { Alert.alert(t('ui.verified'), `${kind} confirmed`); setTrip({ ...trip }) })
-        .catch((e) => Alert.alert(t('ui.invalidAmount'), e instanceof Error ? e.message : 'Wrong code'))
+        .catch((e) => Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Wrong code'))
     } }])
   }
 
@@ -218,11 +245,29 @@ export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipme
         )}
 
         {canPay && (
-          <Button
-            label={`Pay booking amount · ${formatINR(snapshot?.rate ?? trip.load.fareEstimate)}`}
-            onPress={payEscrow}
-            loading={paying}
-          />
+          <View style={{ gap: spacing.sm }}>
+            {snapshot?.advanceAmount ? (
+              <>
+                <Button
+                  label={`Pay advance · ${formatINR(snapshot.advanceAmount)}`}
+                  onPress={() => payStage('advance', snapshot.advanceAmount!)}
+                  loading={paying}
+                />
+                <Button
+                  label={`Pay balance · ${formatINR(snapshot.balanceAmount ?? Math.max(0, (snapshot.rate ?? trip.load.fareEstimate) - (snapshot.advanceAmount ?? 0)))}`}
+                  onPress={() => payStage('balance', snapshot.balanceAmount ?? Math.max(0, (snapshot.rate ?? trip.load.fareEstimate) - (snapshot.advanceAmount ?? 0)))}
+                  loading={paying}
+                  variant="secondary"
+                />
+              </>
+            ) : (
+              <Button
+                label={`Pay booking amount · ${formatINR(snapshot?.rate ?? trip.load.fareEstimate)}`}
+                onPress={payEscrow}
+                loading={paying}
+              />
+            )}
+          </View>
         )}
 
         {canRate && (

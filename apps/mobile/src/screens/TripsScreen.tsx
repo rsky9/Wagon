@@ -268,7 +268,7 @@ function TripCard({
         {formatWeight(trip.load.weight)} · {trip.load.distanceKm} km · {trip.load.material?.name ?? '—'}
       </Text>
 
-      {trip.status === 'in_transit' && <LocationShare tripId={trip.id} />}
+      {canHaul && trip.status === 'in_transit' && <LocationShare tripId={trip.id} />}
 
       <View style={[styles.stepper, { backgroundColor: theme.muted, borderRadius: radius.lg }]}>
         <StatusStepper steps={steps} />

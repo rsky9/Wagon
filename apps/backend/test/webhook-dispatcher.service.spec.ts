@@ -16,7 +16,7 @@ describe('WebhookDispatcher', () => {
       webhookDelivery: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
       $transaction: jest.fn(),
     }
-    service = new WebhookDispatcher(prisma)
+    service = new WebhookDispatcher(prisma, { get: jest.fn().mockReturnValue('test') } as any)
   })
 
   describe('enqueue', () => {

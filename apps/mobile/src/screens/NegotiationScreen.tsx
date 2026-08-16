@@ -65,8 +65,20 @@ export function NegotiationScreen({ loadId, onBack }: Props) {
       } }])
       return
     }
+    if (action === 'accept') {
+      // Accepting a counteroffer locks a binding rate — confirm first.
+      Alert.alert('Accept this offer?', `This locks the negotiated rate of ${formatINR(offer.amount)} for the trip.`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Accept', onPress: () => {
+          api.post(`/bidding/offer/${offer.id}/respond`, { action })
+            .then(() => { Alert.alert('Accepted', 'Terms agreed'); fetch() })
+            .catch((e) => Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed'))
+        } },
+      ])
+      return
+    }
     api.post(`/bidding/offer/${offer.id}/respond`, { action })
-      .then(() => { Alert.alert(action === 'accept' ? 'Accepted' : 'Rejected', action === 'accept' ? 'Terms agreed' : 'Offer declined'); fetch() })
+      .then(() => { Alert.alert('Rejected', 'Offer declined'); fetch() })
       .catch((e) => Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed'))
   }
 

@@ -1,9 +1,44 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
 import { createHmac } from 'node:crypto'
+import { lookup as dnsLookup } from 'node:dns/promises'
 import { PrismaService } from '../prisma/prisma.service'
 
 const MAX_ATTEMPTS = 3
 const MAX_DELIVERIES_PER_CYCLE = 20
+
+/** True when an IP (v4 or v6) is private/reserved/loopback/link-local — never an SSRF target. */
+function isPrivateIp(address: string): boolean {
+  const v4 = address.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])]
+    if (a === 10) return true
+    if (a === 172 && b >= 16 && b <= 31) return true
+    if (a === 192 && b === 168) return true
+    if (a === 127) return true
+    if (a === 0) return true
+    if (a === 169 && b === 254) return true
+    if (a >= 224) return true
+    return false
+  }
+  // IPv6: loopback, link-local, unique-local, IPv4-mapped loopback.
+  const v6 = address.toLowerCase()
+  if (v6 === '::1' || v6 === '::' || v6.startsWith('fe80:') || v6.startsWith('fc') || v6.startsWith('fd')) return true
+  if (v6.startsWith('::ffff:127.') || v6.startsWith('::ffff:10.') || v6.startsWith('::ffff:172.') || v6.startsWith('::ffff:192.168.')) return true
+  return false
+}
+
+/** Resolve a hostname and ensure every address is publicly routable (DNS-rebinding guard). */
+async function assertPublicHost(hostname: string): Promise<void> {
+  try {
+    const addresses = await dnsLookup(hostname, { all: true })
+    for (const a of addresses) {
+      if (isPrivateIp(a.address)) throw new Error(`resolves to private address ${a.address}`)
+    }
+  } catch (e) {
+    throw new Error(`webhook host not publicly reachable: ${e instanceof Error ? e.message : e}`)
+  }
+}
 
 /**
  * Webhook fan-out (Phase 5): after the outbox relay publishes a message, matching
@@ -17,7 +52,7 @@ export class WebhookDispatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WebhookDispatcher.name)
   private running = false
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly config: ConfigService) {}
 
   onModuleInit() {
     this.running = true
@@ -101,12 +136,33 @@ export class WebhookDispatcher implements OnModuleInit, OnModuleDestroy {
       let ok = false
       let responseStatus: number | null = null
       try {
+        // SSRF guard at DELIVERY time: resolve the host and reject private
+        // addresses (defends against DNS rebinding between validation and send).
+        let urlObj: URL
+        try {
+          urlObj = new URL(sub.url)
+        } catch {
+          throw new Error('invalid webhook url')
+        }
+        if (!['http:', 'https:'].includes(urlObj.protocol)) throw new Error('non-http(s) webhook url')
+        const host = urlObj.hostname.replace(/^\[|\]$/g, '')
+        // In dev/test, localhost receivers are allowed (local test hooks); in
+        // production every hostname must resolve to a public address.
+        const isProd = this.config.get('NODE_ENV') === 'production'
+        if (host !== 'localhost' && host !== '127.0.0.1' && host !== '::1') {
+          await assertPublicHost(host)
+        }
+        // Never follow redirects — a public URL could 302 to a private target.
         const res = await fetch(sub.url, {
           method: 'POST',
           headers: { 'content-type': 'application/json', 'x-wagon-signature': `sha256=${signature}`, 'x-wagon-delivery-id': d.id },
           body,
           signal: AbortSignal.timeout(5000),
+          redirect: 'manual',
         })
+        if (res.status >= 300 && res.status < 400) {
+          throw new Error(`redirect (${res.status}) not followed`)
+        }
         ok = res.ok
         responseStatus = res.status
       } catch {

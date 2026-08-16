@@ -48,12 +48,14 @@ export class ChatService {
         where: { transporterId: transporter.id },
         include: { load: { include: { supplier: { include: { user: { select: { name: true, id: true } } } } } } },
         orderBy: { updatedAt: 'desc' },
+        take: 50,
       })) as never
     } else if (supplier) {
       trips = (await this.prisma.trip.findMany({
         where: { load: { supplierId: supplier.id } },
         include: { load: { include: { supplier: { include: { user: { select: { name: true, id: true } } } } } } },
         orderBy: { updatedAt: 'desc' },
+        take: 50,
       })) as never
     } else {
       const driver = await this.prisma.driver.findFirst({ where: { mobile: user.mobile } })
@@ -61,6 +63,7 @@ export class ChatService {
         where: { driverId: driver?.id },
         include: { load: true },
         orderBy: { updatedAt: 'desc' },
+        take: 50,
       })) as never
     }
 

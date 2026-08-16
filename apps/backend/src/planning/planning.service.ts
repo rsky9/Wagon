@@ -127,14 +127,20 @@ export class PlanningService {
     this.validateLegs(planLegs)
 
     const tx = await this.prisma.$transaction(async (p) => {
-      await p.plan.updateMany({
-        where: { shipmentId: plan.shipmentId, status: 'selected' },
-        data: { status: 'superseded' },
-      })
-      const updated = await p.plan.update({
-        where: { id: planId },
+      // Atomic claim: only a 'proposed' plan may be selected. Two concurrent
+      // selects cannot both win — the second sees count === 0 and fails.
+      const claimed = await p.plan.updateMany({
+        where: { id: planId, status: 'proposed' },
         data: { status: 'selected', selectedBy: user.id, selectedAt: new Date() },
       })
+      if (claimed.count === 0) {
+        throw new BadRequestException('This plan was already selected by someone else')
+      }
+      await p.plan.updateMany({
+        where: { shipmentId: plan.shipmentId, status: 'selected', id: { not: planId } },
+        data: { status: 'superseded' },
+      })
+      const updated = await p.plan.findUniqueOrThrow({ where: { id: planId } })
       // Do not regress a shipment that is already booked/in_transit.
       const keepStatus = shipment.status === 'draft' || shipment.status === 'planned' ? 'planned' : shipment.status
       await p.shipment.update({

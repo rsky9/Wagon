@@ -995,6 +995,10 @@ export class MarketService {
   }, user: User) {
     if (!input.legs?.length) throw new BadRequestException('Need at least one leg')
     if (input.legs.length > 12) throw new BadRequestException('At most 12 legs')
+    // Every leg must declare an origin — a missing one would 500 in scoring.
+    if (input.legs.some((l) => !l.origin?.trim())) {
+      throw new BadRequestException('Every leg must declare an origin')
+    }
 
     const request = await this.prisma.marketRequest.findUnique({ where: { id: input.requestId } })
     if (!request) throw new NotFoundException('Request not found')

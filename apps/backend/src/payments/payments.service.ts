@@ -376,17 +376,32 @@ export class PaymentsService {
             orderBy: { createdAt: 'desc' },
           })
     const entries = trips.flatMap((t) =>
-      t.payments.map((p) => ({
-        id: p.id,
-        tripId: t.id,
-        loadId: t.loadId,
-        route: `${t.load.pickupAddr} → ${t.load.dropAddr}`,
-        type: p.type,
-        amount: p.type === 'escrow' ? -p.amount : p.amount,
-        status: p.status,
-        providerRef: p.providerRef,
-        createdAt: p.createdAt,
-      })),
+      t.payments.map((p) => {
+        // Role-aware direction:
+        //  - supplier pays escrow/advance/balance (out); gets refunds (in)
+        //  - transporter receives payouts (in); refunds are out
+        //  - both-capability users see both ledgers (each trip's side)
+        let amount: number
+        if (isTransporter && isSupplier) {
+          amount = p.type === 'refund' ? p.amount : p.type === 'payout' ? p.amount : -p.amount
+        } else if (isTransporter) {
+          amount = p.type === 'payout' ? p.amount : -p.amount
+        } else {
+          // Supplier
+          amount = p.type === 'refund' ? p.amount : -p.amount
+        }
+        return {
+          id: p.id,
+          tripId: t.id,
+          loadId: t.loadId,
+          route: `${t.load.pickupAddr} → ${t.load.dropAddr}`,
+          type: p.type,
+          amount,
+          status: p.status,
+          providerRef: p.providerRef,
+          createdAt: p.createdAt,
+        }
+      }),
     )
     entries.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
 

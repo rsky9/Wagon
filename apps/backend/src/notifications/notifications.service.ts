@@ -82,12 +82,14 @@ export class NotificationsService {
   }
 
   async forUser(userId: string) {
-    const items = await this.prisma.notification.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    })
-    const unread = items.filter((n) => !n.isRead).length
+    const [items, unread] = await Promise.all([
+      this.prisma.notification.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      }),
+      this.prisma.notification.count({ where: { userId, isRead: false } }),
+    ])
     return { items, unread }
   }
 
