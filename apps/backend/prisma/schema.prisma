@@ -40,6 +40,7 @@ enum LoadStatus {
   delivered
   completed
   cancelled
+  expired
 }
 
 enum TripStatus {
@@ -126,6 +127,7 @@ model User {
   verified     Boolean     @default(false)
   supplierVerified  Boolean @default(false)
   transporterVerified Boolean @default(false)
+  bankVerified Boolean   @default(false)
   xp           Int         @default(0)
   cashbackBalance Float    @default(0)
   xpConverted  Int         @default(0)
@@ -440,6 +442,7 @@ model Bid {
   updatedAt       DateTime @updatedAt
   @@index([loadId])
   @@index([transporterId])
+  @@index([truckId])
 }
 
 // Negotiation timeline: structured counteroffers with validity + optional conditions.

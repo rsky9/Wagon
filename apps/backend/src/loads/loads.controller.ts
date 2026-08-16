@@ -65,7 +65,7 @@ export class LoadsController {
   }
 
   @Get(':id')
-  detail(@Param('id') id: string) {
-    return this.loads.detail(id)
+  detail(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.loads.detail(id, user)
   }
 }

@@ -640,6 +640,9 @@ export class MarketService {
     if (input.listingId) {
       const listing = await this.prisma.marketListing.findUnique({ where: { id: input.listingId } })
       if (!listing) throw new NotFoundException('Listing not found')
+      if (!(await this.orgAccess.isMember(user, listing.providerOrgId))) {
+        throw new BadRequestException("Can't quote with another org's listing")
+      }
       org = { id: listing.providerOrgId }
     } else {
       const kindToOrgKind: Record<string, string[]> = {
@@ -696,22 +699,31 @@ export class MarketService {
     if (!orgIds.includes(quote.request.requesterOrgId)) throw new ForbiddenException('Only the requester can accept')
     if (quote.status !== 'submitted') throw new BadRequestException(`Quote is ${quote.status}`)
     const updated = await this.prisma.$transaction(async (tx) => {
+      // Concurrency-safe: only accept if still submitted (atomic claim).
+      const claimed = await tx.marketQuote.updateMany({
+        where: { id: quoteId, status: 'submitted' },
+        data: { status: 'accepted' },
+      })
+      if (claimed.count === 0) {
+        throw new BadRequestException(`Quote is ${(await tx.marketQuote.findUnique({ where: { id: quoteId } }))?.status ?? 'gone'}`)
+      }
       await tx.marketQuote.updateMany({
         where: { requestId: quote.requestId, status: 'submitted' },
         data: { status: 'rejected' },
       })
-      const accepted = await tx.marketQuote.update({ where: { id: quoteId }, data: { status: 'accepted' } })
       await tx.marketRequest.update({ where: { id: quote.requestId }, data: { status: 'booked' } })
       // Materialize the booked request into an operational object so the
       // execute/settle layers can run (not just a paper booking).
-      await this.materializeBooking(tx as unknown as Record<string, never>, quote)
-      // Money flow: the accepted quote becomes a settlement (requester pays provider).
+      const materializedShipmentId = await this.materializeBooking(tx as unknown as Record<string, never>, quote)
+      // Money flow: the accepted quote becomes a settlement (requester pays provider),
+      // bound to the actual shipment created for this booking. Kinds that don't
+      // materialize a shipment (warehouse ops, forwarding, insurance) are tracked by
+      // their operational object instead — no fake shipment FK.
       let settlementId: string | null = null
-      if (quote.amount != null) {
-        const shipment = await tx.shipment.findFirst({ where: { ownerOrgId: quote.request.requesterOrgId } })
+      if (quote.amount != null && materializedShipmentId) {
         const settlement = await tx.settlement.create({
           data: {
-            shipmentId: shipment?.id ?? quote.request.id,
+            shipmentId: materializedShipmentId,
             payerId: quote.request.requesterOrgId,
             payeeId: quote.providerOrgId,
             type: 'freight',
@@ -722,6 +734,7 @@ export class MarketService {
         })
         settlementId = settlement.id
       }
+      const accepted = await tx.marketQuote.findUniqueOrThrow({ where: { id: quoteId } })
       return { accepted, settlementId }
     })
     // Notify the provider's org members that their quote was accepted.
@@ -765,15 +778,16 @@ export class MarketService {
     return { quote: updated }
   }
 
-  /** Map an accepted request to its operational object by kind. */
+  /** Map an accepted request to its operational object by kind. Returns the created shipment id if any. */
   private async materializeBooking(tx: { [k: string]: any }, quote: {
     request: { id: string; kind: string; requesterOrgId: string; originRef?: string | null; destinationRef?: string | null; city?: string | null; capacityNeeded?: number | null }
     providerOrgId: string
     amount?: number | null
     currency: string
     listing?: { id: string; sourceType?: string | null; sourceId?: string | null } | null
-  }) {
+  }): Promise<string | null> {
     const r = quote.request
+    let createdShipmentId: string | null = null
     switch (r.kind) {
       case 'warehouse': {
         // Find an operator facility near the requested city and open an operation.
@@ -857,6 +871,7 @@ export class MarketService {
             destinationId: r.requesterOrgId,
           },
         })
+        createdShipmentId = shipment.id
         await tx.shipmentLeg.create({
           data: {
             shipmentId: shipment.id,
@@ -882,6 +897,7 @@ export class MarketService {
         break
       }
     }
+    return createdShipmentId
   }
 
   /** Quotes on a request (requester or participants). */
@@ -1193,6 +1209,50 @@ export class MarketService {
     if (!subject) throw new NotFoundException('Organization not found')
     const giver = await this.orgAccess.primaryOrg(user)
     if (subject.id === giver.id) throw new BadRequestException('Cannot rate your own org')
+    // Reputation integrity: a rating requires a real completed transaction
+    // between the two orgs (delivered trip, confirmed carrier booking, or a
+    // settled contract) — otherwise anyone could spam/review-bomb.
+    const hasTransaction = await this.prisma.$transaction(async (tx) => {
+      const memberFilter = (orgId: string) => ({
+        some: { organizationId: orgId },
+      })
+      const [tripTx, bookingTx, settlementTx] = await Promise.all([
+        tx.trip.findFirst({
+          where: {
+            status: { in: ['delivered'] },
+            OR: [
+              { transporter: { user: { memberships: memberFilter(giver.id) } } },
+              { load: { supplier: { user: { memberships: memberFilter(giver.id) } } } },
+            ],
+            load: { supplier: { user: { memberships: memberFilter(subject.id) } } },
+          },
+        }),
+        tx.carrierBooking.findFirst({
+          where: {
+            status: { in: ['confirmed', 'completed'] },
+            OR: [
+              { carrierId: giver.id },
+              { carrierId: subject.id },
+            ],
+            shipment: { ownerOrgId: { in: [giver.id, subject.id] } },
+          },
+        }),
+        tx.settlement.findFirst({
+          where: {
+            status: 'cleared',
+            type: 'freight',
+            OR: [
+              { payerId: giver.id, payeeId: subject.id },
+              { payerId: subject.id, payeeId: giver.id },
+            ],
+          },
+        }),
+      ])
+      return !!(tripTx || bookingTx || settlementTx)
+    })
+    if (!hasTransaction) {
+      throw new ForbiddenException('You can only rate an organization you have completed a transaction with')
+    }
     // One rating per (giver, subject, axis, reference) if referenceId provided.
     const existing = await this.prisma.orgRating.findFirst({
       where: {

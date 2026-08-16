@@ -7,13 +7,14 @@ describe('PaymentsService', () => {
   let prisma: any
   let notifications: any
   let provider: any
+  let outbox: any
 
   const trip = {
     id: 'trip1',
     loadId: 'load1',
     transporterId: 'tr1',
     status: 'accepted',
-    load: { supplierId: 'sup1', id: 'load1' },
+    load: { supplierId: 'sup1', id: 'load1', fareEstimate: 5000 },
   }
 
   const supplier = { id: 'sup1', userId: 'user-sup' } as any
@@ -28,10 +29,16 @@ describe('PaymentsService', () => {
       payment: { findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
       user: { update: jest.fn() },
       load: { update: jest.fn() },
+      kycDocument: { count: jest.fn() },
+      shipment: { findFirst: jest.fn() },
+      dispute: { count: jest.fn() },
+      settlement: { count: jest.fn() },
+      proofOfDelivery: { findUnique: jest.fn() },
     }
     notifications = { create: jest.fn() }
     provider = { capture: jest.fn(), payout: jest.fn() }
-    service = new PaymentsService(prisma, notifications, provider)
+    outbox = { emit: jest.fn() }
+    service = new PaymentsService(prisma, notifications, outbox, provider)
   })
 
   describe('captureEscrow', () => {
@@ -54,7 +61,7 @@ describe('PaymentsService', () => {
       prisma.trip.findUnique.mockResolvedValue(trip)
       prisma.supplier.findUnique.mockResolvedValue(supplier)
       prisma.payment.findUnique.mockResolvedValue({ id: 'existing', status: 'succeeded' })
-      const res = await service.captureEscrow('t1', 100, user)
+      const res = await service.captureEscrow('t1', 5000, user)
       expect(res.alreadyCaptured).toBe(true)
       expect(res.payment.id).toBe('existing')
       expect(provider.capture).not.toHaveBeenCalled()
@@ -91,6 +98,10 @@ describe('PaymentsService', () => {
       prisma.trip.findUnique.mockResolvedValue(deliveredTrip)
       prisma.transporter.findUnique.mockResolvedValue(transporter)
       prisma.payment.findFirst.mockResolvedValue(null)
+      prisma.dispute.count.mockResolvedValue(0)
+      prisma.shipment.findFirst.mockResolvedValue(null)
+      prisma.settlement.count.mockResolvedValue(0)
+      prisma.proofOfDelivery.findUnique.mockResolvedValue({ status: 'confirmed' })
       await expect(service.releasePayout('t1', trUser)).rejects.toThrow(BadRequestException)
     })
 
@@ -99,12 +110,16 @@ describe('PaymentsService', () => {
       prisma.transporter.findUnique.mockResolvedValue(transporter)
       prisma.payment.findFirst.mockResolvedValue({ id: 'esc1', type: 'escrow', status: 'succeeded', amount: 5000 })
       prisma.payment.findUnique.mockResolvedValue(null)
+      prisma.dispute.count.mockResolvedValue(0)
+      prisma.shipment.findFirst.mockResolvedValue(null)
+      prisma.settlement.count.mockResolvedValue(0)
+      prisma.proofOfDelivery.findUnique.mockResolvedValue({ status: 'confirmed' })
       provider.payout.mockResolvedValue({ providerRef: 'ref', status: 'succeeded', paidAt: new Date() })
       prisma.payment.create.mockResolvedValue({ id: 'pay1', status: 'succeeded' })
 
       const res = await service.releasePayout('t1', trUser)
       expect(provider.payout).toHaveBeenCalledWith(
-        expect.objectContaining({ amount: 5000, destination: { account: '1234', ifsc: 'IFSC' } }),
+        expect.objectContaining({ amount: 4900, destination: { account: '1234', ifsc: 'IFSC' } }),
       )
       expect(res.alreadyPaid).toBe(false)
     })

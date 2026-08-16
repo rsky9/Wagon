@@ -8,6 +8,7 @@ import { api } from '../config'
 import { useAuth } from '../auth'
 import { useThemeMode } from '../theme'
 import { useStepUp } from '../hooks/useStepUp'
+import * as LocalAuthentication from 'expo-local-authentication'
 
 interface Props {
   onBack: () => void
@@ -24,8 +25,19 @@ export function SettingsScreen({ onBack, onChangeRole }: Props) {
   const [section, setSection] = useState<Section>('main')
   const [biometricOn, setBiometricOn] = useState(false)
 
-  // Persist the biometric step-up preference.
-  const toggleBiometric = (next: boolean) => {
+  // Persist the biometric step-up preference. Only enable when the device
+  // actually has an enrolled biometric (honest toggle — no fake lock).
+  const toggleBiometric = async (next: boolean) => {
+    if (next) {
+      const [hasHardware, enrolled] = await Promise.all([
+        LocalAuthentication.hasHardwareAsync().catch(() => false),
+        LocalAuthentication.isEnrolledAsync().catch(() => false),
+      ])
+      if (!hasHardware || !enrolled) {
+        Alert.alert('Biometric unavailable', 'This device has no enrolled fingerprint or face to lock sensitive actions')
+        return
+      }
+    }
     setBiometricOn(next)
     AsyncStorage.setItem('wagon_biometric', next ? 'on' : 'off').catch(() => {})
   }

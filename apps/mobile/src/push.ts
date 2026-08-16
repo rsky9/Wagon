@@ -5,14 +5,17 @@ import { api } from './config'
 
 const STORAGE_KEY = 'wagon_push_registered'
 
-type NavigateFn = (url: string) => void
+type NotificationItem = { data?: Record<string, unknown>; route?: string }
+type NavigateFn = (url: string, item?: NotificationItem) => void
 let navigateToUrl: NavigateFn | null = null
 let handlersReady = false
 
 /**
  * Wires up tapped-notification handling. Registers the response listener
- * once, then delegates the notification's `data.url` deep link to the
- * provided navigate callback (the app's navigation ref).
+ * once, then delegates the notification's `data.route` deep link to the
+ * provided navigate callback (the app's navigation ref). The full payload
+ * is forwarded so stack routes can receive their params (tripId/loadId/
+ * shipmentId/requestId) on background taps.
  * Best-effort: never throws; missing params are ignored.
  */
 export function setUpNotificationHandlers(navigate: NavigateFn): void {
@@ -20,11 +23,11 @@ export function setUpNotificationHandlers(navigate: NavigateFn): void {
   if (handlersReady) return
   handlersReady = true
   Notifications.addNotificationResponseReceivedListener((response) => {
-    const data = response.notification.request.content.data ?? {}
+    const data = (response.notification.request.content.data ?? {}) as Record<string, unknown>
     // The backend deep-links via `data.route` (a stack route or wagon:// URL).
     const url = (data.route ?? data.url ?? '') as string
     if (typeof url === 'string' && url && navigateToUrl) {
-      navigateToUrl(url)
+      navigateToUrl(url, { data })
     }
   })
 }

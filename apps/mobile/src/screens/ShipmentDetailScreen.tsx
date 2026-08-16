@@ -5,6 +5,7 @@ import { useTheme, spacing, radius } from '@wagon/design'
 import { api } from '../config'
 import type { Shipment, ShipmentLeg, Plan, ForwardOrder, CargoUnit } from '@wagon/contracts'
 import { alertPrompt } from '../components/Prompt'
+import { showActionSheet } from '../components/ActionSheet'
 interface Detail extends Shipment {
   legs: ShipmentLeg[]
   plans: Plan[]
@@ -36,13 +37,15 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
   const [sourceLoad, setSourceLoad] = useState<SourceLoad | null>(null)
   const [cargo, setCargo] = useState<CargoUnit[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [coverPlanId, setCoverPlanId] = useState<string | null>(null)
   const [coverValue, setCoverValue] = useState('')
 
   const fetch = useCallback(() => {
+    setError(null)
     api.get<{ shipment: Detail; sourceLoad: SourceLoad | null }>(`/foundation/shipments/${shipmentId}`)
       .then((r) => { setShipment(r.shipment); setSourceLoad(r.sourceLoad ?? null) })
-      .catch(() => {})
+      .catch((e) => setError(e instanceof Error ? e.message : 'Could not load shipment'))
     api.get<{ units: CargoUnit[] }>(`/foundation/shipments/${shipmentId}/cargo`)
       .then((r) => setCargo(r.units))
       .catch(() => {})
@@ -86,13 +89,26 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
     action('claim', () => api.post('/finance/claims', { shipmentId, reason: 'damage', amount: 1000 }), 'Claim filed')
   }
   const bookCarrier = () => {
-    Alert.alert('Book carrier', 'Enter carrier org id', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Book', onPress: () => {
-        // Use the first forward order's forwarder as a placeholder; real picker in Forwarding flow.
-        action('book', () => api.post('/forwarding/bookings', { shipmentId, bookingRef: `BK-${Date.now()}` }), 'Booking requested')
-      } },
-    ])
+    // Real carrier selection: pick a live market service, then book it against
+    // the shipment (never a placeholder POST without a carrierId).
+    setLoading(true)
+    api.get<{ services: Array<{ id: string; carrierOrg: { name: string } | null; vessel?: string | null; flight?: string | null; originRef?: string | null; destinationRef?: string | null; rate?: number | null; currency: string; availableSlots: number }> }>('/market/carrier-services')
+      .then((res) => {
+        if (res.services.length === 0) {
+          Alert.alert('No carriers', 'No carrier services available on the market to book')
+          return
+        }
+        showActionSheet({
+          title: 'Book a carrier',
+          message: `${res.services.length} service(s) available on the market`,
+          options: res.services.map((svc) => ({
+            text: `${svc.carrierOrg?.name ?? 'Carrier'} · ${svc.vessel ?? svc.flight ?? 'service'} · ${svc.originRef ?? '—'}→${svc.destinationRef ?? '—'} · ${svc.rate != null ? `${svc.currency} ${svc.rate}` : '—'} (${svc.availableSlots} slots)`,
+            onPress: () => action('book', () => api.post(`/market/carrier-services/${svc.id}/book`), 'Carrier booked'),
+          })),
+        })
+      })
+      .catch((e) => Alert.alert('Error', e.message))
+      .finally(() => setLoading(false))
   }
 
   const legTransition = (legId: string, event: 'departed' | 'arrived') => {
@@ -148,10 +164,31 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
       { label: 'Discharged (STRP)', event: 'discharged' },
       { label: 'Returned (GTOT)', event: 'returned' },
     ]
-    Alert.alert(`Container · ${unit.status}`, 'Advance container lifecycle', [
-      ...evts.map((e) => ({ text: e.label, onPress: () => action('container', () => api.post(`/foundation/cargo/${unit.id}/container`, { event: e.event }), 'Container updated') })),
-      { text: 'Cancel', style: 'cancel' },
-    ])
+    showActionSheet({
+      title: `Container · ${unit.status}`,
+      message: 'Advance container lifecycle',
+      options: evts.map((e) => ({
+        text: e.label,
+        onPress: () => action('container', () => api.post(`/foundation/cargo/${unit.id}/container`, { event: e.event }), 'Container updated'),
+      })),
+    })
+  }
+
+  if (error && !shipment) {
+    return <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
+      <View style={styles.header}>
+        <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
+        <Text style={[styles.title, { color: theme.foreground }]}>Shipment</Text>
+        <View style={{ width: 20 }} />
+      </View>
+      <View style={{ padding: spacing.xl, gap: spacing.md }}>
+        <Text style={{ color: theme.foreground, fontWeight: '800' }}>Could not load shipment</Text>
+        <Text style={{ color: theme.mutedForeground }}>{error}</Text>
+        <Pressable style={[styles.smallBtn, { backgroundColor: '#F97316', alignSelf: 'flex-start' }]} onPress={() => { setLoading(true); fetch() }}>
+          <Text style={styles.smallBtnText}>Retry</Text>
+        </Pressable>
+      </View>
+    </SafeAreaView>
   }
 
   if (loading || !shipment) {

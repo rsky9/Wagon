@@ -295,6 +295,32 @@ A second deep audit of money/state-machine integrity + mobile flows surfaced and
 - Trip deep-links resolve by trip id; `TripDetail`/`LoadDetail` in the deep-link registry; POD body aligned; single trip-execution path (coarse status removed).
 - Supplier load-card "Pay booking" action; KYC alert routes to KYC; LoadById error state; Market search refetch debounced.
 
+### 10.4 Delivered: marketplace authority + reputation + lifecycle integrity
+
+A third deep audit of the enablement/marketplace layer surfaced and fixed cross-cutting gaps:
+
+**Marketplace authority & money binding**
+- **Supply-side gating**: listing publish/quote is bound to the provider's own org; quoting with **another org's listing is rejected**.
+- **acceptQuote**: atomic concurrency-safe claim (was check-then-act → double-accept); the resulting **settlement binds to the actual shipment materialized by the booking** — no more arbitrary `findFirst` shipment, no fake `''` shipment FK on kinds that don't materialize a shipment (warehouse/forwarding/insurance are tracked by their operational object instead).
+- **Reputation integrity**: `rateOrg` now requires a real transaction between the two orgs (delivered trip / confirmed carrier booking / cleared freight settlement) — no more review-bombing.
+
+**Trust & lifecycle**
+- **Per-document KYC verification**: admin `POST /admin/kyc-documents/:id/decide` approves/rejects individual docs with audit + user notification; recomputes overall KYC tier and a `bankVerified` flag.
+- **Bank-KYC payout gate**: payouts require an admin-verified bank document (or a legacy bankAccount+IFSC on the transporter profile).
+- **Load expiry**: stale `posted` loads past their bidding deadline / pickup date are lazily swept to `expired` (protected when they have shortlist activity) — no more zombie listings.
+- **Truck double-booking guard fixed**: checks the *specific* truck's active bookings on *other* loads (was a global active-trip check); `Trip.loadId` unique race surfaces as a clean "already booked" error; `Bid.truckId` index added.
+- **Insurance buyer fix**: plan-cover acceptance no longer requires the buyer to be an insurer org — the policy is underwritten by the plan/shipment-owner org.
+
+**Notifications & PII**
+- Finance now notifies org members: claim decisions, settlement created/cleared, policy issued (types route to shipment deep-links `wagon://shipment/:id`).
+- `GET /loads/:id` masks `contactName`/`contactPhone` unless the caller owns the load or is its assigned transporter.
+
+**Mobile**
+- **Cross-platform ActionSheet** (modal list) replacing Android-capped 3-button `Alert.alert` for: 5-star rate-supplier, carrier-service picker (Forwarding + ShipmentDetail "Book carrier" now a real market booking, not a placeholder POST), container lifecycle (4 events).
+- **Push-tap routing**: notification taps now forward the full payload (tripId/loadId/shipmentId) so stack routes get params on background taps; `wagon://shipment/:id` deep-link added.
+- ShipmentDetail: proper error + retry state (was an infinite "Loading…"); Profile KYC row no longer crashes on missing `kycStatus`; Settings biometric toggle verifies device enrollment before enabling.
+- **Data-bus refresh**: Home and Driver hub re-sync automatically when trips/finance change anywhere in the app.
+
 ---
 
 ## Research sources

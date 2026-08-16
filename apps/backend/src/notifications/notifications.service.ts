@@ -68,6 +68,7 @@ export class NotificationsService {
   private deepLink(type: string, data?: Record<string, unknown>) {
     if (data?.tripId) return `wagon://trip/${data.tripId}`
     if (data?.loadId) return `wagon://load/${data.loadId}`
+    if (data?.shipmentId) return `wagon://shipment/${data.shipmentId}`
     switch (type) {
       case 'lane_match':
       case 'order_accepted':

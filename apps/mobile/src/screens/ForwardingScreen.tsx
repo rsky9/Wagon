@@ -6,6 +6,7 @@ import { EmptyState } from '@wagon/components'
 import { api } from '../config'
 import type { ForwardOrder, Consolidation, Shipment } from '@wagon/contracts'
 import { alertPrompt } from '../components/Prompt'
+import { showActionSheet } from '../components/ActionSheet'
 interface Props {
   onBack: () => void
   onOpenShipments: () => void
@@ -86,27 +87,29 @@ export function ForwardingScreen({ onBack, onOpenShipments }: Props) {
           ])
           return
         }
-        const labels = res.services.map((svc, i) => `${i + 1}. ${svc.carrierOrg?.name ?? 'Carrier'} · ${svc.vessel ?? svc.flight ?? 'service'} · ${svc.originRef ?? '—'}→${svc.destinationRef ?? '—'} · ${svc.rate != null ? `${svc.currency} ${svc.rate}` : '—'} (${svc.availableSlots} slots)`)
-        Alert.alert('Pick a carrier service', labels.join('\n'), [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Use carrier id', onPress: () => {
-            alertPrompt('Book consolidation', 'Carrier org id', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Book', onPress: (cid?: string) => {
-                api.post(`/forwarding/consolidations/${id}/book`, { carrierId: cid?.trim() })
-                  .then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
-              } },
-            ])
-          } },
-          ...res.services.map((svc, i) => ({
-            text: `Book #${i + 1}`,
-            onPress: () => {
-              api.post(`/market/carrier-services/${svc.id}/book`)
-                .then(() => { Alert.alert('Booked', 'Carrier space booked'); fetch() })
-                .catch((e) => Alert.alert('Error', e.message))
-            },
-          })),
-        ])
+        showActionSheet({
+          title: 'Pick a carrier service',
+          message: `${res.services.length} service(s) available on the market`,
+          options: [
+            ...res.services.map((svc) => ({
+              text: `${svc.carrierOrg?.name ?? 'Carrier'} · ${svc.vessel ?? svc.flight ?? 'service'} · ${svc.originRef ?? '—'}→${svc.destinationRef ?? '—'} · ${svc.rate != null ? `${svc.currency} ${svc.rate}` : '—'} (${svc.availableSlots} slots)`,
+              onPress: () => {
+                api.post(`/market/carrier-services/${svc.id}/book`)
+                  .then(() => { Alert.alert('Booked', 'Carrier space booked'); fetch() })
+                  .catch((e) => Alert.alert('Error', e.message))
+              },
+            })),
+            { text: 'Use carrier id', onPress: () => {
+              alertPrompt('Book consolidation', 'Carrier org id', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Book', onPress: (cid?: string) => {
+                  api.post(`/forwarding/consolidations/${id}/book`, { carrierId: cid?.trim() })
+                    .then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
+                } },
+              ])
+            } },
+          ],
+        })
       })
       .catch(() => Alert.alert('Error', 'Could not load carrier services'))
   }

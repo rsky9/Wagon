@@ -71,6 +71,7 @@ import { SplashScreen, LanguageSelection, RoleSelection, CapabilitySelection } f
 import { AppLogo } from '../components/AppLogo'
 import { UnifiedTabs } from './UnifiedTabs'
 import { PromptHost } from '../components/Prompt'
+import { ActionSheetHost } from '../components/ActionSheet'
 import { api } from '../config'
 import { setUpNotificationHandlers } from '../push'
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
@@ -176,10 +177,12 @@ function navigateToUrl(nav: any, url: string, item?: { data?: { loadId?: string;
     nav.navigate(url, Object.keys(params).length ? params : undefined)
     return
   }
-  const m = url.match(/^wagon:\/\/(load|trip)\/(.+)$/)
+  const m = url.match(/^wagon:\/\/(load|trip|shipment)\/(.+)$/)
   if (m && m[2]) {
     if (m[1] === 'load') {
       nav.navigate('LoadDetail', { id: m[2] } as never)
+    } else if (m[1] === 'shipment') {
+      nav.navigate('ShipmentDetail', { shipmentId: m[2] })
     } else {
       nav.navigate('TripDetail', { tripId: m[2] })
     }
@@ -202,6 +205,7 @@ const linking: LinkingOptions<RootStackParamList> = {
     screens: {
       LoadDetail: 'load/:id',
       TripDetail: 'trip/:tripId',
+      ShipmentDetail: 'shipment/:shipmentId',
       Track: 'track/:tripId',
       Kyc: 'kyc',
       Notifications: 'notifications',
@@ -616,8 +620,8 @@ export function MobileNavigator() {
 
   useEffect(() => {
     if (!auth.session) return
-    setUpNotificationHandlers((url) => {
-      if (navigationRef.isReady()) navigateToUrl(navigationRef, url)
+    setUpNotificationHandlers((url, item) => {
+      if (navigationRef.isReady()) navigateToUrl(navigationRef, url, item)
     })
   }, [auth.session])
 
@@ -760,6 +764,7 @@ export function MobileNavigator() {
               </Stack.Navigator>
             </NavigationContainer>
             <PromptHost />
+            <ActionSheetHost />
           </ThemeContext.Provider>
         )}
       </SafeAreaProvider>

@@ -167,6 +167,7 @@ export class LoadsService {
   }
 
   async list(query: ListLoadsQuery, user: User) {
+    await this.expireStaleLoads()
     const page = Math.max(1, query.page ?? 1)
     const pageSize = Math.min(50, query.pageSize ?? 20)
     const where: Record<string, unknown> = { status: { not: 'cancelled' } }
@@ -282,7 +283,7 @@ export class LoadsService {
     return { returnLoads: enriched, fromCity: dropCity }
   }
 
-  async detail(id: string) {
+  async detail(id: string, user?: User) {
     const load = await this.prisma.load.findUnique({
       where: { id },
       include: { material: true, quotes: true },
@@ -290,9 +291,23 @@ export class LoadsService {
     if (!load) {
       throw new NotFoundException('Load not found')
     }
+    // Mask contact details unless the caller is the load's supplier (or a transporter
+    // who has been awarded the trip), to avoid leaking PII to any authenticated user.
+    let visible = load
+    const isOwner = user ? (await this.isSupplier(user))?.id === load.supplierId : false
+    const isAssigned = user
+      ? await this.prisma.trip.findFirst({ where: { loadId: id, transporter: { userId: user.id } } })
+      : null
+    if (!isOwner && !isAssigned) {
+      visible = { ...load, contactName: null, contactPhone: null }
+    }
     // Enablement linkage: the canonical shipment projected from this load.
     const shipment = await this.prisma.shipment.findFirst({ where: { ref: id } })
-    return { load, shipmentId: shipment?.id ?? null, shipment: shipment ?? null }
+    return { load: visible, shipmentId: shipment?.id ?? null, shipment: shipment ?? null }
+  }
+
+  private async isSupplier(user: User) {
+    return this.prisma.supplier.findUnique({ where: { userId: user.id } })
   }
 
   /** Supplier: all quotes/interest received on their posted loads. */
@@ -399,12 +414,44 @@ export class LoadsService {
     const supplier = await this.prisma.supplier.findUnique({ where: { userId: user.id } })
     if (!supplier) return { loads: [] }
     const loads = await this.prisma.load.findMany({
-      where: { supplierId: supplier.id, status: { in: ['completed', 'cancelled'] } },
+      where: { supplierId: supplier.id, status: { in: ['completed', 'cancelled', 'expired'] } },
       include: { material: true },
       orderBy: { createdAt: 'desc' },
       take: 50,
     })
     return { loads }
+  }
+
+  /**
+   * Lazy expiry sweep: `posted` loads whose bidding deadline (or pickup date)
+   * has passed with no accepted bid are moved to `expired`. Runs cheaply on
+   * every browse/list call; idempotent and bounded.
+   */
+  private async expireStaleLoads() {
+    const now = new Date()
+    const sweep = await this.prisma.load.findMany({
+      where: {
+        status: 'posted',
+        OR: [
+          { biddingDeadline: { lt: now } },
+          { biddingDeadline: null, pickupDate: { lt: now } },
+          { biddingDeadline: null, pickupDate: null, date: { lt: now } },
+        ],
+      },
+      select: { id: true },
+      take: 200,
+    })
+    if (!sweep.length) return
+    // Only expire loads with no accepted bid; keep ones that have shortlist activity.
+    const accepted = await this.prisma.bid.findMany({
+      where: { loadId: { in: sweep.map((l) => l.id) }, status: { in: ['accepted', 'booking_pending', 'shortlisted'] } },
+      select: { loadId: true },
+    })
+    const protectedIds = new Set(accepted.map((b) => b.loadId))
+    const toExpire = sweep.filter((l) => !protectedIds.has(l.id)).map((l) => l.id)
+    if (toExpire.length) {
+      await this.prisma.load.updateMany({ where: { id: { in: toExpire } }, data: { status: 'expired' } })
+    }
   }
 
   private estimateFare(truckType: string, distanceKm: number) {

@@ -13,6 +13,7 @@ export const LOAD_STATUSES = [
   'delivered',
   'completed',
   'cancelled',
+  'expired',
 ] as const
 export type LoadStatus = (typeof LOAD_STATUSES)[number]
 

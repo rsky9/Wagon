@@ -512,6 +512,10 @@ describe('Enablement platform (e2e)', () => {
       const req = await api(supToken).post('/market/requests', { kind: 'transport', originRef: 'Mumbai', destinationRef: 'Pune', capacityNeeded: 2000 }).expect(201)
       const matches = await api(supToken).get(`/market/requests/${req.body.request.id}/match`).expect(200)
       expect(Array.isArray(matches.body.matches)).toBe(true)
+      // Establish a real transaction (quote + accept) so cross-org rating is
+      // backed by actual business between the two orgs (reputation integrity).
+      const quote = await api(trToken).post(`/market/requests/${req.body.request.id}/quotes`, { amount: 9900 }).expect(201)
+      await api(supToken).post(`/market/quotes/${quote.body.quote.id}/accept`).expect(201)
       // Cross-org rating works; self-rating blocked.
       const supOrg = (await api(supToken).get('/foundation/organizations').expect(200)).body.organizations[0].id
       const rated = await api(trToken).post('/market/ratings', { subjectOrgId: supOrg, axis: 'supplier', score: 4, review: 'prompt' }).expect(201)

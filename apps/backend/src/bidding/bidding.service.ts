@@ -324,16 +324,26 @@ export class BiddingService {
       throw new BadRequestException('Bid must be accepted before booking')
     }
 
-    // Truck double-booking guard: reject if the same truck already has an active trip.
+    // Truck double-booking guard: reject if the same truck already has an active
+    // booking on another load (confirmed trip or a pending/confirmed booking).
     if (bid.truckId) {
-      const truckBusy = await this.prisma.trip.findFirst({
-        where: { status: { in: ['accepted', 'in_transit'] } },
-      }).then(async (anyActive) => {
-        if (!anyActive) return false
-        const bidsOnActive = await this.prisma.bid.findMany({
-          where: { truckId: bid.truckId, status: { in: ['accepted', 'pending'] } },
+      const truckBusy = await this.prisma.$transaction(async (tx) => {
+        const activeTrip = await tx.trip.findFirst({
+          where: {
+            loadId: { not: loadId },
+            status: { in: ['accepted', 'in_transit'] },
+            booking: { truckId: bid.truckId },
+          },
         })
-        return bidsOnActive.length > 0
+        if (activeTrip) return true
+        const otherActiveBid = await tx.bid.findFirst({
+          where: {
+            truckId: bid.truckId,
+            loadId: { not: loadId },
+            status: { in: ['accepted', 'booking_pending'] },
+          },
+        })
+        return !!otherActiveBid
       })
       if (truckBusy) {
         throw new BadRequestException('Selected truck is already committed to another trip')
@@ -374,7 +384,39 @@ export class BiddingService {
       throw new BadRequestException('No pending booking to confirm')
     }
 
-    const trip = await this.prisma.$transaction(async (tx) => {
+    let trip: { id: string } | null = null
+    try {
+      trip = await this.createTripTx(loadId, bidId, bid, load)
+    } catch (e: unknown) {
+      const code = (e as { code?: string })?.code
+      // Unique constraint on Trip.loadId: the load was already booked concurrently.
+      if (code === 'P2002') {
+        throw new BadRequestException('This load was already booked by another transporter')
+      }
+      throw e
+    }
+
+    const supplier = await this.prisma.supplier.findUnique({
+      where: { id: load.supplierId },
+      include: { user: true },
+    })
+    if (supplier) {
+      await this.notifications.create({
+        userId: supplier.userId,
+        type: 'booking_confirmed',
+        title: 'Booking locked in',
+        body: `Transporter confirmed — trip created for ${load.pickupAddr} → ${load.dropAddr}`,
+        data: { tripId: trip.id, loadId },
+        category: 'booking',
+      })
+    }
+    await this.shipments.syncFromLoad(loadId, 'accepted', 'TRIP_STARTED', 'TRANSPORT', user.id)
+    return { trip, snapshot: { rate: bid.amount } }
+  }
+
+  /** Negotiation timeline: full offer history for a load's winning/nominated bid. */
+  private async createTripTx(loadId: string, bidId: string, bid: { transporterId: string; driverId?: string | null; truckId?: string | null; amount: number; advanceAmount?: number | null; balanceAmount?: number | null }, load: { pickupAddr?: string | null; dropAddr?: string | null; paymentTerms?: string | null; extraCharges?: string | null; supplierId: string }) {
+    return this.prisma.$transaction(async (tx) => {
       const created = await tx.trip.create({
         data: {
           loadId,
@@ -402,26 +444,8 @@ export class BiddingService {
       await tx.quote.deleteMany({ where: { loadId } })
       return created
     })
-
-    const supplier = await this.prisma.supplier.findUnique({
-      where: { id: load.supplierId },
-      include: { user: true },
-    })
-    if (supplier) {
-      await this.notifications.create({
-        userId: supplier.userId,
-        type: 'booking_confirmed',
-        title: 'Booking locked in',
-        body: `Transporter confirmed — trip created for ${load.pickupAddr} → ${load.dropAddr}`,
-        data: { tripId: trip.id, loadId },
-        category: 'booking',
-      })
-    }
-    await this.shipments.syncFromLoad(loadId, 'accepted', 'TRIP_STARTED', 'TRANSPORT', user.id)
-    return { trip, snapshot: { rate: bid.amount } }
   }
 
-  /** Negotiation timeline: full offer history for a load's winning/nominated bid. */
   async negotiationTimeline(loadId: string, user: User) {
     const load = await this.loadFor(loadId)
     const supplier = await this.supplierFor(user)

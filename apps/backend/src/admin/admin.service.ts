@@ -150,6 +150,56 @@ export class AdminService {
     return { docs }
   }
 
+  /**
+   * Decide a single KYC document (approved/rejected). On approval of a bank
+   * doc, the user's bank verification is recorded so payouts can be gated.
+   */
+  async decideKycDocument(documentId: string, decision: 'approved' | 'rejected', actor: User, adminNote?: string) {
+    if (!['approved', 'rejected'].includes(decision)) throw new BadRequestException('Decision must be approved or rejected')
+    const doc = await this.prisma.kycDocument.findUnique({ where: { id: documentId } })
+    if (!doc) throw new NotFoundException('Document not found')
+    if (doc.status !== 'pending') throw new BadRequestException(`Document is already ${doc.status}`)
+    const updated = await this.prisma.kycDocument.update({
+      where: { id: documentId },
+      data: {
+        status: decision,
+        adminNote: adminNote ?? null,
+        verifiedAt: decision === 'approved' ? new Date() : null,
+      },
+    })
+    await this.audit.log({
+      actorId: actor.id,
+      action: `kyc.${decision}`,
+      resource: `kycDocument:${documentId}`,
+      before: { status: doc.status },
+      after: { status: decision, adminNote },
+    })
+    // Recompute the user's overall KYC: fully approved when every submitted doc
+    // is approved; also flip the bank-doc flag for payout eligibility.
+    const docs = await this.prisma.kycDocument.findMany({ where: { userId: doc.userId } })
+    const allApproved = docs.length > 0 && docs.every((d) => d.status === 'approved')
+    const hasApprovedBank = docs.some((d) => d.kind === 'bank' && d.status === 'approved')
+    await this.prisma.user.update({
+      where: { id: doc.userId },
+      data: {
+        ...(allApproved ? { kycStatus: 'approved', tier: 'kyc_full' } : {}),
+        ...(hasApprovedBank ? { bankVerified: true } : {}),
+      },
+    })
+    // Notify the user about the outcome of this document.
+    await this.notifications.create({
+      userId: doc.userId,
+      type: decision === 'approved' ? 'kyc_doc_approved' : 'kyc_doc_rejected',
+      title: decision === 'approved' ? 'Document approved' : 'Document not approved',
+      body: decision === 'approved'
+        ? `Your ${doc.kind} document was approved`
+        : `Your ${doc.kind} document was not approved${adminNote ? `: ${adminNote}` : ''}`,
+      data: { route: 'Kyc' },
+      category: 'kyc',
+    }).catch(() => {})
+    return { document: updated, allApproved, hasApprovedBank }
+  }
+
   /** All support tickets (ops console). */
   async tickets() {
     const tickets = await this.prisma.supportTicket.findMany({

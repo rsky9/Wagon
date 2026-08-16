@@ -16,6 +16,8 @@ import { useI18n } from '@wagon/i18n'
 import { uploadToPresignedUrl } from '@wagon/api-client'
 import * as DocumentPicker from 'expo-document-picker'
 import { LocationShare } from '../components/LocationShare'
+import { showActionSheet } from '../components/ActionSheet'
+import { notifyDataChanged } from '../lib/dataBus'
 import { useStepUp } from '../hooks/useStepUp'
 import type { Load } from '@wagon/contracts'
 
@@ -66,6 +68,7 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
     } finally {
       setLoading(false)
       setRefreshing(false)
+      notifyDataChanged('trips')
     }
   }, [])
 
@@ -102,11 +105,16 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
   }
 
   const rateSupplier = (trip: TripInfo) => {
-    const stars = [5, 4, 3, 2, 1].map((s) => ({
-      text: `${s}★`,
-      onPress: () => api.post(`/bidding/trip/${trip.id}/rate-supplier`, { score: s }).then(() => Alert.alert(t('ui.thanks'), 'Rating saved')).catch(() => Alert.alert(t('ui.error'), 'Failed to rate')),
-    }))
-    Alert.alert(t('ui.rateSupplier'), 'How was loading readiness and communication?', [{ text: 'Cancel', style: 'cancel' }, ...stars])
+    showActionSheet({
+      title: t('ui.rateSupplier'),
+      message: 'How was loading readiness and communication?',
+      options: [5, 4, 3, 2, 1].map((s) => ({
+        text: `${s}★`,
+        onPress: () => api.post(`/bidding/trip/${trip.id}/rate-supplier`, { score: s })
+          .then(() => Alert.alert(t('ui.thanks'), 'Rating saved'))
+          .catch(() => Alert.alert(t('ui.error'), 'Failed to rate')),
+      })),
+    })
   }
 
   const uploadPod = async (trip: TripInfo) => {

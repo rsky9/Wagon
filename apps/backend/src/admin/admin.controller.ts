@@ -46,6 +46,11 @@ export class AdminController {
     return this.admin.kycDocuments(id)
   }
 
+  @Post('kyc-documents/:id/decide')
+  decideKyc(@Param('id') id: string, @Body() body: { decision: 'approved' | 'rejected'; note?: string }, @CurrentUser() actor: User) {
+    return this.admin.decideKycDocument(id, body.decision, actor, body.note)
+  }
+
   @Get('tickets')
   tickets(@Query('q') q?: string, @Query('status') status?: string) {
     return this.admin.ticketsSearch(q, status)

@@ -9,6 +9,7 @@ import { useI18n } from '@wagon/i18n'
 import { useAuth } from '../auth'
 import { api } from '../config'
 import { Greeting, KpiCard, QuickAction, SectionHeader, StatTile, CapabilityChip } from '../components/ui'
+import { subscribeDataChanged } from '../lib/dataBus'
 
 interface LoadRef {
   id: string
@@ -122,6 +123,12 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
     api.get<ForYou>('/market/for-you').then((r) => setForYou(r)).catch(() => {})
   }, [])
   useEffect(() => { fetch() }, [fetch])
+  // Shared refresh: re-sync money/alerts whenever trips or finance change
+  // elsewhere in the app (execution, escrow, payouts, claims).
+  useEffect(() => {
+    const unsubs = ['trips', 'finance'].map((topic) => subscribeDataChanged(topic, () => fetch()))
+    return () => unsubs.forEach((u) => u())
+  }, [fetch])
 
   const caps = session?.profile.capabilities?.length ? session.profile.capabilities : [session?.profile.role ?? '']
   const isSupplier = caps.includes('supplier')

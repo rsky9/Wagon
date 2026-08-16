@@ -5,6 +5,7 @@ import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { StatusChip, EmptyState, type StatusTone } from '@wagon/components'
 import { api } from '../config'
 import { useI18n } from '@wagon/i18n'
+import { subscribeDataChanged } from '../lib/dataBus'
 
 interface DriverTrip {
   id: string
@@ -49,6 +50,7 @@ export function DriverHomeScreen({ onOpenTrip }: Props) {
   }, [])
 
   useEffect(() => { fetch() }, [fetch])
+  useEffect(() => subscribeDataChanged('trips', () => fetch()), [fetch])
 
   const toggleAvailability = async (v: boolean) => {
     setAvailable(v)

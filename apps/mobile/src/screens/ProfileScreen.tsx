@@ -158,7 +158,7 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
 
         {/* Identity & Trust */}
         <GroupTitle>Identity &amp; Trust</GroupTitle>
-        <SettingRow icon="🛡️" label={t('profile.verification')} sub={`${kycPct}% complete · ${profile?.kycStatus.replace('_', ' ')}`} onPress={onOpenKyc} trailing={kycPct > 0 ? `${kycPct}%` : undefined} />
+        <SettingRow icon="🛡️" label={t('profile.verification')} sub={`${kycPct}% complete · ${(profile?.kycStatus ?? 'not_started').replace('_', ' ')}`} onPress={onOpenKyc} trailing={kycPct > 0 ? `${kycPct}%` : undefined} />
         <SettingRow icon="⭐" label={t('profile.reviews')} onPress={onOpenReviews} />
         <SettingRow icon="🎯" label={t('profile.quests')} sub={t('profile.questsSub')} onPress={onOpenQuests} />
 

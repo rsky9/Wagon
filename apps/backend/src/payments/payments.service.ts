@@ -155,6 +155,15 @@ export class PaymentsService {
     if (trip.status !== 'delivered') {
       throw new BadRequestException('Payout requires trip to be delivered')
     }
+    // Payouts land in a bank account: an admin-verified bank KYC document (or a
+    // legacy bankAccount+IFSC on the transporter profile) is required so money
+    // never moves to an unverified destination.
+    const bankVerified = await this.prisma.kycDocument.count({
+      where: { userId: user.id, kind: 'bank', status: 'approved' },
+    })
+    if (bankVerified === 0 && !(transporter.bankAccount && transporter.ifsc)) {
+      throw new BadRequestException('Verify a bank document (KYC) before payouts can be released')
+    }
     // Freeze payouts while a dispute is open on this trip, or an approved claim
     // settlement on the linked shipment is still unpaid.
     const shipmentId = await this.shipmentIdFor(trip.loadId)

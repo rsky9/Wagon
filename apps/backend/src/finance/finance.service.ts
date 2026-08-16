@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException, ForbiddenException,
 import { PrismaService } from '../prisma/prisma.service'
 import { OutboxRelay } from '../outbox/outbox-relay.service'
 import { OrgAccessService } from '../org-access/org-access.service'
+import { NotificationsService } from '../notifications/notifications.service'
 import { PAYMENT_PROVIDER, PaymentProvider } from '../payments/payment-provider.service'
 import type { User } from '@prisma/client'
 
@@ -12,7 +13,23 @@ export class FinanceService {
     private readonly orgAccess: OrgAccessService,
     @Inject(OutboxRelay) private readonly outbox: OutboxRelay,
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
+    private readonly notifications: NotificationsService,
   ) {}
+
+  /** Notify every member of an organization (fire-and-forget). */
+  private async notifyOrg(orgId: string | null | undefined, input: {
+    type: string
+    title: string
+    body: string
+    data?: Record<string, unknown>
+    category?: string
+  }) {
+    if (!orgId) return
+    const members = await this.prisma.organizationMember.findMany({ where: { organizationId: orgId }, select: { userId: true } })
+    for (const m of members) {
+      void this.notifications.create({ userId: m.userId, ...input }).catch(() => undefined)
+    }
+  }
 
   /** Assert the caller can access a shipment (for claims/policies/settlements/risk). */
   private async requireShipmentAccess(user: User, shipmentId: string) {
@@ -140,6 +157,16 @@ export class FinanceService {
       })
       return changed
     })
+    // Notify the claimant's org of the outcome.
+    await this.notifyOrg(claim.claimantId, {
+      type: decision === 'approved' ? 'claim_approved' : 'claim_rejected',
+      title: decision === 'approved' ? 'Claim approved' : 'Claim rejected',
+      body: decision === 'approved'
+        ? `Your claim of ${claim.currency} ${claim.amount} was approved and a settlement was created`
+        : `Your claim of ${claim.currency} ${claim.amount} was not approved`,
+      data: { shipmentId: claim.shipmentId, claimId, status: decision },
+      category: 'finance',
+    })
     return { claim: updated }
   }
 
@@ -161,12 +188,16 @@ export class FinanceService {
 
   // ---------- Insurance ----------
 
-  async issuePolicy(input: { shipmentId: string; policyRef: string; premium?: number; coverage?: number; currency?: string }, user: User) {
+  async issuePolicy(input: { shipmentId: string; policyRef: string; premium?: number; coverage?: number; currency?: string; insurerOrgId?: string }, user: User) {
     const shipment = await this.requireShipmentAccess(user, input.shipmentId)
     if (input.premium != null && input.premium < 0) throw new BadRequestException('Premium cannot be negative')
     if (input.coverage != null && input.coverage <= 0) throw new BadRequestException('Coverage must be positive')
-    // Only an insurer/carrier org can underwrite policies.
-    const org = await this.orgAccess.requireOrgOfKind(user, ['carrier', 'broker', 'other'])
+    // Only an insurer/carrier org can underwrite policies — unless the caller is the
+    // shipment owner buying cover for themselves (plan-cover acceptance), in which
+    // case the insurer org is supplied by the marketplace plan.
+    const org = input.insurerOrgId
+      ? { id: input.insurerOrgId }
+      : await this.orgAccess.requireOrgOfKind(user, ['carrier', 'broker', 'other'])
     const policy = await this.prisma.$transaction(async (tx) => {
       const created = await tx.insurancePolicy.create({
         data: {
@@ -190,6 +221,13 @@ export class FinanceService {
         payload: { policyRef: input.policyRef, coverage: input.coverage },
       })
       return created
+    })
+    await this.notifyOrg(shipment.ownerOrgId, {
+      type: 'policy_issued',
+      title: 'Cover issued',
+      body: `Insurance policy ${input.policyRef} is active with ${input.coverage ? `coverage of ${input.currency ?? 'INR'} ${input.coverage}` : 'coverage bound'} on this shipment`,
+      data: { shipmentId: input.shipmentId, policyRef: input.policyRef },
+      category: 'finance',
     })
     return { policy }
   }
@@ -301,6 +339,13 @@ export class FinanceService {
       })
       return created
     })
+    await this.notifyOrg(input.payeeId, {
+      type: 'settlement_due',
+      title: 'Payment due',
+      body: `A ${input.type} settlement of ${input.currency ?? 'INR'} ${input.amount ?? 0} is owed to you on this shipment`,
+      data: { shipmentId: input.shipmentId, settlementId: settlement.id, type: input.type },
+      category: 'finance',
+    })
     return { settlement }
   }
 
@@ -353,6 +398,15 @@ export class FinanceService {
       })
       return { changed, payment }
     })
+    if (result.status === 'succeeded') {
+      await this.notifyOrg(settlement.payerId, {
+        type: 'settlement_cleared',
+        title: 'Settlement cleared',
+        body: `Your ${settlement.type} settlement of ${settlement.currency || 'INR'} ${amount} was paid`,
+        data: { shipmentId: settlement.shipmentId, settlementId, type: settlement.type },
+        category: 'finance',
+      })
+    }
     return { settlement: updated.changed, payment: updated.payment }
   }
 
@@ -468,8 +522,13 @@ export class FinanceService {
   async acceptPlanCover(planId: string, input: { declaredValue: number; policyRef: string; currency?: string }, user: User) {
     const quote = await this.quotePlanCover(planId, { declaredValue: input.declaredValue, currency: input.currency }, user)
     const q = quote.quote
+    const plan = await this.prisma.plan.findUnique({ where: { id: planId } })
+    if (!plan) throw new NotFoundException('Plan not found')
+    // Insurer org: the plan's source carrier listing if present, else the owner's org.
+    const shipment = await this.prisma.shipment.findUnique({ where: { id: plan.shipmentId } })
+    const insurerOrgId = (plan as unknown as { sourceOrgId?: string | null }).sourceOrgId ?? shipment?.ownerOrgId ?? undefined
     const policy = await this.issuePolicy(
-      { shipmentId: (await this.prisma.plan.findUnique({ where: { id: planId } }))!.shipmentId, policyRef: input.policyRef, premium: q.premium, coverage: q.coverage, currency: q.currency },
+      { shipmentId: plan.shipmentId, policyRef: input.policyRef, premium: q.premium, coverage: q.coverage, currency: q.currency, insurerOrgId },
       user,
     )
     return { policy: policy.policy, quote: q }
