@@ -10,7 +10,7 @@ export class DisputesService {
     private readonly audit: AuditService,
   ) {}
 
-  async raise(tripId: string, subject: string, evidenceKeys: string[] | undefined, user: User) {
+  async raise(tripId: string, subject: string, evidenceKeys: string[] | undefined, user: User, issueType?: string) {
     if (!subject || subject.trim().length === 0) {
       throw new BadRequestException('Dispute subject is required')
     }
@@ -23,7 +23,7 @@ export class DisputesService {
       throw new BadRequestException('Only trip participants can raise a dispute')
     }
     return this.prisma.dispute.create({
-      data: { tripId, raisedBy: user.id, subject, evidenceKeys: evidenceKeys ?? [] },
+      data: { tripId, raisedBy: user.id, subject, issueType: issueType?.trim() || null, evidenceKeys: evidenceKeys ?? [] },
     })
   }
 

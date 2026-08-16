@@ -63,9 +63,18 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
       { text: 'Propose', onPress: (cost?: string) => {
         const c = cost ? Number(cost) : NaN
         if (!c || c <= 0) { Alert.alert('Valid cost required'); return }
+        // Derive route from the shipment's first leg (real addresses), not
+        // placeholder text that would poison tracking/claims.
+        const first = shipment?.legs?.[0]
+        const origin = first?.pickupAddr?.trim() || 'Origin'
+        const destination = first?.dropAddr?.trim() || 'Destination'
+        if (origin === 'Origin' || destination === 'Destination') {
+          Alert.alert('Missing route', 'Add origin/destination to the shipment before proposing a plan.')
+          return
+        }
         action('propose', () => api.post('/planning/plans', {
           shipmentId,
-          legs: [{ mode: 'road', origin: 'Origin', destination: 'Destination', cost: c, etaHours: 24 }],
+          legs: [{ mode: 'road', origin, destination, cost: c, etaHours: 24 }],
         }), 'Plan proposed')
       } },
     ])
@@ -96,7 +105,14 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
     api.post<{ quote: { premium: number; coverage: number; band: string; risk: number } }>(`/finance/plans/${coverPlanId}/cover-quote`, { declaredValue: v })
       .then((r) => {
         setCoverPlanId(null)
-        Alert.alert('Cover quote', `Coverage ₹${r.quote.coverage.toLocaleString('en-IN')}\nPremium ₹${r.quote.premium.toLocaleString('en-IN')} · ${r.quote.band} risk (${(r.quote.risk * 100).toFixed(0)}%)\nAccept to issue a policy.`)
+        // Issue the policy directly — the premium is billed via a settlement.
+        const policyRef = `PLCY-${Date.now().toString(36).toUpperCase()}`
+        Alert.alert('Cover quote', `Coverage ₹${r.quote.coverage.toLocaleString('en-IN')}\nPremium ₹${r.quote.premium.toLocaleString('en-IN')} · ${r.quote.band} risk (${(r.quote.risk * 100).toFixed(0)}%)`, [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Accept & issue policy', onPress: () => {
+            action('cover', () => api.post(`/finance/plans/${coverPlanId}/cover-accept`, { declaredValue: v, policyRef }), 'Policy issued')
+          } },
+        ])
       })
       .catch((e) => Alert.alert('Error', e.message))
       .finally(() => { setLoading(false); fetch() })

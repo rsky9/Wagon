@@ -21,6 +21,12 @@ describe('Wagon API (e2e)', () => {
   const ADM = '9999988888'
 
   const requestOtp = async (mobile: string) => {
+    // Clear per-mobile send throttle so seeded numbers can be reused across suites.
+    const redis = app.get(REDIS)
+    if (redis?.del) {
+      await redis.del(`otp_send_cooldown:${mobile}`).catch(() => {})
+      await redis.del(`otp_send_count:${mobile}`).catch(() => {})
+    }
     const res = await request(app.getHttpServer())
       .post('/api/v1/auth/otp')
       .send({ mobile })
@@ -1434,9 +1440,11 @@ describe('Wagon API (e2e)', () => {
     })
 
     it('saves and reads bank details', async () => {
+      const bankToken = await stepUpAction('update_bank', trToken)
       await request(app.getHttpServer())
         .patch('/api/v1/auth/bank')
         .set('Authorization', `Bearer ${trToken}`)
+        .set('x-action-token', bankToken)
         .send({ account: '1234567890', ifsc: 'SBIN0001234', holder: 'E2E Haulage' })
         .expect(200)
       const res = await request(app.getHttpServer())

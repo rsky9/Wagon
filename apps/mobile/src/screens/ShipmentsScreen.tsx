@@ -19,6 +19,8 @@ export function ShipmentsScreen({ onBack, onOpen }: Props) {
   const [commodity, setCommodity] = useState('')
   const [weight, setWeight] = useState('')
   const [value, setValue] = useState('')
+  const [origin, setOrigin] = useState('')
+  const [destination, setDestination] = useState('')
 
   const fetch = useCallback(() => {
     api.get<{ shipments: Shipment[] }>('/foundation/shipments').then((r) => setShipments(r.shipments)).catch(() => {}).finally(() => setLoading(false))
@@ -27,6 +29,7 @@ export function ShipmentsScreen({ onBack, onOpen }: Props) {
 
   const create = () => {
     if (!commodity.trim()) { Alert.alert('Commodity required'); return }
+    if (!origin.trim() || !destination.trim()) { Alert.alert('Origin & destination required', 'Real locations are needed for tracking and claims.'); return }
     setCreating(true)
     api.post<{ shipment: Shipment }>('/foundation/shipments', {
       commodity: commodity.trim(),
@@ -34,8 +37,8 @@ export function ShipmentsScreen({ onBack, onOpen }: Props) {
       value: value ? Number(value) : undefined,
       pieces: 1,
     }).then(async (r) => {
-      await api.post(`/foundation/shipments/${r.shipment.id}/legs`, { mode: 'road', pickupAddr: 'Origin', dropAddr: 'Destination' })
-      setCommodity(''); setWeight(''); setValue('')
+      await api.post(`/foundation/shipments/${r.shipment.id}/legs`, { mode: 'road', pickupAddr: origin.trim(), dropAddr: destination.trim() })
+      setCommodity(''); setWeight(''); setValue(''); setOrigin(''); setDestination('')
       fetch()
     }).catch((e) => Alert.alert('Error', e.message)).finally(() => setCreating(false))
   }
@@ -54,6 +57,16 @@ export function ShipmentsScreen({ onBack, onOpen }: Props) {
           style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]}
           placeholder="Commodity" placeholderTextColor={theme.mutedForeground}
           value={commodity} onChangeText={setCommodity}
+        />
+        <TextInput
+          style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]}
+          placeholder="Origin (city)" placeholderTextColor={theme.mutedForeground}
+          value={origin} onChangeText={setOrigin}
+        />
+        <TextInput
+          style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]}
+          placeholder="Destination (city)" placeholderTextColor={theme.mutedForeground}
+          value={destination} onChangeText={setDestination}
         />
         <View style={styles.row}>
           <TextInput

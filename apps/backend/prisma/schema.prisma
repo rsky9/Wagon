@@ -696,6 +696,7 @@ model Dispute {
   raisedBy     String
   raisedByUser User     @relation("RaisedBy", fields: [raisedBy], references: [id], onDelete: Cascade)
   subject      String
+  issueType    String?
   evidenceKeys String[]
   resolution   String?
   status       String   @default("open")

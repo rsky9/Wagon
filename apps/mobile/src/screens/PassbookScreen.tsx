@@ -56,7 +56,7 @@ export function PassbookScreen({ onBack, onOpenBank, onOpenInvoices }: Props) {
       .finally(() => setLoading(false))
   }, [])
 
-  const pending = entries.filter((e) => e.status !== 'succeeded')
+  const pending = entries.filter((e) => e.status === 'pending' || e.status === 'processing')
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>

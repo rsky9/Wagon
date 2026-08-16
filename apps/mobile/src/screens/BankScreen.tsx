@@ -5,6 +5,7 @@ import { useTheme, spacing, radius } from '@wagon/design'
 import { Button } from '@wagon/components'
 import { api } from '../config'
 import { useI18n } from '@wagon/i18n'
+import { useStepUp } from '../hooks/useStepUp'
 
 interface BankInfo {
   account: string | null
@@ -19,6 +20,7 @@ interface Props {
 export function BankScreen({ onBack }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
+  const { stepUp } = useStepUp()
   const [bank, setBank] = useState<BankInfo | null>(null)
   const [account, setAccount] = useState('')
   const [ifsc, setIfsc] = useState('')
@@ -44,9 +46,13 @@ export function BankScreen({ onBack }: Props) {
 
   const save = async () => {
     if (!account.trim() || !ifsc.trim()) { Alert.alert(t('ui.required'), 'Enter account number and IFSC'); return }
+    // Changing the payout destination redirects future money — verify identity
+    // with a fresh action OTP before the backend accepts the new account.
+    const token = await stepUp('update_bank')
+    if (!token) return
     setSaving(true)
     try {
-      await api.patch('/auth/bank', { account: account.trim(), ifsc: ifsc.trim(), holder: holder.trim() })
+      await api.patch('/auth/bank', { account: account.trim(), ifsc: ifsc.trim(), holder: holder.trim() }, { 'x-action-token': token })
       Alert.alert(t('ui.saved'), 'Payout details updated')
       fetch()
     } catch (e) {

@@ -131,6 +131,11 @@ export class TrucksService {
         odometerKm: input.odometerKm,
       },
     })
+    // Keep the market truck_capacity listing in sync with availability changes
+    // (paused truck → paused listing, re-enabled → live again).
+    if (input.activeStatus !== undefined) {
+      await this.market.publishTruck(updated, user).catch(() => {})
+    }
     return { truck: updated }
   }
 
@@ -138,7 +143,21 @@ export class TrucksService {
     const transporterId = await this.transporterId(user)
     const truck = await this.prisma.truck.findFirst({ where: { id, transporterId } })
     if (!truck) throw new NotFoundException('Truck not found')
+    // Block removal while the truck is committed to an active trip or booking.
+    const active = await this.prisma.trip.findFirst({
+      where: {
+        booking: { truckId: id },
+        status: { in: ['accepted', 'in_transit'] },
+      },
+    })
+    if (active) throw new BadRequestException('Cannot remove a truck that is on an active trip')
+    const pending = await this.prisma.bid.findFirst({
+      where: { truckId: id, status: { in: ['accepted', 'booking_pending', 'shortlisted'] } },
+    })
+    if (pending) throw new BadRequestException('Cannot remove a truck with a committed booking')
     await this.prisma.truck.delete({ where: { id } })
+    // Pause/expire the truck_capacity market listing so no one books removed capacity.
+    await this.market.publishTruck({ ...truck, activeStatus: false } as never, user).catch(() => {})
     return { success: true }
   }
 }

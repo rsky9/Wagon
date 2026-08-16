@@ -13,7 +13,7 @@ export class DisputesController {
   @Post()
   @UseGuards(JwtAuthGuard)
   raise(@Body() body: RaiseDto, @CurrentUser() user: User) {
-    return this.disputes.raise(body.tripId, body.subject, body.evidenceKeys, user)
+    return this.disputes.raise(body.tripId, body.subject, body.evidenceKeys, user, body.issueType)
   }
 
   @Get('mine')

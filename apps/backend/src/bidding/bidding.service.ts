@@ -287,29 +287,42 @@ export class BiddingService {
     }
 
     const status = action === 'accept' ? 'accepted' : 'rejected'
-    const updated = await this.prisma.negotiationOffer.update({ where: { id: offerId }, data: { status } })
 
     if (action === 'accept') {
-      const bid = await this.prisma.bid.update({ where: { id: offer.bidId }, data: { amount: offer.amount, status: 'accepted' } })
-      const load = await this.prisma.load.findUnique({ where: { id: offer.loadId } })
-      if (load) {
-        const transporter = await this.prisma.transporter.findUnique({
-          where: { id: bid.transporterId },
-          include: { user: true },
+      // Atomic claim: only an 'offered' offer may be accepted, and the load must
+      // still be open — two concurrent accepts can't both win.
+      const claimed = await this.prisma.$transaction(async (tx) => {
+        if (load.status !== 'posted') return 0
+        const claimedOffer = await tx.negotiationOffer.updateMany({
+          where: { id: offerId, status: 'offered' },
+          data: { status: 'accepted' },
         })
-        if (transporter) {
-          await this.notifications.create({
-            userId: transporter.userId,
-            type: 'bid_accepted',
-            title: 'Bid accepted',
-            body: `Offer of ₹${offer.amount.toLocaleString('en-IN')} accepted`,
-            data: { loadId: load.id },
-            category: 'loads',
-          })
-        }
+        if (claimedOffer.count === 0) return 0
+        await tx.bid.update({ where: { id: offer.bidId }, data: { amount: offer.amount, status: 'accepted' } })
+        return 1
+      })
+      if (claimed === 0) {
+        throw new BadRequestException(load.status === 'posted' ? 'Offer already resolved' : 'Load is no longer open for booking')
       }
-      return { offer: updated, bid }
+      const bid = await this.prisma.bid.findUniqueOrThrow({ where: { id: offer.bidId } })
+      const transporter = await this.prisma.transporter.findUnique({
+        where: { id: bid.transporterId },
+        include: { user: true },
+      })
+      if (transporter) {
+        await this.notifications.create({
+          userId: transporter.userId,
+          type: 'bid_accepted',
+          title: 'Bid accepted',
+          body: `Offer of ₹${offer.amount.toLocaleString('en-IN')} accepted`,
+          data: { loadId: load.id },
+          category: 'loads',
+        })
+      }
+      return { offer: { ...offer, status: 'accepted' }, bid }
     }
+
+    const updated = await this.prisma.negotiationOffer.update({ where: { id: offerId }, data: { status } })
     return { offer: updated }
   }
 
@@ -324,10 +337,11 @@ export class BiddingService {
       throw new BadRequestException('Bid must be accepted before booking')
     }
 
-    // Truck double-booking guard: reject if the same truck already has an active
-    // booking on another load (confirmed trip or a pending/confirmed booking).
+    // Truck double-booking guard + atomic booking claim in ONE transaction: the
+    // bid is claimed to 'booking_pending' only if the truck isn't already
+    // committed elsewhere — two concurrent confirms can't both pass.
     if (bid.truckId) {
-      const truckBusy = await this.prisma.$transaction(async (tx) => {
+      const claimed = await this.prisma.$transaction(async (tx) => {
         const activeTrip = await tx.trip.findFirst({
           where: {
             loadId: { not: loadId },
@@ -335,7 +349,14 @@ export class BiddingService {
             booking: { truckId: bid.truckId },
           },
         })
-        if (activeTrip) return true
+        if (activeTrip) return false
+        // Another bid on this SAME load already pending → don't allow a second.
+        const sameLoadPending = await tx.bid.findFirst({
+          where: { loadId, id: { not: bidId }, status: 'booking_pending' },
+        })
+        if (sameLoadPending) return false
+        // Claim the bid atomically: only a shortlisted/accepted bid may become
+        // booking_pending, and only if no other bid uses this truck right now.
         const otherActiveBid = await tx.bid.findFirst({
           where: {
             truckId: bid.truckId,
@@ -343,15 +364,32 @@ export class BiddingService {
             status: { in: ['accepted', 'booking_pending'] },
           },
         })
-        return !!otherActiveBid
+        if (otherActiveBid) return false
+        const claimedRow = await tx.bid.updateMany({
+          where: { id: bidId, loadId, status: { in: ['accepted', 'shortlisted'] } },
+          data: { status: 'booking_pending' },
+        })
+        return claimedRow.count === 1
       })
-      if (truckBusy) {
+      if (!claimed) {
         throw new BadRequestException('Selected truck is already committed to another trip')
       }
+    } else {
+      // No truck: still claim the bid atomically (no same-load double booking).
+      const claimedRow = await this.prisma.$transaction(async (tx) => {
+        const sameLoadPending = await tx.bid.findFirst({
+          where: { loadId, id: { not: bidId }, status: 'booking_pending' },
+        })
+        if (sameLoadPending) return 0
+        return (await tx.bid.updateMany({
+          where: { id: bidId, loadId, status: { in: ['accepted', 'shortlisted'] } },
+          data: { status: 'booking_pending' },
+        })).count
+      })
+      if (claimedRow === 0) {
+        throw new BadRequestException('This bid can no longer be booked')
+      }
     }
-
-    // Represent the pending booking via the bid state: 'booking_pending'.
-    await this.prisma.bid.update({ where: { id: bidId }, data: { status: 'booking_pending' } })
 
     const transporter = await this.prisma.transporter.findUnique({
       where: { id: bid.transporterId },

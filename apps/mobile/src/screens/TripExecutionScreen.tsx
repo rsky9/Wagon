@@ -15,7 +15,9 @@ interface TripDetail {
   status: string
   podUrl?: string | null
   pickupOtpAt?: string | null
+  pickupOtpVerifiedAt?: string | null
   deliveryOtpAt?: string | null
+  deliveryOtpVerifiedAt?: string | null
   load: {
     id: string
     pickupAddr: string
@@ -92,8 +94,12 @@ export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
 
   const currentIdx = STAGE_FLOW.findIndex((s) => s.key === trip.stage)
   const isDelivered = trip.stage === 'delivered'
-  const needsPickupOtp = trip.stage === 'arrived_pickup' && !trip.pickupOtpAt
-  const needsDeliveryOtp = trip.stage === 'arrived_drop' && !trip.deliveryOtpAt
+  // OTP is required until the supplier VERIFIES it (not merely generated) — so a
+  // mistyped code can be regenerated instead of blocking the trip forever.
+  const needsPickupOtp = trip.stage === 'arrived_pickup' && !trip.pickupOtpVerifiedAt
+  const needsDeliveryOtp = trip.stage === 'arrived_drop' && !trip.deliveryOtpVerifiedAt
+  const pickupOtpPending = trip.stage === 'arrived_pickup' && !!trip.pickupOtpAt && !trip.pickupOtpVerifiedAt
+  const deliveryOtpPending = trip.stage === 'arrived_drop' && !!trip.deliveryOtpAt && !trip.deliveryOtpVerifiedAt
 
   const advance = async () => {
     setBusy(true)
@@ -185,8 +191,18 @@ export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
           {needsPickupOtp && (
             <Button label={t('tripExec.genPickupOtp')} onPress={() => generateOtp('pickup')} loading={busy} variant="secondary" />
           )}
+          {pickupOtpPending && (
+            <Text style={{ color: theme.warning, fontSize: 13, textAlign: 'center', marginVertical: 4 }}>
+              Waiting for the supplier to verify the pickup OTP
+            </Text>
+          )}
           {needsDeliveryOtp && (
             <Button label={t('tripExec.genDeliveryOtp')} onPress={() => generateOtp('delivery')} loading={busy} variant="secondary" />
+          )}
+          {deliveryOtpPending && (
+            <Text style={{ color: theme.warning, fontSize: 13, textAlign: 'center', marginVertical: 4 }}>
+              Waiting for the supplier to verify the delivery OTP
+            </Text>
           )}
           {isDelivered && (
             <View style={[styles.done, { backgroundColor: theme.success + '1A' }]}>

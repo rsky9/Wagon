@@ -46,8 +46,17 @@ export function EnablementFinanceScreen({ onBack }: Props) {
       .then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
   }
   const decide = (c: Claim, decision: 'approved' | 'rejected') => {
-    api.post(`/finance/claims/${c.id}/decide`, { decision })
+    const run = () => api.post(`/finance/claims/${c.id}/decide`, { decision })
       .then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
+    if (decision === 'approved') {
+      // Approving a claim mints a payable settlement — confirm before committing.
+      Alert.alert('Approve claim?', `Approving this claim creates a payable settlement of ${c.currency ?? 'INR'} ${c.amount ?? 0} to the claimant.`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Approve & settle', onPress: run },
+      ])
+    } else {
+      run()
+    }
   }
   const assessRisk = (sid: string) => {
     api.post(`/finance/risk/${sid}/assess`)

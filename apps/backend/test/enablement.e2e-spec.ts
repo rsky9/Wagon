@@ -25,6 +25,12 @@ describe('Enablement platform (e2e)', () => {
   const ADM = '9999988888'
 
   const requestOtp = async (mobile: string) => {
+    // Clear per-mobile send throttle so seeded numbers can be reused across suites.
+    const redis = app.get(REDIS)
+    if (redis?.del) {
+      await redis.del(`otp_send_cooldown:${mobile}`).catch(() => {})
+      await redis.del(`otp_send_count:${mobile}`).catch(() => {})
+    }
     const res = await request(app.getHttpServer())
       .post('/api/v1/auth/otp')
       .send({ mobile })

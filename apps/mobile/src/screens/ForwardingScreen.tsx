@@ -75,7 +75,7 @@ export function ForwardingScreen({ onBack, onOpenShipments }: Props) {
 
   const bookConsolidation = (id: string) => {
     // Discover live carrier services on the market and let the forwarder pick one.
-    api.get<{ services: Array<{ id: string; carrierOrg: { name: string } | null; vessel?: string | null; flight?: string | null; originRef?: string | null; destinationRef?: string | null; rate?: number | null; currency: string; availableSlots: number }> }>('/market/carrier-services')
+    api.get<{ services: Array<{ id: string; carrierOrg: { id: string; name: string } | null; vessel?: string | null; flight?: string | null; originRef?: string | null; destinationRef?: string | null; rate?: number | null; currency: string; availableSlots: number }> }>('/market/carrier-services')
       .then((res) => {
         if (res.services.length === 0) {
           alertPrompt('Book consolidation', 'Carrier org id', [
@@ -94,8 +94,14 @@ export function ForwardingScreen({ onBack, onOpenShipments }: Props) {
             ...res.services.map((svc) => ({
               text: `${svc.carrierOrg?.name ?? 'Carrier'} · ${svc.vessel ?? svc.flight ?? 'service'} · ${svc.originRef ?? '—'}→${svc.destinationRef ?? '—'} · ${svc.rate != null ? `${svc.currency} ${svc.rate}` : '—'} (${svc.availableSlots} slots)`,
               onPress: () => {
-                api.post(`/market/carrier-services/${svc.id}/book`)
-                  .then(() => { Alert.alert('Booked', 'Carrier space booked'); fetch() })
+                // Book the market slot AND mark THIS consolidation booked with
+                // the chosen carrier (never an orphan shipment).
+                const book = svc.carrierOrg?.id
+                  ? api.post(`/forwarding/consolidations/${id}/book`, { carrierId: svc.carrierOrg.id })
+                      .then(() => api.post(`/market/carrier-services/${svc.id}/book`).catch(() => {}))
+                  : api.post(`/market/carrier-services/${svc.id}/book`)
+                book
+                  .then(() => { Alert.alert('Booked', 'Carrier booked for this consolidation'); fetch() })
                   .catch((e) => Alert.alert('Error', e.message))
               },
             })),

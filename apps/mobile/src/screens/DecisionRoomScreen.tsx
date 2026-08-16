@@ -131,10 +131,23 @@ export function DecisionRoomScreen({ loadId, onBack, onConfirmed, onNegotiate }:
             </View>
 
             <View style={styles.actions}>
-              <ActionBtn label={t('decisionRoom.shortlist')} tone="success" onPress={() => shortlist(item.id)} theme={theme} />
-              <ActionBtn label={t('decisionRoom.counter')} tone="primary" onPress={() => counter(item.id, item.amount)} theme={theme} />
-              <ActionBtn label={t('decisionRoom.confirm')} tone="brand" onPress={() => confirm(item.id, item.amount)} theme={theme} />
-              <ActionBtn label={t('decisionRoom.reject')} tone="danger" onPress={() => reject(item.id)} theme={theme} />
+              {item.status === 'pending' && (
+                <>
+                  <ActionBtn label={t('decisionRoom.shortlist')} tone="success" onPress={() => shortlist(item.id)} theme={theme} />
+                  <ActionBtn label={t('decisionRoom.counter')} tone="primary" onPress={() => counter(item.id, item.amount)} theme={theme} />
+                  <ActionBtn label={t('decisionRoom.reject')} tone="danger" onPress={() => reject(item.id)} theme={theme} />
+                </>
+              )}
+              {item.status === 'shortlisted' && (
+                <>
+                  <ActionBtn label={t('decisionRoom.confirm')} tone="brand" onPress={() => confirm(item.id, item.amount)} theme={theme} />
+                  <ActionBtn label={t('decisionRoom.counter')} tone="primary" onPress={() => counter(item.id, item.amount)} theme={theme} />
+                  <ActionBtn label={t('decisionRoom.reject')} tone="danger" onPress={() => reject(item.id)} theme={theme} />
+                </>
+              )}
+              {item.status === 'negotiating' && (
+                <ActionBtn label={t('decisionRoom.counter')} tone="primary" onPress={() => counter(item.id, item.amount)} theme={theme} />
+              )}
             </View>
           </View>
         )}

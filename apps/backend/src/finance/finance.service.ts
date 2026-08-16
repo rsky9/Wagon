@@ -66,6 +66,15 @@ export class FinanceService {
     if (!['loss', 'damage', 'delay', 'other'].includes(input.reason)) throw new BadRequestException('Invalid claim reason')
     if (input.amount != null && input.amount <= 0) throw new BadRequestException('Claim amount must be positive')
     const shipment = await this.requireShipmentAccess(user, input.shipmentId)
+    // Prevent stacking: once a claim on this shipment has been approved (and a
+    // policy claimed / settlement minted), further claims are blocked so a policy
+    // can't be drained by repeated approvals.
+    const alreadyApproved = await this.prisma.claim.findFirst({
+      where: { shipmentId: input.shipmentId, status: 'approved' },
+    })
+    if (alreadyApproved) {
+      throw new BadRequestException('A claim on this shipment is already approved — no further claims')
+    }
     const org = await this.orgAccess.primaryOrg(user)
     const claim = await this.prisma.$transaction(async (tx) => {
       const created = await tx.claim.create({
@@ -148,13 +157,34 @@ export class FinanceService {
       // org that happened to decide the claim.
       if (decision === 'approved' && claim.amount) {
         const liableOrg = await this.resolveClaimPayer(claim.shipmentId)
+        // If the insurer is liable, cap the payout at the policy's coverage so
+        // a ₹10M claim can't be charged to a ₹1L policy.
+        let payoutAmount = claim.amount
+        if (liableOrg) {
+          const policy = await tx.insurancePolicy.findFirst({
+            where: { shipmentId: claim.shipmentId, insurerId: liableOrg },
+            select: { coverage: true },
+          })
+          if (policy?.coverage != null) {
+            // Aggregate: subtract anything already paid out on this policy.
+            const paid = await tx.settlement.aggregate({
+              where: { shipmentId: claim.shipmentId, type: 'claim', payeeId: claim.claimantId ?? undefined, status: 'cleared' },
+              _sum: { amount: true },
+            })
+            const remaining = Math.max(0, policy.coverage - (paid._sum.amount ?? 0))
+            payoutAmount = Math.min(claim.amount, remaining)
+          }
+        }
+        if (payoutAmount <= 0) {
+          throw new BadRequestException('Policy coverage on this shipment is exhausted — no further payout')
+        }
         await tx.settlement.create({
           data: {
             shipmentId: claim.shipmentId,
             payerId: liableOrg ?? undefined,
             payeeId: claim.claimantId ?? undefined,
             type: 'claim',
-            amount: claim.amount,
+            amount: payoutAmount,
             currency: claim.currency,
             status: 'due',
           },
@@ -250,6 +280,21 @@ export class FinanceService {
           status: 'active',
         },
       })
+      // Premium is collected: the shipment owner (or the buyer) pays the insurer
+      // via a settlement so cover is actually funded, not just recorded.
+      if (input.premium != null && input.premium > 0) {
+        await tx.settlement.create({
+          data: {
+            shipmentId: input.shipmentId,
+            payerId: shipment.ownerOrgId ?? undefined,
+            payeeId: org.id,
+            type: 'premium',
+            amount: input.premium,
+            currency: input.currency ?? 'INR',
+            status: 'due',
+          },
+        })
+      }
       await this.outbox.emit(tx as never, {
         eventType: 'FINANCE',
         eventCode: 'POLICY_ISSUED',
@@ -339,7 +384,7 @@ export class FinanceService {
   // ---------- Settlements ----------
 
   async createSettlement(input: { shipmentId: string; payerId?: string; payeeId?: string; type: string; amount?: number; currency?: string }, user: User) {
-    if (!['freight', 'advance', 'balance', 'commission', 'claim'].includes(input.type)) throw new BadRequestException('Invalid settlement type')
+    if (!['freight', 'advance', 'balance', 'commission', 'claim', 'premium'].includes(input.type)) throw new BadRequestException('Invalid settlement type')
     if (input.amount != null && input.amount <= 0) throw new BadRequestException('Settlement amount must be positive')
     const shipment = await this.requireShipmentAccess(user, input.shipmentId)
     // Default the payer to the caller's org when neither side is specified.
@@ -385,6 +430,21 @@ export class FinanceService {
         throw new BadRequestException(`Settlement cannot exceed the agreed rate ₹${cap}`)
       }
     }
+    // Claim settlements may only reference a REAL approved claim, and the
+    // amount is capped at the claim's assessed/approved amount — a shipment
+    // owner must not mint an arbitrary obligation against an innocent org.
+    if (input.type === 'claim') {
+      const claim = await this.prisma.claim.findFirst({
+        where: { shipmentId: input.shipmentId, status: 'approved' },
+        orderBy: { decidedAt: 'desc' },
+      })
+      if (!claim) throw new BadRequestException('No approved claim on this shipment to settle')
+      if (input.amount != null && claim.amount != null && input.amount > claim.amount) {
+        throw new BadRequestException(`Claim settlement cannot exceed the approved claim amount ₹${claim.amount}`)
+      }
+      // The claimant cannot settle a claim they raised against themselves.
+      if (payerId === input.payeeId) throw new BadRequestException('Claim settlement must have distinct payer and payee')
+    }
     const settlement = await this.prisma.$transaction(async (tx) => {
       const created = await tx.settlement.create({
         data: {
@@ -424,6 +484,14 @@ export class FinanceService {
     if (!settlement) throw new NotFoundException('Settlement not found')
     await this.requireShipmentAccess(user, settlement.shipmentId)
     if (settlement.status !== 'due') throw new BadRequestException('Only due settlements can be cleared')
+    // Clearing RUNS A REAL CAPTURE against the payer — only the payer's org (or
+    // the shipment owner, which is usually the payer) may authorize it. A member
+    // of the owner org who is neither side must not trigger a charge on a third
+    // party's account.
+    const memberOrgIds = await this.orgAccess.memberOrgIds(user)
+    if (settlement.payerId && !memberOrgIds.includes(settlement.payerId)) {
+      throw new ForbiddenException('Only the payer’s org can authorize clearing this settlement')
+    }
     const amount = settlement.amount ?? 0
     if (amount <= 0) throw new BadRequestException('Settlement has no amount to collect')
     // Idempotent: one real payment per settlement (escrow-style capture).

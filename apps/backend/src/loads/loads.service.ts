@@ -211,10 +211,14 @@ export class LoadsService {
       where.supplierId = supplier?.id
     }
 
+    // Quotes are competitive intelligence — only the load's supplier sees them;
+    // transporters browsing the open feed must not see other bidders' amounts.
+    const includeQuotes = isSupplier && !isTransporter
+
     const [items, total] = await Promise.all([
       this.prisma.load.findMany({
         where,
-        include: { material: true, quotes: true },
+        include: { material: true, ...(includeQuotes ? { quotes: true } : {}) },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,

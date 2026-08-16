@@ -65,7 +65,7 @@ export class AuthController {
   }
 
   @Patch('bank')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, ActionVerifiedGuard('update_bank'))
   updateBank(@Body() body: { account: string; ifsc: string; holder?: string }, @CurrentUser() user: User) {
     return this.auth.updateBank(user, body.account, body.ifsc, body.holder ?? '')
   }

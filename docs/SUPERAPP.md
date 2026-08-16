@@ -379,6 +379,35 @@ A fifth deep audit of the economy, money loop, and tracking surfaced and fixed:
 - **Passbook is role-aware**: suppliers see escrow/advance/balance as out and refunds as in; transporters see payouts as in — no more cross-side negative balances. Transporter trip money shows the **agreed booking rate**, not the fare estimate.
 - Raise-Dispute splits issue-type from description; Finance "pending" excludes failed; KYC quest XP fires once per session; negotiation accept asks for confirmation; OTP error uses the right i18n key.
 
+### 10.7 Delivered: settlement-integrity + deletion-safety + flow repair
+
+A sixth deep audit of the money/settlement layer, deletion safety, and the least-covered screens surfaced and fixed:
+
+**Settlement integrity**
+- **`claim` settlements are guarded**: they require a real approved claim, are capped at the claim amount, and `clearSettlement` now requires the **payer's org** to authorize the real capture (a shipment owner can no longer mint a ₹10M obligation against an innocent org and capture it).
+- **Every accepted market quote with an amount now creates a settlement** for all kinds (warehouse/forwarding/insurance get a canonical shipment) — providers of every kind are actually paid, not just transport.
+- **Insurance premiums are billed**: issuing a policy with a premium creates a `premium` settlement (orderer → insurer).
+- **Claim payouts are capped at policy coverage** (aggregate against prior payouts on the policy) and a second claim on an already-approved shipment is blocked (no policy draining).
+
+**Deletion safety**
+- **User deletion is soft + anonymized** (deactivate, scrub mobile/name, revoke sessions) — never a hard cascade that would destroy the *other* party's payout/escrow ledger through Load → Trip → Payment.
+
+**Money/authorization edge cases**
+- `submitQuote` requires a positive amount (a 0/negative quote would materialize a worthless settlement).
+- **Truck availability syncs to the market listing** (pause ↔ live) and truck removal is blocked while committed to an active trip/booking.
+- **Driver availability toggle no longer self-locks**: `setAvailability` resolves without the availability filter.
+- **Booking confirm + negotiation accept are atomic**: `confirmBooking` claims the bid inside the truck-busy check (no TOCTOU double-book; no same-load double booking); negotiation accept atomically claims the offer and re-checks the load is open.
+- **OTP send is throttled per-mobile** (30s cooldown + 5/hour via Redis) — no SMS bombing or OTP invalidation; **public load feed hides other bidders' quote amounts** (competitive-intelligence leak closed).
+- **Programmatic market** attributes demand to the connector's org, not the acting member's primary org.
+
+**Mobile flow repairs**
+- **Raise Dispute no longer 400s**: the backend accepts `issueType` and persists it.
+- **Trip-execution OTP gates on verification** (not just generation) with a "waiting for supplier" state — a mistyped code can be regenerated instead of blocking the trip forever.
+- **"My requests" renders** (contract-shape fix); **consolidation booking** now books the consolidation with the chosen carrier (not an orphan shipment); **Decision Room** gates action buttons by bid status.
+- **Insurance purchase completes**: "Accept & issue policy" calls cover-accept (the premium is billed).
+- **Placeholder addresses eliminated**: Shipments/Planning/Plan proposal require real origin/destination (no 'Origin'/'Destination' sentinels in production data).
+- **Claim approve asks for confirmation** (it mints a payable settlement); **bank-detail changes now step-up** (payout destination is a serious money action); Passbook "pending" excludes failed.
+
 ---
 
 ## Research sources

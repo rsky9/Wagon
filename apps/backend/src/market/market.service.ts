@@ -386,9 +386,14 @@ export class MarketService {
     description?: string
     sourceType?: string
     sourceId?: string
+    requesterOrgId?: string
   }, user: User) {
     if (!REQUEST_KINDS.includes(input.kind)) throw new BadRequestException('Invalid request kind')
-    const org = await this.orgAccess.primaryOrg(user)
+    // Programmatic (API-key) callers pass their connector's org explicitly so
+    // demand is never mis-attributed to a member's *primary* org.
+    const org = input.requesterOrgId
+      ? { id: input.requesterOrgId }
+      : await this.orgAccess.primaryOrg(user)
     const request = await this.prisma.marketRequest.create({
       data: {
         requesterOrgId: org.id,
@@ -632,6 +637,11 @@ export class MarketService {
     if (request.status !== 'open' && request.status !== 'quoted') {
       throw new BadRequestException(`Request is ${request.status}`)
     }
+    // A quote is a binding money offer — zero/negative amounts would materialize
+    // as a worthless settlement or a free policy.
+    if (input.amount == null || input.amount <= 0) {
+      throw new BadRequestException('Quote amount must be positive')
+    }
     // Attribute the quote to the provider's org. When quoting against a specific
     // listing, that listing's org is authoritative; otherwise resolve by request
     // kind (warehouse -> warehouse org, carrier -> carrier org, ...) with
@@ -720,15 +730,31 @@ export class MarketService {
       // Materialize the booked request into an operational object so the
       // execute/settle layers can run (not just a paper booking).
       const materializedShipmentId = await this.materializeBooking(tx as unknown as Record<string, never>, quote)
-      // Money flow: the accepted quote becomes a settlement (requester pays provider),
-      // bound to the actual shipment created for this booking. Kinds that don't
-      // materialize a shipment (warehouse ops, forwarding, insurance) are tracked by
-      // their operational object instead — no fake shipment FK.
+      // Money flow: the accepted quote becomes a settlement (requester pays provider).
+      // Every accepted quote with an amount creates a settlement so providers of
+      // every kind (warehouse, forwarding, insurance, carrier) are actually paid.
       let settlementId: string | null = null
-      if (quote.amount != null && materializedShipmentId) {
+      if (quote.amount != null) {
+        // Kinds that don't materialize a shipment yet (warehouse/forwarding/
+        // insurance) get a canonical shipment row so the settlement has a valid FK.
+        let shipmentId = materializedShipmentId
+        if (!shipmentId) {
+          const canonical = await tx.shipment.create({
+            data: {
+              ref: `MK-${quote.request.id.slice(-8)}-${Date.now().toString(36).toUpperCase()}`,
+              ownerOrgId: quote.request.requesterOrgId,
+              commodity: quote.request.kind,
+              status: 'booked',
+              mode: 'multimodal',
+              originId: quote.providerOrgId,
+              destinationId: quote.request.requesterOrgId,
+            },
+          })
+          shipmentId = canonical.id
+        }
         const settlement = await tx.settlement.create({
           data: {
-            shipmentId: materializedShipmentId,
+            shipmentId,
             payerId: quote.request.requesterOrgId,
             payeeId: quote.providerOrgId,
             type: 'freight',

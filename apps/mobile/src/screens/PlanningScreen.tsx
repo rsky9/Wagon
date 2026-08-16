@@ -20,6 +20,8 @@ export function PlanningScreen({ onBack }: Props) {
   const [loading, setLoading] = useState(true)
   const [shipmentId, setShipmentId] = useState('')
   const [mode, setMode] = useState('road')
+  const [origin, setOrigin] = useState('')
+  const [destination, setDestination] = useState('')
   const [cost, setCost] = useState('')
   const [eta, setEta] = useState('')
   const [proposing, setProposing] = useState(false)
@@ -31,11 +33,12 @@ export function PlanningScreen({ onBack }: Props) {
 
   const propose = () => {
     if (!shipmentId.trim() || !cost.trim()) { Alert.alert('Shipment id and cost required'); return }
+    if (!origin.trim() || !destination.trim()) { Alert.alert('Origin & destination required'); return }
     setProposing(true)
     api.post<{ plan: Plan }>('/planning/plans', {
       shipmentId: shipmentId.trim(),
-      legs: [{ mode, origin: 'Origin', destination: 'Destination', cost: Number(cost), etaHours: eta ? Number(eta) : 24 }],
-    }).then(() => { setShipmentId(''); setCost(''); setEta(''); fetch() })
+      legs: [{ mode, origin: origin.trim(), destination: destination.trim(), cost: Number(cost), etaHours: eta ? Number(eta) : 24 }],
+    }).then(() => { setShipmentId(''); setOrigin(''); setDestination(''); setCost(''); setEta(''); fetch() })
       .catch((e) => Alert.alert('Error', e.message))
       .finally(() => setProposing(false))
   }
@@ -61,6 +64,8 @@ export function PlanningScreen({ onBack }: Props) {
           <View style={[styles.form, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Text style={[styles.formTitle, { color: theme.foreground }]}>Propose a plan</Text>
             <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Shipment id" placeholderTextColor={theme.mutedForeground} value={shipmentId} onChangeText={setShipmentId} />
+            <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Origin (city)" placeholderTextColor={theme.mutedForeground} value={origin} onChangeText={setOrigin} />
+            <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Destination (city)" placeholderTextColor={theme.mutedForeground} value={destination} onChangeText={setDestination} />
             <View style={styles.row}>
               {['road', 'rail', 'ocean', 'air'].map((m) => (
                 <Pressable key={m} style={[styles.kindChip, mode === m && styles.kindActive]} onPress={() => setMode(m)}>

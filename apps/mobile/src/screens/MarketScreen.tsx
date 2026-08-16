@@ -39,18 +39,13 @@ const KIND_ICON: Record<string, string> = {
 }
 const REQ_KINDS = ['transport', 'warehouse', 'forwarding', 'carrier', 'insurance']
 
-interface MineItem {
-  request: MarketRequest
-  quotes: MarketQuote[]
-}
-
 export function MarketScreen({ onBack, capabilities = [] }: Props) {
   const theme = useTheme()
   const [tab, setTab] = useState<Tab>('listings')
   const [listings, setListings] = useState<MarketListing[]>([])
   const [myListings, setMyListings] = useState<MarketListing[]>([])
   const [requests, setRequests] = useState<MarketRequest[]>([])
-  const [mine, setMine] = useState<MineItem[]>([])
+  const [mine, setMine] = useState<MarketRequest[]>([])
   const [counts, setCounts] = useState<{ listings: number; requests: number; carriers: number; ai: number; partners: number; mine: number }>({ listings: 0, requests: 0, carriers: 0, ai: 0, partners: 0, mine: 0 })
   const [loading, setLoading] = useState(true)
   const [filterKind, setFilterKind] = useState('')
@@ -112,7 +107,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
     Promise.all([
       api.get<{ listings: MarketListing[] }>(`/market/listings${qs}`).then((r) => r.listings),
       api.get<{ requests: MarketRequest[] }>('/market/requests').then((r) => r.requests),
-      api.get<{ requests: MineItem[] }>('/market/requests/mine').then((r) => { setMine(r.requests); return r.requests }).catch(() => [] as MineItem[]),
+      api.get<{ requests: MarketRequest[] }>('/market/requests/mine').then((r) => { setMine(r.requests); return r.requests }).catch(() => [] as MarketRequest[]),
       api.get<{ services: typeof carrierServices }>(`/market/carrier-services${carOriginSearch || carDestSearch ? `?origin=${encodeURIComponent(carOriginSearch)}&destination=${encodeURIComponent(carDestSearch)}` : ''}`).then((r) => { setCarrierServices(r.services); return r.services }).catch(() => []),
       api.get<{ listings: MarketListing[] }>('/market/listings/mine').then((r) => { setMyListings(r.listings); return r.listings }).catch(() => [] as MarketListing[]),
       api.get<{ partners: typeof partners }>('/market/partners').then((r) => { setPartners(r.partners); return r.partners }).catch(() => []),
@@ -615,7 +610,7 @@ export function MarketScreen({ onBack, capabilities = [] }: Props) {
               <Text style={[styles.sectionTitle, { color: theme.foreground }]}>My requests ({mine.length})</Text>
               {mine.length === 0
                 ? <EmptyState title="No requests yet" message="Your requests and their quotes appear here" icon="📋" />
-                : mine.map((m) => m.request ? renderRequest(m.request, true) : null)}
+                : mine.map((m) => renderRequest(m, true))}
             </View>
           ) : item.type === 'quotes' ? (
             <View style={styles.section}>

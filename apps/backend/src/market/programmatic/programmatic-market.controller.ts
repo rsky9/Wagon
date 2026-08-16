@@ -30,7 +30,8 @@ export class ProgrammaticMarketController {
   @Post('requests')
   async postRequest(@Req() req: { apiKeyAuth: { orgId: string } }, @Body() body: { kind: string; originRef?: string; destinationRef?: string; city?: string; capacityNeeded?: number; budget?: number; description?: string }) {
     const user = await this.actingUser(req.apiKeyAuth.orgId)
-    return this.market.createRequest({ ...body, sourceType: 'programmatic', sourceId: req.apiKeyAuth.orgId }, user)
+    // Attribute demand to the CONNECTOR's org, not the acting member's primary org.
+    return this.market.createRequest({ ...body, sourceType: 'programmatic', sourceId: req.apiKeyAuth.orgId, requesterOrgId: req.apiKeyAuth.orgId }, user)
   }
 
   @Post('requests/:requestId/decompose')

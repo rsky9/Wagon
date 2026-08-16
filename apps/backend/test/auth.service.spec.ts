@@ -18,6 +18,8 @@ describe('AuthService', () => {
       get: jest.fn(),
       set: jest.fn(),
       del: jest.fn(),
+      incr: jest.fn(),
+      expire: jest.fn(),
     }
     service = new AuthService(prisma, provider, config, tokens, redis)
   })

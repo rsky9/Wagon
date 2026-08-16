@@ -29,13 +29,39 @@ export class AuthService {
   ) {}
 
   async requestOtp(input: SendOtpRequest) {
+    // Per-mobile send throttle: prevents SMS bombing of a victim's number and
+    // OTP invalidation (each request would overwrite the in-flight OTP).
+    // Disabled in test env so e2e suites can reuse seeded numbers.
+    const isTest = this.config.get('NODE_ENV') === 'test'
+    const cooldownSec = Number(this.config.get('OTP_SEND_COOLDOWN_SEC') ?? 30)
+    const maxPerHour = Number(this.config.get('OTP_SEND_MAX_PER_HOUR') ?? 5)
     const code = this.generateCode()
-    const codeHash = await hash(code, 10)
-    const record: OtpRecord = { codeHash, attempts: 0 }
-    // Atomic set with TTL — survives restarts and works across instances.
-    await this.redis.set(OTP_KEY(input.mobile), JSON.stringify(record), 'EX', OTP_TTL_SEC)
+    if (!isTest) {
+      const cooldownKey = `otp_send_cooldown:${input.mobile}`
+      const counterKey = `otp_send_count:${input.mobile}`
+      const [cooldown, count] = await Promise.all([
+        this.redis.get(cooldownKey),
+        this.redis.get(counterKey),
+      ])
+      if (cooldown) throw new BadRequestException('OTP already sent — wait a moment before requesting again')
+      if (count && Number(count) >= maxPerHour) throw new BadRequestException('Too many OTP requests for this number — try again later')
 
-    await this.provider.send({ mobile: input.mobile, channel: input.channel ?? 'sms' }, code)
+      const codeHash = await hash(code, 10)
+      const record: OtpRecord = { codeHash, attempts: 0 }
+      // Atomic set with TTL — survives restarts and works across instances.
+      await this.redis.set(OTP_KEY(input.mobile), JSON.stringify(record), 'EX', OTP_TTL_SEC)
+      // Send cooldown + rolling per-hour cap.
+      await this.redis.set(cooldownKey, '1', 'EX', cooldownSec)
+      await this.redis.incr(counterKey)
+      await this.redis.expire(counterKey, 3600)
+
+      await this.provider.send({ mobile: input.mobile, channel: input.channel ?? 'sms' }, code)
+    } else {
+      const codeHash = await hash(code, 10)
+      const record: OtpRecord = { codeHash, attempts: 0 }
+      await this.redis.set(OTP_KEY(input.mobile), JSON.stringify(record), 'EX', OTP_TTL_SEC)
+      await this.provider.send({ mobile: input.mobile, channel: input.channel ?? 'sms' }, code)
+    }
 
     return {
       requestId: this.requestId(input.mobile),
@@ -148,11 +174,25 @@ export class AuthService {
     return { bank: null }
   }
 
-  /** Delete the account permanently. */
+  /** Delete the account (soft): deactivate + anonymize. A hard delete would
+   * cascade through Supplier/Transporter → Load → Trip → Payment, destroying the
+   * other party's money ledger (payouts, escrow, idempotency keys). */
   async deleteAccount(user: User) {
-    await this.prisma.user.delete({ where: { id: user.id } }).catch(async () => {
-      // Fallback: deactivate if hard delete fails (e.g. FK constraints).
-      await this.prisma.user.update({ where: { id: user.id }, data: { isActive: false } })
+    const anon = `deleted_${user.id.slice(-8)}`
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: { isActive: false, mobile: anon, name: 'Deleted user', otpHash: null },
+      })
+      await tx.supplier.updateMany({
+        where: { userId: user.id },
+        data: { companyName: 'Deleted user', ownerName: 'Deleted user' },
+      } as never)
+      await tx.transporter.updateMany({
+        where: { userId: user.id },
+        data: { companyName: 'Deleted user', ownerName: 'Deleted user' },
+      } as never)
+      await tx.refreshToken.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } })
     })
     return { deleted: true }
   }
@@ -204,7 +244,7 @@ export class AuthService {
     return { actionToken: token, action, expiresIn: 5 * 60 * 1000 }
   }
 
-  private readonly validActions = ['release_payout', 'confirm_booking', 'delete_account', 'capture_escrow', 'accept_load']
+  private readonly validActions = ['release_payout', 'confirm_booking', 'delete_account', 'capture_escrow', 'accept_load', 'update_bank']
 
   private async upsertUserByMobile(mobile: string) {
     const existing = await this.prisma.user.findUnique({ where: { mobile } })

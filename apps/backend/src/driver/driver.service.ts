@@ -13,6 +13,13 @@ export class DriverService {
     return driver
   }
 
+  /** Lookup without the availability filter — self-service (availability toggle)
+   *  must work even when the driver has marked themself unavailable, otherwise
+   *  an unavailable driver is permanently locked out. */
+  private async driverByMobile(user: User) {
+    return this.prisma.driver.findFirst({ where: { mobile: user.mobile } })
+  }
+
   /** Driver home: today's trips + assigned active trip. */
   async home(user: User) {
     const driver = await this.driverFor(user)
@@ -48,7 +55,7 @@ export class DriverService {
 
   /** Toggle driver availability. */
   async setAvailability(user: User, available: boolean) {
-    const driver = await this.driverFor(user)
+    const driver = await this.driverByMobile(user)
     if (!driver) throw new BadRequestException('Driver profile not found')
     const updated = await this.prisma.driver.update({
       where: { id: driver.id },

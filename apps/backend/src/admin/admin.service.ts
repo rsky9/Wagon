@@ -373,10 +373,19 @@ export class AdminService {
       action: 'user.delete',
       resource: `user:${userId}`,
       before: { mobile: user.mobile, role: user.role },
-      after: { deleted: true },
+      after: { deleted: true, soft: true },
     })
-    await this.prisma.user.delete({ where: { id: userId } }).catch(async () => {
-      await this.prisma.user.update({ where: { id: userId }, data: { isActive: false } })
+    // Soft delete: hard-deleting a user cascades through Load → Trip → Payment
+    // and destroys the other party's money ledger. Deactivate + anonymize instead.
+    const anon = `deleted_${userId.slice(-8)}`
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { isActive: false, mobile: anon, name: 'Deleted user', otpHash: null },
+      })
+      await tx.supplier.updateMany({ where: { userId }, data: { companyName: 'Deleted user', ownerName: 'Deleted user' } as never })
+      await tx.transporter.updateMany({ where: { userId }, data: { companyName: 'Deleted user', ownerName: 'Deleted user' } as never })
+      await tx.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } })
     })
     return { deleted: true }
   }
