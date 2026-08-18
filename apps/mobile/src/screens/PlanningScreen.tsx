@@ -17,6 +17,7 @@ interface PlanRow extends Plan {
 export function PlanningScreen({ onBack }: Props) {
   const theme = useTheme()
   const [plans, setPlans] = useState<PlanRow[]>([])
+  const [shipments, setShipments] = useState<Shipment[]>([])
   const [loading, setLoading] = useState(true)
   const [shipmentId, setShipmentId] = useState('')
   const [mode, setMode] = useState('road')
@@ -28,6 +29,8 @@ export function PlanningScreen({ onBack }: Props) {
 
   const fetch = useCallback(() => {
     api.get<{ plans: PlanRow[] }>('/planning/plans').then((r) => setPlans(r.plans)).catch(() => {}).finally(() => setLoading(false))
+    // Pick from the user's own shipments instead of typing a raw id.
+    api.get<{ shipments: Shipment[] }>('/foundation/shipments').then((r) => setShipments(r.shipments)).catch(() => {})
   }, [])
   useEffect(() => { fetch() }, [fetch])
 
@@ -63,7 +66,22 @@ export function PlanningScreen({ onBack }: Props) {
         ListHeaderComponent={
           <View style={[styles.form, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Text style={[styles.formTitle, { color: theme.foreground }]}>Propose a plan</Text>
-            <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Shipment id" placeholderTextColor={theme.mutedForeground} value={shipmentId} onChangeText={setShipmentId} />
+            {shipments.length > 0 ? (
+              <>
+                <Text style={[styles.label, { color: theme.mutedForeground }]}>Shipment</Text>
+                <View style={styles.shipRow}>
+                  {shipments.slice(0, 6).map((s) => (
+                    <Pressable key={s.id} style={[styles.shipChip, { backgroundColor: shipmentId === s.id ? theme.primary : theme.background, borderColor: shipmentId === s.id ? theme.primary : theme.border }]} onPress={() => setShipmentId(s.id)}>
+                      <Text style={{ color: shipmentId === s.id ? '#fff' : theme.mutedForeground, fontSize: 12, fontWeight: '700' }}>
+                        {s.commodity ?? 'Shipment'}{s.weightKg ? ` · ${s.weightKg}kg` : ''}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            ) : (
+              <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Shipment id" placeholderTextColor={theme.mutedForeground} value={shipmentId} onChangeText={setShipmentId} />
+            )}
             <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Origin (city)" placeholderTextColor={theme.mutedForeground} value={origin} onChangeText={setOrigin} />
             <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Destination (city)" placeholderTextColor={theme.mutedForeground} value={destination} onChangeText={setDestination} />
             <View style={styles.row}>
@@ -122,6 +140,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
   half: { flex: 1 },
   input: { borderRadius: radius.md, borderWidth: 1, padding: spacing.md, fontSize: 14 },
+  label: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
+  shipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  shipChip: { borderRadius: radius.full, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   kindChip: { borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderWidth: 1, borderColor: 'rgba(128,128,128,0.4)' },
   kindActive: { backgroundColor: '#F97316', borderColor: '#F97316' },
   kindText: { fontSize: 12, fontWeight: '700' },

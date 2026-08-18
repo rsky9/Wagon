@@ -114,7 +114,7 @@ export type RootStackParamList = {
   TruckDetail: { truckId: string }
   Invoices: undefined
   LoadHistory: undefined
-  Quests: { role: 'transporter' | 'supplier' } | undefined
+  Quests: undefined
   RoleChange: undefined
   PostLoadWizard: undefined
   DecisionRoom: { loadId: string }
@@ -168,7 +168,6 @@ function navigateToUrl(nav: any, url: string, item?: { data?: { loadId?: string;
     if (url === 'TripExceptions' && d.tripId) params.tripId = d.tripId
     if (url === 'ReturnLoads' && d.tripId) params.tripId = d.tripId
     if (url === 'TripExecute' && d.tripId) params.tripId = d.tripId
-    if (url === 'Quests') params.role = 'transporter'
     if (url === 'LoadDetail' && d.loadId) {
       // LoadDetail fetches by id in LoadByIdScreen when only an id is present.
       nav.navigate('LoadDetail', { id: d.loadId } as never)
@@ -560,11 +559,9 @@ function LoadHistoryRoute({ navigation }: any) {
   return <LoadHistoryScreen onBack={() => navigation.goBack()} />
 }
 
-function QuestsRoute({ navigation, route }: any) {
-  const role = route.params?.role as 'transporter' | 'supplier'
+function QuestsRoute({ navigation }: any) {
   return (
     <QuestsScreen
-      role={role}
       onBack={() => navigation.goBack()}
       onOpenQuest={(target) => {
         if (!target) return

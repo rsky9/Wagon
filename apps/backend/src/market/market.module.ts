@@ -5,9 +5,10 @@ import { OutboxModule } from '../outbox/outbox.module'
 import { OrgAccessModule } from '../org-access/org-access.module'
 import { NotificationsModule } from '../notifications/notifications.module'
 import { PlanningModule } from '../planning/planning.module'
+import { MatchingModule } from '../matching/matching.module'
 
 @Module({
-  imports: [OutboxModule, OrgAccessModule, NotificationsModule, PlanningModule],
+  imports: [OutboxModule, OrgAccessModule, NotificationsModule, PlanningModule, MatchingModule],
   controllers: [MarketController],
   providers: [MarketService],
   exports: [MarketService],

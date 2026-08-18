@@ -262,7 +262,7 @@ function AccountTab({ navigation }: any) {
       onOpenNotifPrefs={() => root?.navigate('NotifPrefs')}
       onOpenInvoices={() => root?.navigate('Invoices')}
       onOpenLoadHistory={() => root?.navigate('LoadHistory')}
-      onOpenQuests={() => root?.navigate('Quests', { role: 'transporter' })}
+      onOpenQuests={() => root?.navigate('Quests')}
       onOpenSaved={() => root?.navigate('Favorites')}
       onOpenBids={() => root?.navigate('MyBids')}
       onOpenDisputes={() => root?.navigate('Disputes')}

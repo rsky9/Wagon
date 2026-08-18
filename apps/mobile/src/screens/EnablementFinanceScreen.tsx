@@ -5,6 +5,7 @@ import { useTheme, spacing, radius } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
 import { api } from '../config'
 import type { Claim, Settlement, InsurancePolicy, Shipment } from '@wagon/contracts'
+import { useAuth } from '../auth'
 
 interface Props {
   onBack: () => void
@@ -12,6 +13,14 @@ interface Props {
 
 export function EnablementFinanceScreen({ onBack }: Props) {
   const theme = useTheme()
+  const { session } = useAuth()
+  const caps = session?.profile.capabilities?.length ? session.profile.capabilities : [session?.profile.role ?? '']
+  // Approving a claim / assessing risk / deciding mints money obligations —
+  // only insurer-kind users and admins should act on others' claims.
+  const canDecide = caps.includes('carrier') || caps.includes('admin')
+  // Filing a claim is for the shipment owner (supplier/transporter) — not any
+  // enablement user who wanders into this screen.
+  const canFile = caps.includes('supplier') || caps.includes('transporter')
   const [claims, setClaims] = useState<Claim[]>([])
   const [settlements, setSettlements] = useState<Settlement[]>([])
   const [policies, setPolicies] = useState<InsurancePolicy[]>([])
@@ -89,6 +98,7 @@ export function EnablementFinanceScreen({ onBack }: Props) {
         data={[{ k: 'claims' as const }, { k: 'settlements' as const }, { k: 'policies' as const }]}
         keyExtractor={(i) => i.k}
         ListHeaderComponent={
+          canFile ? (
           <View style={[styles.form, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Text style={[styles.formTitle, { color: theme.foreground }]}>File a claim</Text>
             <TextInput
@@ -112,6 +122,7 @@ export function EnablementFinanceScreen({ onBack }: Props) {
               <Text style={styles.createBtnText}>{filing ? 'Filing…' : '+ File claim'}</Text>
             </Pressable>
           </View>
+          ) : undefined
         }
         renderItem={({ item }) => (
           <View style={styles.section}>
@@ -127,7 +138,7 @@ export function EnablementFinanceScreen({ onBack }: Props) {
                     <Text style={[styles.chip, { color: c.status === 'approved' ? theme.success : c.status === 'rejected' ? theme.danger : theme.warning, borderColor: c.status === 'approved' ? theme.success : c.status === 'rejected' ? theme.danger : theme.warning }]}>{c.status}</Text>
                   </View>
                   <Text style={[styles.meta, { color: theme.mutedForeground }]}>Shipment {c.shipmentId.slice(-6)}</Text>
-                  {(c.status === 'filed' || c.status === 'assessed') && (
+                  {(c.status === 'filed' || c.status === 'assessed') && canDecide && (
                     <View style={styles.claimActions}>
                       {c.status === 'filed' && (
                         <Pressable style={[styles.smallBtn, { backgroundColor: theme.warning, opacity: busyId ? 0.5 : 1 }]} onPress={() => assess(c)} disabled={!!busyId}>

@@ -127,6 +127,78 @@ export class HomeService {
       }
     }
 
+    // ----- Role-aware blocks for the remaining user types -----
+    // Driver: today's trips, active trip, availability, earnings.
+    if (caps.includes('driver') || user.role === 'driver') {
+      const driver = await this.prisma.driver.findFirst({ where: { mobile: user.mobile } })
+      if (driver) {
+        const start = new Date()
+        start.setHours(0, 0, 0, 0)
+        const [trips, delivered, activeTrip] = await Promise.all([
+          this.prisma.trip.findMany({
+            where: { driverId: driver.id, createdAt: { gte: start } },
+            include: { load: true },
+            orderBy: { updatedAt: 'desc' },
+            take: 10,
+          }),
+          this.prisma.trip.findMany({
+            where: { driverId: driver.id, status: 'delivered' },
+            include: { load: true, booking: true },
+          }),
+          this.prisma.trip.findFirst({
+            where: { driverId: driver.id, status: { in: ['accepted', 'in_transit'] } },
+            include: { load: true },
+            orderBy: { updatedAt: 'desc' },
+          }),
+        ])
+        const earned = delivered.reduce((s, t) => s + this.driverPay(driver, t.booking?.rate ?? t.load.fareEstimate), 0)
+        result.driver = {
+          available: driver.status,
+          activeTrip,
+          todayTrips: trips.slice(0, 5),
+          earnings: { trips: delivered.length, earned },
+          missingProfile: false,
+        }
+      } else {
+        result.driver = { available: false, activeTrip: null, todayTrips: [], earnings: { trips: 0, earned: 0 }, missingProfile: true }
+      }
+    }
+
+    // Enablement roles: forwarder / warehouse / carrier get their org's active work.
+    const enablementCaps = caps.filter((c) => ['forwarder', 'warehouse', 'carrier'].includes(c))
+    if (enablementCaps.length > 0) {
+      const orgIds = await this.orgIds(user)
+      if (orgIds.length > 0) {
+        const [shipments, forwardOrders, facilities, policies, activePlans] = await Promise.all([
+          this.prisma.shipment.count({ where: { ownerOrgId: { in: orgIds } } }),
+          this.prisma.forwardOrder.count({ where: { forwarderId: { in: orgIds } } }),
+          this.prisma.facility.count({ where: { operatorId: { in: orgIds } } }),
+          this.prisma.insurancePolicy.count({ where: { OR: [{ insurerId: { in: orgIds } }, { shipment: { ownerOrgId: { in: orgIds } } }] } }),
+          this.prisma.plan.count({ where: { shipment: { ownerOrgId: { in: orgIds } }, status: { in: ['proposed', 'selected'] } } }),
+        ])
+        result.enablement = {
+          capabilities: enablementCaps,
+          orgIds,
+          counts: { shipments, forwardOrders, facilities, policies, activePlans },
+        }
+      } else {
+        result.enablement = { capabilities: enablementCaps, orgIds: [], counts: { shipments: 0, forwardOrders: 0, facilities: 0, policies: 0, activePlans: 0 } }
+      }
+    }
+
+    // Admin: a compact platform KPI strip on the home cockpit.
+    if (user.role === 'admin' || caps.includes('admin')) {
+      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      const [activeUsers, loadsWeek, openDisputes, liveListings, openRequests] = await Promise.all([
+        this.prisma.user.count({ where: { isActive: true } }),
+        this.prisma.load.count({ where: { createdAt: { gte: since } } }),
+        this.prisma.dispute.count({ where: { status: 'open' } }),
+        this.prisma.marketListing.count({ where: { status: 'live' } }),
+        this.prisma.marketRequest.count({ where: { status: { in: ['open', 'quoted'] } } }),
+      ])
+      result.admin = { activeUsers, loadsWeek, openDisputes, liveListings, openRequests }
+    }
+
     // ----- Cross-cutting: what needs attention right now -----
     const [unreadCount, kycPending, activeExceptions, pendingBookings, expiringDocs] = await Promise.all([
       this.prisma.notification.count({ where: { userId: user.id, isRead: false } }),
@@ -179,5 +251,15 @@ export class HomeService {
 
   private async supplierId(user: User) {
     return (await this.prisma.supplier.findUnique({ where: { userId: user.id } }))?.id
+  }
+
+  private async orgIds(user: User) {
+    const memberships = await this.prisma.organizationMember.findMany({ where: { userId: user.id }, select: { organizationId: true } })
+    return memberships.map((m) => m.organizationId)
+  }
+
+  private driverPay(driver: { payRate: number | null }, fare: number) {
+    if (driver.payRate != null && driver.payRate > 0) return driver.payRate
+    return Math.round(fare * 0.25) // default 25% share when no pay rate is set
   }
 }

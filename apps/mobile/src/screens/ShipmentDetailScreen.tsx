@@ -6,6 +6,7 @@ import { api } from '../config'
 import type { Shipment, ShipmentLeg, Plan, ForwardOrder, CargoUnit } from '@wagon/contracts'
 import { alertPrompt } from '../components/Prompt'
 import { showActionSheet } from '../components/ActionSheet'
+import { useAuth } from '../auth'
 interface Detail extends Shipment {
   legs: ShipmentLeg[]
   plans: Plan[]
@@ -33,6 +34,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) {
   const theme = useTheme()
+  const { session } = useAuth()
   const [shipment, setShipment] = useState<Detail | null>(null)
   const [sourceLoad, setSourceLoad] = useState<SourceLoad | null>(null)
   const [cargo, setCargo] = useState<CargoUnit[]>([])
@@ -40,6 +42,13 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
   const [error, setError] = useState<string | null>(null)
   const [coverPlanId, setCoverPlanId] = useState<string | null>(null)
   const [coverValue, setCoverValue] = useState('')
+
+  // Role-aware actions: only show what this user's capabilities support.
+  const caps = session?.profile.capabilities?.length ? session.profile.capabilities : [session?.profile.role ?? '']
+  // Operational actions (leg transitions, cargo split/container) belong to the
+  // parties executing the shipment; insurance is a money action.
+  const canOperate = caps.some((c) => ['supplier', 'transporter', 'forwarder', 'warehouse'].includes(c))
+  const canInsure = caps.some((c) => ['supplier', 'carrier', 'forwarder'].includes(c))
 
   const fetch = useCallback(() => {
     setError(null)
@@ -240,6 +249,21 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
     </SafeAreaView>
   }
 
+  // Role-aware actions: only show what this user's capabilities support.
+  const actions: Array<{ label: string; fn: () => void }> = []
+  if (caps.some((c) => ['supplier', 'transporter', 'forwarder', 'warehouse', 'carrier'].includes(c))) {
+    actions.push({ label: '🗺️ Propose plan', fn: proposePlan })
+  }
+  if (caps.includes('forwarder') || caps.includes('supplier')) {
+    actions.push({ label: '🧾 Forward order', fn: createOrder })
+  }
+  if (caps.includes('supplier') || caps.includes('transporter')) {
+    actions.push({ label: '⚖️ File claim', fn: fileClaim })
+  }
+  if (caps.some((c) => ['forwarder', 'carrier', 'supplier'].includes(c))) {
+    actions.push({ label: '🚢 Book carrier', fn: bookCarrier })
+  }
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
@@ -280,7 +304,7 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
             </Text>
             {l.departedAt && <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>Departed {new Date(l.departedAt).toLocaleString()}</Text>}
             {l.arrivedAt && <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>Arrived {new Date(l.arrivedAt).toLocaleString()}</Text>}
-            {(l.status === 'planned' || l.status === 'booked' || l.status === 'in_transit') && (
+            {(l.status === 'planned' || l.status === 'booked' || l.status === 'in_transit') && canOperate && (
               <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm }}>
                 {(l.status === 'planned' || l.status === 'booked') && (
                   <Pressable style={[styles.smallBtn, { backgroundColor: '#F97316' }]} onPress={() => legTransition(l.id, 'departed')}>
@@ -304,7 +328,7 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
 
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.sm }}>
           <Text style={[styles.sectionTitle, { color: theme.foreground }]}>Cargo ({cargo.length})</Text>
-          <Pressable onPress={addCargo} hitSlop={8}><Text style={{ color: '#F97316', fontSize: 13, fontWeight: '800' }}>+ Add</Text></Pressable>
+          {canOperate && <Pressable onPress={addCargo} hitSlop={8}><Text style={{ color: '#F97316', fontSize: 13, fontWeight: '800' }}>+ Add</Text></Pressable>}
         </View>
         {cargo.map((u) => (
           <View key={u.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -315,12 +339,12 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
             <Text style={[styles.meta, { color: theme.mutedForeground }]}>
               {u.weightKg ? `${u.weightKg} kg` : '—'} · {u.equipment ?? '—'} {u.parent ? `· from ${u.parent.ref}` : ''}
             </Text>
-            {!u.parent && (
+            {!u.parent && canOperate && (
               <Pressable style={[styles.smallBtn, { backgroundColor: '#8B5CF6', alignSelf: 'flex-start', marginTop: spacing.sm }]} onPress={() => splitCargo(u)}>
                 <Text style={styles.smallBtnText}>Split</Text>
               </Pressable>
             )}
-            {(u.kind === 'container' || u.kind === 'teu') && (
+            {(u.kind === 'container' || u.kind === 'teu') && canOperate && (
               <Pressable style={[styles.smallBtn, { backgroundColor: '#2563EB', alignSelf: 'flex-start', marginTop: spacing.sm }]} onPress={() => advanceContainer(u)}>
                 <Text style={styles.smallBtnText}>Container ⚙️</Text>
               </Pressable>
@@ -336,9 +360,11 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
               <Text style={[styles.chip, { color: p.status === 'selected' ? theme.success : theme.warning, borderColor: p.status === 'selected' ? theme.success : theme.warning }]}>{p.status}</Text>
             </View>
             <Text style={[styles.meta, { color: theme.mutedForeground }]}>₹{(p.cost ?? 0).toLocaleString('en-IN')} · {(p.etaHours ?? '—')}h · risk {p.riskScore}</Text>
-            <Pressable style={[styles.smallBtn, { backgroundColor: '#0EA5E9', alignSelf: 'flex-start', marginTop: spacing.sm }]} onPress={() => quoteCover(p.id)}>
-              <Text style={styles.smallBtnText}>Insure this plan</Text>
-            </Pressable>
+            {canInsure && (
+              <Pressable style={[styles.smallBtn, { backgroundColor: '#0EA5E9', alignSelf: 'flex-start', marginTop: spacing.sm }]} onPress={() => quoteCover(p.id)}>
+                <Text style={styles.smallBtnText}>Insure this plan</Text>
+              </Pressable>
+            )}
           </View>
         ))}
 
@@ -356,12 +382,7 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
 
         <Text style={[styles.sectionTitle, { color: theme.foreground }]}>Actions</Text>
         <View style={styles.actions}>
-          {[
-            { label: '🗺️ Propose plan', fn: proposePlan },
-            { label: '🧾 Forward order', fn: createOrder },
-            { label: '⚖️ File claim', fn: fileClaim },
-            { label: '🚢 Book carrier', fn: bookCarrier },
-          ].map((a) => (
+          {actions.map((a) => (
             <Pressable key={a.label} style={[styles.actionBtn, { backgroundColor: '#F97316' }]} onPress={a.fn}>
               <Text style={styles.actionText}>{a.label}</Text>
             </Pressable>

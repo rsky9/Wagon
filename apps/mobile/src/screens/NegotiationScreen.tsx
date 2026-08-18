@@ -5,6 +5,7 @@ import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { Button, EmptyState, StatusChip, type StatusTone } from '@wagon/components'
 import { api } from '../config'
 import { useI18n } from '@wagon/i18n'
+import { useAuth } from '../auth'
 import { alertPrompt } from '../components/Prompt'
 interface Offer {
   id: string
@@ -43,9 +44,19 @@ const TONE: Record<string, StatusTone> = {
 export function NegotiationScreen({ loadId, onBack }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
+  const { session } = useAuth()
   const [data, setData] = useState<TimelineData | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
+
+  // Whose side is the viewer on? Used to label "your offer" vs "their offer"
+  // correctly — the old code assumed the viewer is always the transporter.
+  const caps = session?.profile.capabilities?.length ? session.profile.capabilities : [session?.profile.role ?? '']
+  const isSupplier = caps.includes('supplier')
+  const isTransporter = caps.includes('transporter')
+  // For a viewer who is neither supplier nor transporter (deep-linked), fall
+  // back to labeling by the counterpart role without claiming ownership.
+  const isMine = (o: Offer) => (isSupplier || isTransporter) && o.fromRole === (isSupplier ? 'supplier' : 'transporter')
 
   const fetch = useCallback(() => {
     api.get<TimelineData>(`/bidding/load/${loadId}/timeline`).then(setData).catch(() => {}).finally(() => setLoading(false))
@@ -112,7 +123,7 @@ export function NegotiationScreen({ loadId, onBack }: Props) {
                   <View key={o.id} style={[styles.offerCard, { backgroundColor: theme.card, borderColor: theme.primary + '55' }]}>
                     <View style={styles.offerTop}>
                       <Text style={[styles.amount, { color: theme.foreground }]}>{formatINR(o.amount)}</Text>
-                      <StatusChip label={o.fromRole === 'supplier' ? 'Supplier offer' : 'Your offer'} tone="info" />
+                      <StatusChip label={isMine(o) ? 'Your offer' : 'Their offer'} tone="info" />
                     </View>
                     {o.conditions ? <Text style={[styles.conditions, { color: theme.mutedForeground }]}>Condition: {o.conditions}</Text> : null}
                     <Text style={[styles.validity, { color: theme.mutedForeground }]}>Valid {o.validityHours}h · {new Date(o.createdAt).toLocaleString('en-IN')}</Text>
@@ -142,7 +153,7 @@ export function NegotiationScreen({ loadId, onBack }: Props) {
                       <StatusChip label={o.status} tone={TONE[o.status]} />
                     </View>
                     <Text style={[styles.meta, { color: theme.mutedForeground }]}>
-                      {o.fromRole === 'supplier' ? 'Supplier' : 'Transporter'} · {new Date(o.createdAt).toLocaleString('en-IN')}
+                      {isMine(o) ? 'You' : o.fromRole === 'supplier' ? 'Supplier' : 'Transporter'} · {new Date(o.createdAt).toLocaleString('en-IN')}
                     </Text>
                     {o.conditions ? <Text style={[styles.conditions, { color: theme.mutedForeground }]}>If: {o.conditions}</Text> : null}
                   </View>

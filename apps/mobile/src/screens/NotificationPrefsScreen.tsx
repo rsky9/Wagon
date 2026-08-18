@@ -4,6 +4,7 @@ import { StyleSheet, Text, View, ScrollView, Pressable, Switch } from 'react-nat
 import { useTheme, spacing, radius } from '@wagon/design'
 import { api } from '../config'
 import { useI18n } from '@wagon/i18n'
+import { useAuth } from '../auth'
 
 interface Prefs {
   loadAlerts: boolean
@@ -20,13 +21,13 @@ interface Props {
   onBack: () => void
 }
 
-const ROWS: Array<{ key: keyof Prefs; icon: string; label: string; desc: string }> = [
-  { key: 'loadAlerts', icon: '🚛', label: 'Load alerts', desc: 'New loads matching your lane' },
+const ROWS: Array<{ key: keyof Prefs; icon: string; label: string; desc: string; roles?: Array<'supplier' | 'transporter'> }> = [
+  { key: 'loadAlerts', icon: '🚛', label: 'Load alerts', desc: 'New loads matching your lane', roles: ['transporter'] },
   { key: 'booking', icon: '📅', label: 'Booking alerts', desc: 'Load accepted, quoted, booked' },
   { key: 'trip', icon: '🚚', label: 'Trip alerts', desc: 'Pickup, transit and delivery updates' },
   { key: 'payment', icon: '₹', label: 'Payment alerts', desc: 'Escrow, payout and settlement' },
   { key: 'kyc', icon: '🛡️', label: 'KYC alerts', desc: 'Verification status changes' },
-  { key: 'docExpiry', icon: '📄', label: 'Document expiry', desc: 'Insurance, permit, fitness reminders' },
+  { key: 'docExpiry', icon: '📄', label: 'Document expiry', desc: 'Insurance, permit, fitness reminders', roles: ['transporter'] },
   { key: 'promo', icon: '🎁', label: 'Promotions', desc: 'Offers and product updates' },
   { key: 'market', icon: '📦', label: 'Marketplace', desc: 'Shipments, quotes and asks on the capability market' },
 ]
@@ -34,6 +35,10 @@ const ROWS: Array<{ key: keyof Prefs; icon: string; label: string; desc: string 
 export function NotificationPrefsScreen({ onBack }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
+  const { session } = useAuth()
+  const caps = session?.profile.capabilities?.length ? session.profile.capabilities : [session?.profile.role ?? '']
+  const isTransporter = caps.includes('transporter')
+  const isSupplier = caps.includes('supplier')
   const [prefs, setPrefs] = useState<Prefs | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -47,6 +52,15 @@ export function NotificationPrefsScreen({ onBack }: Props) {
     setPrefs((p) => (p ? { ...p, [key]: value } : p))
     await api.patch('/notification-preferences', { [key]: value }).catch(() => {})
   }
+
+  // Only show rows that apply to this user's role — a supplier with no fleet
+  // shouldn't see truck-document-expiry toggles.
+  const visibleRows = ROWS.filter((r) => {
+    if (!r.roles) return true
+    if (r.roles.includes('transporter') && isTransporter) return true
+    if (r.roles.includes('supplier') && isSupplier) return true
+    return false
+  })
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
@@ -63,7 +77,7 @@ export function NotificationPrefsScreen({ onBack }: Props) {
           <Text style={[styles.subtitle, { color: theme.mutedForeground }]}>
             Choose which notifications you want to receive.
           </Text>
-          {ROWS.map((row) => (
+          {visibleRows.map((row) => (
             <View key={row.key} style={[styles.row, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <Text style={{ fontSize: 18 }}>{row.icon}</Text>
               <View style={{ flex: 1, marginLeft: spacing.md }}>

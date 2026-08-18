@@ -436,11 +436,20 @@ export class AiService {
     return { recommendations }
   }
 
-  /** Recommendations created by the caller (any agent) — for a personal AI feed. */
+  /**
+   * AI feed for the caller: recommendations created by anyone in the caller's
+   * orgs (a colleague's plan/carrier rec for the same shipment is relevant),
+   * falling back to strictly personal items when the user has no org yet.
+   */
   async myRecommendations(user: User, agent?: string, status?: string) {
+    const orgIds = await this.orgAccess.memberOrgIds(user)
+    const memberIds = orgIds.length
+      ? await this.prisma.organizationMember.findMany({ where: { organizationId: { in: orgIds } }, select: { userId: true } })
+      : []
+    const creators = memberIds.length ? memberIds.map((m) => m.userId) : [user.id]
     const recommendations = await this.prisma.aiRecommendation.findMany({
       where: {
-        createdBy: user.id,
+        createdBy: { in: creators },
         ...(agent ? { agent } : {}),
         ...(status ? { status } : {}),
       },

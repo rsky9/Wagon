@@ -80,6 +80,11 @@ export class ChatService {
           const tr = await this.prisma.transporter.findUnique({ where: { id: t.transporterId }, include: { user: { select: { name: true, id: true } } } })
           otherName = tr?.user?.name ?? 'Transporter'
           otherUserId = tr?.user?.id ?? null
+        } else {
+          // Driver: the counterparty is the transporter who assigned the trip.
+          const tr = await this.prisma.transporter.findUnique({ where: { id: t.transporterId }, include: { user: { select: { name: true, id: true } } } })
+          otherName = tr?.user?.name ?? 'Transporter'
+          otherUserId = tr?.user?.id ?? null
         }
         return {
           tripId: t.id,

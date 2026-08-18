@@ -4,6 +4,7 @@ import { OutboxRelay } from '../outbox/outbox-relay.service'
 import { OrgAccessService } from '../org-access/org-access.service'
 import { NotificationsService } from '../notifications/notifications.service'
 import { PlanningService } from '../planning/planning.service'
+import { LoadMatchingService } from '../matching/matching.service'
 import type { User } from '@prisma/client'
 import type { Prisma } from '@prisma/client'
 
@@ -18,6 +19,7 @@ export class MarketService {
     private readonly notifications: NotificationsService,
     @Inject(OutboxRelay) private readonly outbox: OutboxRelay,
     @Inject(PlanningService) private readonly planning: PlanningService,
+    private readonly matching: LoadMatchingService,
   ) {}
 
   // ---------- Lanes (shared primitive) ----------
@@ -1647,7 +1649,9 @@ export class MarketService {
       warehouse: ['warehouse_space'],
       carrier: ['carrier_service'],
       forwarder: ['forwarder_service'],
-      supplier: ['truck_capacity'],
+      // A shipper posts Loads, which materialize as transport DEMAND (requests),
+      // not as supply listings — so a supplier offers no capacity on the market.
+      supplier: [],
       driver: [],
     }
     const CAP_TO_FULFILL: Record<string, string[]> = {
@@ -1679,38 +1683,48 @@ export class MarketService {
       this.prisma.marketQuote.count({ where: { providerOrgId: { in: orgIds }, status: { in: ['submitted', 'accepted'] } } }),
     ])
 
-    // Demand I can quote: open requests whose kind matches my capability.
+    // Demand I can quote: open requests whose kind matches my capability,
+    // ranked by proximity to where the user operates + saved-search lanes.
+    const marketCtx = await this.matching.marketContext(user.id)
     const demandWhere: Record<string, unknown> = { status: 'open', requesterOrgId: { notIn: orgIds } }
     if (fulfillKinds.length) demandWhere.kind = { in: fulfillKinds }
     const demand = await this.prisma.marketRequest.findMany({
       where: demandWhere as never,
       include: { requesterOrg: { select: { id: true, name: true, verified: true } }, lane: true },
       orderBy: { createdAt: 'desc' },
-      take: 8,
+      take: 20,
     })
     const demandForMe = await Promise.all(
       demand.map(async (r) => {
         const rating = await this.orgAverageRating(r.requesterOrgId)
-        return { ...r, requesterRating: rating.avg, requesterCompletion: (await this.orgTrust(r.requesterOrgId)).completionRate }
+        const trust = await this.orgTrust(r.requesterOrgId)
+        const rank = this.matching.rankMarketItem(r, marketCtx)
+        return { ...r, requesterRating: rating.avg, requesterCompletion: trust.completionRate, relevance: rank.relevance, hitsKnownLane: rank.hitsKnownLane }
       }),
     )
+    demandForMe.sort((a, b) => (b as { relevance: number }).relevance - (a as { relevance: number }).relevance)
+    const topDemand = demandForMe.slice(0, 8)
 
-    // Supply I can get: live listings of complementary kinds, trust-scored.
+    // Supply I can get: live listings of complementary kinds, trust-scored,
+    // ranked by proximity + lane overlap.
     const supplyWhere: Record<string, unknown> = { status: 'live', providerOrgId: { notIn: orgIds } }
     if (needKinds.length) supplyWhere.kind = { in: needKinds }
     const supply = await this.prisma.marketListing.findMany({
       where: supplyWhere as never,
       include: { providerOrg: { select: { id: true, name: true, verified: true } } },
       orderBy: { createdAt: 'desc' },
-      take: 8,
+      take: 20,
     })
     const supplyForMe = await Promise.all(
       supply.map(async (l) => {
         const rating = await this.orgAverageRating(l.providerOrgId)
         const trust = await this.orgTrust(l.providerOrgId)
-        return { ...l, providerRating: rating.avg, providerCompletion: trust.completionRate }
+        const rank = this.matching.rankMarketItem(l, marketCtx)
+        return { ...l, providerRating: rating.avg, providerCompletion: trust.completionRate, relevance: rank.relevance, hitsKnownLane: rank.hitsKnownLane }
       }),
     )
+    supplyForMe.sort((a, b) => (b as { relevance: number }).relevance - (a as { relevance: number }).relevance)
+    const topSupply = supplyForMe.slice(0, 8)
 
     return {
       capabilities,
@@ -1718,8 +1732,8 @@ export class MarketService {
       canFulfill: fulfillKinds,
       canRequest: needKinds,
       myActivity: { listings: myListings, openShipments: myOpenRequests, submittedQuotes: mySubmittedQuotes },
-      shipmentsForMe: demandForMe,
-      capacityForMe: supplyForMe,
+      shipmentsForMe: topDemand,
+      capacityForMe: topSupply,
     }
   }
 

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
-import { truckToPickupKm } from '../reference/geo'
+import { truckToPickupKm, geocodePlace, haversineKm } from '../reference/geo'
 
 /**
  * Per-truck load matching. Unlike a flat "any truck fits" check, this engine
@@ -33,6 +33,68 @@ export class LoadMatchingService {
     const goodsAffinity = new Set(trips.map((t) => t.load.materialId).filter(Boolean) as string[])
     const completed = trips.filter((t) => t.status === 'delivered').length
     return { fleet, goodsAffinity, reliability: Math.min(1, completed / 5) }
+  }
+
+  /**
+   * Market-context: the places this user operates from (fleet home bases +
+   * past trip pickups/drops) and their saved-search lane keywords. Used to rank
+   * market demand/supply by proximity + preference instead of a global feed.
+   */
+  async marketContext(userId: string) {
+    const transporter = await this.prisma.transporter.findUnique({ where: { userId } })
+    const fleet = transporter
+      ? await this.prisma.truck.findMany({ where: { transporterId: transporter.id }, select: { origin: true, lat: true, lng: true } })
+      : []
+    const trips = transporter
+      ? await this.prisma.trip.findMany({
+          where: { transporterId: transporter.id },
+          include: { load: { select: { pickupAddr: true, dropAddr: true } } },
+          take: 30,
+          orderBy: { updatedAt: 'desc' },
+        })
+      : []
+    const saved = await this.prisma.savedSearch.findMany({ where: { userId }, select: { query: true }, take: 20 })
+    const laneKeywords = new Set<string>()
+    for (const t of trips) {
+      for (const a of [t.load?.pickupAddr, t.load?.dropAddr]) {
+        if (a) laneKeywords.add(a.split(',')[0]!.trim().toLowerCase())
+      }
+    }
+    for (const s of saved) {
+      const q = (s.query as { q?: string } | null)?.q
+      if (q) {
+        q.split(/[\s,]+/).forEach((w) => { if (w.trim()) laneKeywords.add(w.trim().toLowerCase()) })
+      }
+    }
+    const homeBases = fleet.filter((t) => t.lat != null && t.lng != null).map((t) => ({ lat: t.lat!, lng: t.lng! }))
+    return { laneKeywords, homeBases }
+  }
+
+  /**
+   * Rank a market item (request or listing) by proximity to the user's home
+   * bases + lane-keyword overlap. Returns a relevance boost (0-40) and whether
+   * it hits a known lane.
+   */
+  rankMarketItem(
+    item: { originRef?: string | null; destinationRef?: string | null; city?: string | null },
+    ctx: { laneKeywords: Set<string>; homeBases: Array<{ lat: number; lng: number }> },
+  ) {
+    let relevance = 0
+    const origin = (item.originRef ?? item.city ?? '').split(',')[0]?.trim().toLowerCase() ?? ''
+    const dest = (item.destinationRef ?? '').split(',')[0]?.trim().toLowerCase() ?? ''
+    if (ctx.laneKeywords.has(origin) || ctx.laneKeywords.has(dest)) relevance += 25
+    const originCoords = geocodePlace(origin)
+    if (originCoords && ctx.homeBases.length > 0) {
+      let best = Infinity
+      for (const h of ctx.homeBases) {
+        const d = haversineKm(h.lat, h.lng, originCoords[0], originCoords[1])
+        if (d < best) best = d
+      }
+      if (best <= 50) relevance += 15
+      else if (best <= 150) relevance += 10
+      else if (best <= 300) relevance += 5
+    }
+    return { relevance, hitsKnownLane: relevance > 0 }
   }
 
   /**

@@ -8,8 +8,10 @@ import { useI18n } from '@wagon/i18n'
 
 interface ReviewRow {
   tripId: string
+  role?: string
   rating: number
   review?: string | null
+  reviewerName?: string
   route: string
   deliveredAt?: string | null
 }
@@ -23,13 +25,13 @@ export function ReviewsScreen({ onBack }: Props) {
   const { t } = useI18n()
   const [reviews, setReviews] = useState<ReviewRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [profile, setProfile] = useState<{ id: string } | null>(null)
 
   useEffect(() => {
-    api.get<{ profile: { id: string } }>('/auth/me').then((r) => {
-      setProfile(r.profile)
-      return api.get<{ reviews: ReviewRow[] }>(`/ratings/transporter/${r.profile.id}/reviews`)
-    }).then((res) => setReviews(res.reviews)).catch(() => {}).finally(() => setLoading(false))
+    // /ratings/mine returns reviews received by THIS user on either axis
+    // (transporter or supplier), so it works for every role — unlike the old
+    // hardcoded transporter endpoint which returned wrong/empty data for
+    // suppliers, forwarders, warehouses and carriers.
+    api.get<{ reviews: ReviewRow[] }>('/ratings/mine').then((res) => setReviews(res.reviews)).catch(() => {}).finally(() => setLoading(false))
   }, [])
 
   return (
@@ -47,7 +49,7 @@ export function ReviewsScreen({ onBack }: Props) {
           data={reviews}
           keyExtractor={(r) => r.tripId}
           contentContainerStyle={styles.list}
-          ListEmptyComponent={<EmptyState title={t('review.none')} message="Reviews from suppliers will appear after deliveries" icon="⭐" />}
+          ListEmptyComponent={<EmptyState title={t('review.none')} message="Reviews you receive appear here" icon="⭐" />}
           renderItem={({ item }) => (
             <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <View style={styles.cardTop}>
@@ -56,6 +58,9 @@ export function ReviewsScreen({ onBack }: Props) {
               </View>
               <Text style={[styles.route, { color: theme.foreground }]}>{item.route}</Text>
               {item.review && <Text style={[styles.review, { color: theme.mutedForeground }]}>{item.review}</Text>}
+              <Text style={[styles.reviewer, { color: theme.mutedForeground }]}>
+                {item.reviewerName ?? '—'}{item.role ? ` · ${item.role}` : ''}
+              </Text>
             </View>
           )}
         />
@@ -74,4 +79,5 @@ const styles = StyleSheet.create({
   ratingNum: { fontSize: 16, fontWeight: '800' },
   route: { fontSize: 14, fontWeight: '600' },
   review: { fontSize: 14, lineHeight: 20 },
+  reviewer: { fontSize: 12, fontWeight: '600', marginTop: 2 },
 })

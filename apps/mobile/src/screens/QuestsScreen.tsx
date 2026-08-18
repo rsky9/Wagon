@@ -7,12 +7,11 @@ import { loadGamification, levelFor, levelProgress, XP_PER_LEVEL, type Gamificat
 import { useI18n } from '@wagon/i18n'
 
 interface Props {
-  role: 'transporter' | 'supplier'
   onBack: () => void
   onOpenQuest: (target?: string) => void
 }
 
-export function QuestsScreen({ role, onBack, onOpenQuest }: Props) {
+export function QuestsScreen({ onBack, onOpenQuest }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
   const [state, setState] = useState<GamificationState | null>(null)

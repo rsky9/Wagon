@@ -21,6 +21,7 @@ interface Props {
 export function GlobalScreen({ onBack }: Props) {
   const theme = useTheme()
   const [countries, setCountries] = useState<Country[]>([])
+  const [homeCode, setHomeCode] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [fromCode, setFromCode] = useState('US')
   const [amount, setAmount] = useState('100')
@@ -28,6 +29,8 @@ export function GlobalScreen({ onBack }: Props) {
 
   const fetch = useCallback(() => {
     api.get<{ countries: Country[] }>('/countries').then((r) => setCountries(r.countries)).catch(() => {}).finally(() => setLoading(false))
+    // Read the saved home country back so it's marked + drives the converter default.
+    api.get<{ code: string }>('/countries/home').then((r) => { setHomeCode(r.code); if (r.code) setFromCode(r.code) }).catch(() => {})
   }, [])
   useEffect(() => { fetch() }, [fetch])
 
@@ -38,7 +41,7 @@ export function GlobalScreen({ onBack }: Props) {
   }
 
   const setHome = (code: string) => {
-    api.post('/countries/home', { code }).then(() => Alert.alert('Home country', `Set to ${code}`)).catch((e) => Alert.alert('Error', e.message))
+    api.post('/countries/home', { code }).then(() => { setHomeCode(code); setFromCode(code); Alert.alert('Home country', `Set to ${code}`) }).catch((e) => Alert.alert('Error', e.message))
   }
 
   const viewDocuments = (code: string) => {
@@ -82,15 +85,15 @@ export function GlobalScreen({ onBack }: Props) {
         renderItem={({ item }) => (
           <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <View style={styles.cardTop}>
-              <Text style={[styles.cardTitle, { color: theme.foreground }]}>🇺🇳 {item.name} ({item.code})</Text>
+              <Text style={[styles.cardTitle, { color: theme.foreground }]}>🇺🇳 {item.name} ({item.code}){homeCode === item.code ? ' · Home' : ''}</Text>
               <Text style={[styles.chip, { color: theme.warning, borderColor: theme.warning }]}>{item.customsRegime}</Text>
             </View>
             <Text style={[styles.meta, { color: theme.mutedForeground }]}>
               {item.currency} · {item.baseCurrency} @ {(item.exchangeRateToBase ?? 1).toFixed(2)}
             </Text>
             <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm }}>
-              <Pressable style={[styles.createBtn, styles.flexBtn, { backgroundColor: '#F97316' }]} onPress={() => setHome(item.code)}>
-                <Text style={styles.createBtnText}>Set home</Text>
+              <Pressable style={[styles.createBtn, styles.flexBtn, { backgroundColor: homeCode === item.code ? theme.success : '#F97316' }]} onPress={() => setHome(item.code)}>
+                <Text style={styles.createBtnText}>{homeCode === item.code ? '✓ Home' : 'Set home'}</Text>
               </Pressable>
               <Pressable style={[styles.createBtn, styles.flexBtn, { backgroundColor: theme.warning }]} onPress={() => viewDocuments(item.code)}>
                 <Text style={styles.createBtnText}>Documents</Text>

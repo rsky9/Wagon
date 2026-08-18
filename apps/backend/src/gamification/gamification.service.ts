@@ -78,8 +78,16 @@ export class GamificationService {
     await this.convertXpToCash(user.id)
 
     const fresh = await this.prisma.user.findUnique({ where: { id: user.id } })
-    const role = user.role === 'supplier' ? 'supplier' : 'transporter'
-    const quests = (QUESTS[role] ?? []).map((q) => ({ ...q, done: doneSet.has(q.id) }))
+    // Derive quests from capabilities so combined (supplier+transporter), driver
+    // and enablement users get the quests that match what they can actually do.
+    // Role is only a fallback when capabilities haven't been set yet.
+    const hasCaps = Boolean(user.capabilities?.length)
+    const questRoles = new Set<'transporter' | 'supplier'>()
+    if (hasCaps ? user.capabilities.includes('transporter') : user.role === 'transporter') questRoles.add('transporter')
+    if (hasCaps ? user.capabilities.includes('supplier') : user.role === 'supplier') questRoles.add('supplier')
+    const quests = ([...questRoles] as Array<'transporter' | 'supplier'>)
+      .flatMap((r) => QUESTS[r] ?? [])
+      .map((q) => ({ ...q, done: doneSet.has(q.id) }))
     const xp = fresh?.xp ?? profile?.xp ?? 0
 
     return {
@@ -116,8 +124,11 @@ export class GamificationService {
 
   /** Explicitly complete a quest (idempotent). Awards XP + badge ONCE. */
   async completeQuest(questId: string, user: User) {
-    const role = user.role === 'supplier' ? 'supplier' : 'transporter'
-    const quest = (QUESTS[role] ?? []).find((q) => q.id === questId)
+    const hasCaps = Boolean(user.capabilities?.length)
+    const questRoles: Array<'transporter' | 'supplier'> = []
+    if (hasCaps ? user.capabilities.includes('transporter') : user.role === 'transporter') questRoles.push('transporter')
+    if (hasCaps ? user.capabilities.includes('supplier') : user.role === 'supplier') questRoles.push('supplier')
+    const quest = questRoles.flatMap((r) => QUESTS[r] ?? []).find((q) => q.id === questId)
     if (!quest) throw new NotFoundException('Quest not found')
 
     // Atomic claim: only the first completion awards XP/badge — a repeat call
@@ -197,30 +208,34 @@ export class GamificationService {
     doneSet: Set<string>,
     badgeSet: Set<string>,
   ) {
-    const role = user.role === 'supplier' ? 'supplier' : 'transporter'
-    const toComplete: string[] = []
-    for (const q of QUESTS[role] ?? []) {
-      if (counts[q.id as keyof typeof counts] && !doneSet.has(q.id)) toComplete.push(q.id)
-    }
-
-    for (const questId of toComplete) {
-      const quest = (QUESTS[role] ?? []).find((q) => q.id === questId)
-      // Atomic claim: only the first completion awards XP — concurrent state()
-      // calls must not double-mint (XP auto-converts to cash).
-      const claimed = await this.prisma.userQuest.updateMany({
-        where: { userId: user.id, questId, completedAt: null },
-        data: { completedAt: new Date() },
-      })
-      if (claimed.count === 0) continue
-      if (quest?.xp) {
-        await this.prisma.user.update({ where: { id: user.id }, data: { xp: { increment: quest.xp } } })
+    const hasCaps = Boolean(user.capabilities?.length)
+    const roles: Array<'transporter' | 'supplier'> = []
+    if (hasCaps ? user.capabilities.includes('transporter') : user.role === 'transporter') roles.push('transporter')
+    if (hasCaps ? user.capabilities.includes('supplier') : user.role === 'supplier') roles.push('supplier')
+    for (const role of roles) {
+      const toComplete: string[] = []
+      for (const q of QUESTS[role] ?? []) {
+        if (counts[q.id as keyof typeof counts] && !doneSet.has(q.id)) toComplete.push(q.id)
       }
-      if (quest?.badge && !badgeSet.has(quest.badge)) {
-        await this.prisma.userBadge.upsert({
-          where: { userId_badgeId: { userId: user.id, badgeId: quest.badge } },
-          update: {},
-          create: { userId: user.id, badgeId: quest.badge },
+      for (const questId of toComplete) {
+        const quest = (QUESTS[role] ?? []).find((q) => q.id === questId)
+        // Atomic claim: only the first completion awards XP — concurrent state()
+        // calls must not double-mint (XP auto-converts to cash).
+        const claimed = await this.prisma.userQuest.updateMany({
+          where: { userId: user.id, questId, completedAt: null },
+          data: { completedAt: new Date() },
         })
+        if (claimed.count === 0) continue
+        if (quest?.xp) {
+          await this.prisma.user.update({ where: { id: user.id }, data: { xp: { increment: quest.xp } } })
+        }
+        if (quest?.badge && !badgeSet.has(quest.badge)) {
+          await this.prisma.userBadge.upsert({
+            where: { userId_badgeId: { userId: user.id, badgeId: quest.badge } },
+            update: {},
+            create: { userId: user.id, badgeId: quest.badge },
+          })
+        }
       }
     }
   }

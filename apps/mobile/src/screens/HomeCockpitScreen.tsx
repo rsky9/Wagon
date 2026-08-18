@@ -57,6 +57,19 @@ interface HomeSummary {
   capabilities: string[]
   supplier?: SupplierSummary
   transporter?: TransporterSummary
+  driver?: {
+    available: boolean
+    activeTrip?: { id: string; load: LoadRef } | null
+    todayTrips: Array<{ id: string; load: LoadRef }>
+    earnings: { trips: number; earned: number }
+    missingProfile: boolean
+  }
+  enablement?: {
+    capabilities: string[]
+    orgIds: string[]
+    counts: { shipments: number; forwardOrders: number; facilities: number; policies: number; activePlans: number }
+  }
+  admin?: { activeUsers: number; loadsWeek: number; openDisputes: number; liveListings: number; openRequests: number }
   alerts?: HomeAlerts
 }
 
@@ -346,7 +359,73 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
           </>
         )}
 
-        {!loading && !data?.transporter && !data?.supplier && (
+        {/* Driver surface */}
+        {data?.driver && (
+          <>
+            <SectionHeader title="Driver" />
+            <View style={[styles.driverCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              {data.driver.missingProfile ? (
+                <Text style={{ color: theme.warning, fontSize: 14, fontWeight: '700' }}>Ask your transporter to add your mobile number</Text>
+              ) : (
+                <>
+                  <View style={styles.driverTop}>
+                    <View>
+                      <Text style={[styles.driverValue, { color: theme.foreground }]}>{formatINR(data.driver.earnings.earned)}</Text>
+                      <Text style={[styles.driverLabel, { color: theme.mutedForeground }]}>Earned · {data.driver.earnings.trips} trips</Text>
+                    </View>
+                    <Text style={{ color: data.driver.available ? theme.success : theme.mutedForeground, fontWeight: '800' }}>
+                      {data.driver.available ? '● Available' : '○ Offline'}
+                    </Text>
+                  </View>
+                  {data.driver.activeTrip && (
+                    <Pressable style={[styles.activeTrip, { backgroundColor: theme.primary }]} onPress={onOpenTrips}>
+                      <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>Active trip</Text>
+                      <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }} numberOfLines={1}>
+                        {data.driver.activeTrip.load.pickupAddr} → {data.driver.activeTrip.load.dropAddr}
+                      </Text>
+                    </Pressable>
+                  )}
+                </>
+              )}
+            </View>
+          </>
+        )}
+
+        {/* Enablement surface (forwarder / warehouse / carrier) */}
+        {data?.enablement && (
+          <>
+            <SectionHeader title="Your operations" subtitle="Enablement workspace" action="Open" onAction={onOpenMarket ?? onOpenTrips} />
+            <View style={styles.statRow}>
+              <StatTile label="Shipments" value={data.enablement.counts.shipments} icon="📦" onPress={onOpenTrips} />
+              <StatTile label="Forward orders" value={data.enablement.counts.forwardOrders} icon="🧾" onPress={onOpenTrips} />
+              <StatTile label="Active plans" value={data.enablement.counts.activePlans} icon="🗺️" onPress={onOpenTrips} />
+            </View>
+            <View style={styles.statRow}>
+              <StatTile label="Facilities" value={data.enablement.counts.facilities} icon="🏭" onPress={onOpenTrips} />
+              <StatTile label="Policies" value={data.enablement.counts.policies} icon="🛡️" onPress={onOpenTrips} />
+              <StatTile label="Open shipments" value={0} icon="📢" onPress={onOpenMarketRequests ?? onOpenTrips} />
+            </View>
+          </>
+        )}
+
+        {/* Admin surface */}
+        {data?.admin && (
+          <>
+            <SectionHeader title="Platform" subtitle="Admin overview" />
+            <View style={styles.statRow}>
+              <StatTile label="Active users" value={data.admin.activeUsers} icon="👤" onPress={onOpenTrips} />
+              <StatTile label="Loads (7d)" value={data.admin.loadsWeek} icon="📦" onPress={onOpenTrips} />
+              <StatTile label="Open disputes" value={data.admin.openDisputes} icon="⚖️" onPress={onOpenTrips} />
+            </View>
+            <View style={styles.statRow}>
+              <StatTile label="Live capacity" value={data.admin.liveListings} icon="🏗️" onPress={onOpenMarket} />
+              <StatTile label="Open shipments" value={data.admin.openRequests} icon="📦" onPress={onOpenMarketRequests ?? onOpenMarket} />
+              <StatTile label="Marketplace" value={0} icon="📦" onPress={onOpenMarket} />
+            </View>
+          </>
+        )}
+
+        {!loading && !data?.transporter && !data?.supplier && !data?.driver && !data?.enablement && !data?.admin && (
           <View style={{ alignItems: 'center', paddingTop: 40, gap: spacing.lg }}>
             {onOpenMarket ? (
               <>
@@ -420,6 +499,11 @@ const styles = StyleSheet.create({
   alertText: { flex: 1, fontSize: 14, fontWeight: '600' },
   loadCard: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, gap: spacing.sm, marginBottom: spacing.md },
   loadReason: { fontSize: 12, fontWeight: '700' },
+  driverCard: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, gap: spacing.md },
+  driverTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  driverValue: { fontSize: 24, fontWeight: '800' },
+  driverLabel: { fontSize: 12, fontWeight: '600' },
+  activeTrip: { borderRadius: radius.lg, padding: spacing.md, gap: 2 },
   loadTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   loadFare: { fontSize: 18, fontWeight: '800' },
   matchChip: { borderRadius: radius.full, paddingHorizontal: spacing.sm, paddingVertical: 3 },

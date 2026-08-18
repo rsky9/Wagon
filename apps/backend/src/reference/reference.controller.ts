@@ -1,6 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
-import { CITY_COORDS, geocodePlace } from './geo'
+import { geocodePlace } from './geo'
 
 @Controller('reference')
 export class ReferenceController {
