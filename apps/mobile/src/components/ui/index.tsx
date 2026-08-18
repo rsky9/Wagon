@@ -2,6 +2,7 @@ import React from 'react'
 import { StyleSheet, Text, View, Pressable, ViewStyle, TextStyle } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useTheme, spacing, radius, shadows, typography, gradients } from '@wagon/design'
+import { useThemeMode } from '../../theme'
 
 /* ------------------------------------------------------------------ */
 /* Section header                                                       */
@@ -99,11 +100,14 @@ export function StatTile({ label, value, icon, onPress }: { label: string; value
 /* ------------------------------------------------------------------ */
 export function QuickAction({ icon, label, onPress, tone = 'orange' }: { icon: string; label: string; onPress: () => void; tone?: 'orange' | 'navy' | 'blue' | 'green' }) {
   const theme = useTheme()
+  const { isDark } = useThemeMode()
+  // Tones must stay legible in both modes: dark-mode text on a hardcoded light
+  // tint is invisible (e.g. navy's #0F172A "Find loads" on a dark background).
   const tones: Record<string, { bg: string; fg: string }> = {
     orange: { bg: 'rgba(249,115,22,0.12)', fg: '#F97316' },
-    navy: { bg: 'rgba(15,23,42,0.08)', fg: '#0F172A' },
-    blue: { bg: 'rgba(59,130,246,0.12)', fg: '#2563EB' },
-    green: { bg: 'rgba(16,185,129,0.12)', fg: '#047857' },
+    navy: { bg: theme.muted, fg: theme.foreground },
+    blue: { bg: isDark ? 'rgba(59,130,246,0.16)' : 'rgba(59,130,246,0.12)', fg: isDark ? '#93C5FD' : '#2563EB' },
+    green: { bg: isDark ? 'rgba(16,185,129,0.16)' : 'rgba(16,185,129,0.12)', fg: isDark ? '#6EE7B7' : '#047857' },
   }
   const t = tones[tone] ?? tones.orange!
   return (
