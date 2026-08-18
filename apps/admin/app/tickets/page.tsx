@@ -23,7 +23,6 @@ export default function Tickets() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
     api
       .get<{ tickets: Ticket[] }>("/admin/tickets")
       .then((res) => setTickets(res.tickets))

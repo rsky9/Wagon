@@ -10,7 +10,7 @@ export class IntegrationsController {
   constructor(private readonly integrations: IntegrationsService) {}
 
   @Get('catalog')
-  catalog(@CurrentUser() user: User) {
+  catalog() {
     return this.integrations.catalog()
   }
 

@@ -386,7 +386,8 @@ describe('Enablement platform (e2e)', () => {
       expect(parsed.event).toBe('SHIPMENT_CREATED')
       expect(parsed.data).toBeTruthy()
       expect(parsed.timestamp).toBeTruthy()
-      receiver.close()
+      receiver.closeAllConnections?.()
+      await new Promise<void>((resolve) => receiver.close(() => resolve()))
     })
   })
 

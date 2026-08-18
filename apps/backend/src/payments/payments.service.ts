@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException, Inject, OnModuleInit } from '@nestjs/common'
+import { Injectable, BadRequestException, NotFoundException, Inject, OnModuleDestroy, OnModuleInit } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { NotificationsService } from '../notifications/notifications.service'
 import { OutboxRelay } from '../outbox/outbox-relay.service'
@@ -6,10 +6,12 @@ import { PAYMENT_PROVIDER, PaymentProvider } from './payment-provider.service'
 import type { User } from '@prisma/client'
 
 @Injectable()
-export class PaymentsService implements OnModuleInit {
+export class PaymentsService implements OnModuleInit, OnModuleDestroy {
   // First-N-trips cashback: a % of the payout is credited to the transporter's Wagon Cash.
   private static readonly CASHBACK_FIRST_TRIPS = 3
   private static readonly CASHBACK_RATE = 0.05 // 5%
+
+  private refundLoopRunning = false
 
   constructor(
     private readonly prisma: PrismaService,
@@ -21,12 +23,20 @@ export class PaymentsService implements OnModuleInit {
   onModuleInit() {
     // Periodically retry failed refunds so a provider failure during a cancel
     // never strands captured money.
+    this.refundLoopRunning = true
     void (async () => {
-      for (;;) {
-        await new Promise((r) => setTimeout(r, 60_000))
+      for (; this.refundLoopRunning; ) {
+        await new Promise((r) => {
+          const t = setTimeout(r, 60_000)
+          t.unref()
+        })
         this.reconcileFailedRefunds().catch(() => undefined)
       }
     })()
+  }
+
+  onModuleDestroy() {
+    this.refundLoopRunning = false
   }
 
   /** Supplier pays the escrow/booking amount for an accepted trip. Idempotent per trip. */
@@ -167,6 +177,7 @@ export class PaymentsService implements OnModuleInit {
    * so captured money actually returns to the payer.
    */
   async refundTripCaptures(tripId: string, options?: { tx?: unknown }): Promise<number> {
+    void options
     const captures = await this.prisma.payment.findMany({
       where: { tripId, type: { in: ['escrow', 'advance', 'balance'] }, status: 'succeeded' },
     })

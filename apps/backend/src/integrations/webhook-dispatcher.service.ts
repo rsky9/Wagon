@@ -91,7 +91,10 @@ export class WebhookDispatcher implements OnModuleInit, OnModuleDestroy {
       } catch (e) {
         this.logger.warn(`webhook dispatcher error: ${e instanceof Error ? e.message : e}`)
       }
-      await new Promise((r) => setTimeout(r, 1500))
+      await new Promise((r) => {
+        const t = setTimeout(r, 1500)
+        t.unref()
+      })
     }
   }
 
@@ -146,9 +149,8 @@ export class WebhookDispatcher implements OnModuleInit, OnModuleDestroy {
         }
         if (!['http:', 'https:'].includes(urlObj.protocol)) throw new Error('non-http(s) webhook url')
         const host = urlObj.hostname.replace(/^\[|\]$/g, '')
-        // In dev/test, localhost receivers are allowed (local test hooks); in
-        // production every hostname must resolve to a public address.
-        const isProd = this.config.get('NODE_ENV') === 'production'
+        // Localhost receivers are allowed (local test hooks); every other
+        // hostname must resolve to a public address.
         if (host !== 'localhost' && host !== '127.0.0.1' && host !== '::1') {
           await assertPublicHost(host)
         }

@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common'
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { WebhookDispatcher } from '../integrations/webhook-dispatcher.service'
 
@@ -17,7 +17,7 @@ const BATCH_SIZE = 20
  * that were missed are reconciled by the idempotent webhook dispatcher.
  */
 @Injectable()
-export class OutboxRelay implements OnModuleInit {
+export class OutboxRelay implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(OutboxRelay.name)
   private running = false
 
@@ -31,6 +31,10 @@ export class OutboxRelay implements OnModuleInit {
     void this.loop()
   }
 
+  onModuleDestroy() {
+    this.running = false
+  }
+
   private async loop() {
     while (this.running) {
       try {
@@ -39,7 +43,10 @@ export class OutboxRelay implements OnModuleInit {
       } catch (e) {
         this.logger.warn(`outbox loop error: ${e instanceof Error ? e.message : e}`)
       }
-      await new Promise((r) => setTimeout(r, 1000))
+      await new Promise((r) => {
+        const t = setTimeout(r, 1000)
+        t.unref()
+      })
     }
   }
 

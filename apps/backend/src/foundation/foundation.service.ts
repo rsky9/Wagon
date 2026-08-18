@@ -215,7 +215,7 @@ export class FoundationService {
   }
 
   async updateShipment(id: string, input: Record<string, unknown>, user: User) {
-    const shipment = await this.orgAccess.assertShipmentAccess(user, id)
+    await this.orgAccess.assertShipmentAccess(user, id)
     const data: Record<string, unknown> = {}
     for (const key of ['commodity', 'description', 'weightKg', 'volumeM3', 'pieces', 'value', 'mode']) {
       if (key in input && input[key] !== undefined) data[key] = input[key]

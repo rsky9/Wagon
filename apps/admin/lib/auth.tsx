@@ -28,19 +28,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ? { accessToken: token, refreshToken: refreshToken ?? "", profile: { id: "", mobile: "", role: "admin" } }
       : null;
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return Boolean(localStorage.getItem("wagon_admin_token"));
+  });
 
   useEffect(() => {
     let cancelled = false;
-    if (typeof window === "undefined") {
-      setLoading(false);
-      return;
-    }
     const token = localStorage.getItem("wagon_admin_token");
-    if (!token) {
-      setLoading(false);
-      return;
-    }
+    if (!token) return;
     (async () => {
       try {
         const res = await api.get<{ profile: { id: string; mobile: string; role: string } }>("/auth/me");

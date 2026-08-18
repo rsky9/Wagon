@@ -33,13 +33,12 @@ export class TokenService {
   /** Issue an access + refresh pair; persists the refresh token (rotation-ready). */
   async issue(user: User, deviceId?: string, userAgent?: string) {
     const payload: AccessTokenPayload = { sub: user.id, role: user.role }
-    const [accessToken, refreshToken, refreshHash] = await Promise.all([
+    const [accessToken, refreshToken] = await Promise.all([
       this.jwt.signAsync(payload, {
         secret: this.config.get('JWT_ACCESS_SECRET'),
         expiresIn: this.config.get('JWT_ACCESS_TTL') ?? '15m',
       }),
       Promise.resolve(this.randomRefreshToken()),
-      Promise.resolve(),
     ])
     const refreshTtl = this.config.get('JWT_REFRESH_TTL') ?? '30d'
     const expiresAt = new Date(Date.now() + parseTtl(refreshTtl))

@@ -198,7 +198,7 @@ export default function Enablement() {
     setBusy(label);
     setError(null);
     try { await fn(); fetchTab(); }
-    catch (e: any) { setError(e.message ?? "Action failed"); }
+    catch (e) { setError(e instanceof Error ? e.message : "Action failed"); }
     finally { setBusy(null); }
   };
 
@@ -244,8 +244,8 @@ export default function Enablement() {
         const r = await api.get<{ facilities: FacilityRow[] }>("/admin/facilities");
         setFacilities(r.facilities);
       }
-    } catch (e: any) {
-      setError(e.message ?? "Failed to load");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load");
     } finally {
       setLoading(false);
     }

@@ -21,7 +21,6 @@ export default function Audit() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
     api
       .get<{ items: AuditRow[] }>("/admin/audit")
       .then((res) => setItems(res.items))

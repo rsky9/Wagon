@@ -5,6 +5,7 @@ import { OrgAccessService } from '../org-access/org-access.service'
 import { NotificationsService } from '../notifications/notifications.service'
 import { PlanningService } from '../planning/planning.service'
 import type { User } from '@prisma/client'
+import type { Prisma } from '@prisma/client'
 
 const LISTING_KINDS = ['truck_capacity', 'warehouse_space', 'carrier_service', 'forwarder_service']
 const REQUEST_KINDS = ['transport', 'warehouse', 'forwarding', 'carrier', 'insurance']
@@ -240,7 +241,7 @@ export class MarketService {
   }
 
   /** Auto-publish listings from existing supply records (facilities, consolidations). */
-  async publishFromFacility(facilityId: string, user: User) {
+  async publishFromFacility(facilityId: string, _user: User) {
     const facility = await this.prisma.facility.findUnique({ where: { id: facilityId } })
     if (!facility) throw new NotFoundException('Facility not found')
     if (!facility.operatorId) throw new BadRequestException('Facility has no operator org')
@@ -265,7 +266,7 @@ export class MarketService {
   }
 
   /** Auto-publish an LCL/consolidation as forwarder_service supply. */
-  async publishFromConsolidation(consolidationId: string, user: User) {
+  async publishFromConsolidation(consolidationId: string, _user: User) {
     const con = await this.prisma.consolidation.findUnique({ where: { id: consolidationId } })
     if (!con) throw new NotFoundException('Consolidation not found')
     const existing = await this.prisma.marketListing.findFirst({
@@ -729,7 +730,7 @@ export class MarketService {
       await tx.marketRequest.update({ where: { id: quote.requestId }, data: { status: 'booked' } })
       // Materialize the booked request into an operational object so the
       // execute/settle layers can run (not just a paper booking).
-      const materializedShipmentId = await this.materializeBooking(tx as unknown as Record<string, never>, quote)
+      const materializedShipmentId = await this.materializeBooking(tx, quote)
       // Money flow: the accepted quote becomes a settlement (requester pays provider).
       // Every accepted quote with an amount creates a settlement so providers of
       // every kind (warehouse, forwarding, insurance, carrier) are actually paid.
@@ -810,7 +811,7 @@ export class MarketService {
   }
 
   /** Map an accepted request to its operational object by kind. Returns the created shipment id if any. */
-  private async materializeBooking(tx: { [k: string]: any }, quote: {
+  private async materializeBooking(tx: Prisma.TransactionClient, quote: {
     request: { id: string; kind: string; requesterOrgId: string; originRef?: string | null; destinationRef?: string | null; city?: string | null; capacityNeeded?: number | null }
     providerOrgId: string
     amount?: number | null
@@ -1176,7 +1177,7 @@ export class MarketService {
    * matching listing (kind implied by mode) so the planner can re-procure
    * instantly instead of falling back to a static mode flip.
    */
-  async findReplacementForLane(input: { originRef?: string | null; destinationRef?: string | null; mode?: string | null; capacityNeeded?: number }, user: User) {
+  async findReplacementForLane(input: { originRef?: string | null; destinationRef?: string | null; mode?: string | null; capacityNeeded?: number }, _user: User) {
     const MODE_TO_KIND: Record<string, string[]> = {
       road: ['truck_capacity'],
       rail: ['truck_capacity'],
@@ -1477,7 +1478,7 @@ export class MarketService {
   }
 
   /** Auto-create org ratings after a completed trip (both directions). */
-  async autoRateFromTrip(trip: { id: string; transporterId: string; load: { supplierId: string } }, user: User) {
+  async autoRateFromTrip(trip: { id: string; transporterId: string; load: { supplierId: string } }, _user: User) {
     const transporter = await this.prisma.transporter.findUnique({ where: { id: trip.transporterId } }).catch(() => null)
     if (!transporter) return null
     // Transporter's org (subject: transporter) rated by supplier's org (axis transporter)
@@ -1509,7 +1510,7 @@ export class MarketService {
   }
 
   /** Auto-rate a warehouse org after a completed warehouse operation. */
-  async autoRateFromWarehouseOp(op: { id: string; operatorId: string | null; shipmentId: string | null }, user: User) {
+  async autoRateFromWarehouseOp(op: { id: string; operatorId: string | null; shipmentId: string | null }, _user: User) {
     if (!op.operatorId || !op.shipmentId) return null
     const shipment = await this.prisma.shipment.findUnique({ where: { id: op.shipmentId } })
     if (!shipment?.ownerOrgId) return null

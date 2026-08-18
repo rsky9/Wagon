@@ -61,7 +61,6 @@ export default function Loads() {
   };
 
   useEffect(() => {
-    setLoading(true);
     api
       .get<{ loads: LoadRow[] }>("/admin/loads")
       .then((res) => setLoads(res.loads))

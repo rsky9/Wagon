@@ -19,7 +19,6 @@ export default function RateCards() {
   const [loading, setLoading] = useState(true);
 
   const fetchCards = () => {
-    setLoading(true);
     api
       .get<{ rateCards: RateCard[] }>("/reference/rate-cards")
       .then((res) => setCards(res.rateCards))

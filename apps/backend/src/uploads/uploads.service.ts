@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common'
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import {
   S3Client,
@@ -21,11 +21,17 @@ export const ALLOWED_UPLOAD_MIMES = new Set([
 ])
 
 @Injectable()
-export class UploadsService implements OnModuleInit {
+export class UploadsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(UploadsService.name)
   private client: S3Client | null = null
 
   constructor(private readonly config: ConfigService) {}
+
+  onModuleDestroy() {
+    // Close the S3 client's keep-alive sockets so app shutdown is clean (jest exit).
+    this.client?.destroy()
+    this.client = null
+  }
 
   async onModuleInit() {
     const endpoint = this.config.get('MINIO_ENDPOINT')

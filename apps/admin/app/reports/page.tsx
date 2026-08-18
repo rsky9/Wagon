@@ -24,7 +24,6 @@ export default function Reports() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
     api
       .get<{ reports: Report[] }>("/admin/reports")
       .then((res) => setReports(res.reports))

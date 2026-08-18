@@ -109,8 +109,9 @@ export class IntegrationsService {
     private readonly config: ConfigService,
   ) {}
 
-  private stripSecret<T extends { secret: string }>(obj: T) {
+  private stripSecret<T extends { secret: string }>(obj: T): Omit<T, 'secret'> {
     const { secret: _secret, ...rest } = obj
+    void _secret
     return rest
   }
 
@@ -192,6 +193,7 @@ export class IntegrationsService {
     })
     // Never leak the hash; return the raw key exactly once.
     const { apiKeyHash: _hash, ...safe } = connector
+    void _hash
     return { connector: safe, ...(apiKey ? { apiKey, note: 'Store this key — it is shown only once. Authenticate programmatic calls with x-api-key.' } : {}) }
   }
 

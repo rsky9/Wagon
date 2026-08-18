@@ -23,7 +23,6 @@ export default function Disputes() {
   const [loading, setLoading] = useState(true);
 
   const fetchDisputes = useCallback(() => {
-    setLoading(true);
     api
       .get<{ disputes: DisputeRow[] }>("/disputes/open")
       .then((res) => setDisputes(res.disputes))

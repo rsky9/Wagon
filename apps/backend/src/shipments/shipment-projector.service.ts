@@ -1,7 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { OutboxRelay } from '../outbox/outbox-relay.service'
-import type { Load, Trip } from '@prisma/client'
+import type { Load } from '@prisma/client'
 
 /**
  * Phase 1 — road projection: keeps the canonical Shipment/ShipmentLeg in sync

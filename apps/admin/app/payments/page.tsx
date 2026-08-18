@@ -32,7 +32,6 @@ export default function Payments() {
   const [loading, setLoading] = useState(true);
 
   const fetchPayments = (s?: string) => {
-    setLoading(true);
     if (!s || s === "all") {
       api
         .get<{ payments: Payment[] }>("/admin/payments")
