@@ -1624,4 +1624,282 @@ describe('Wagon API (e2e)', () => {
       expect(res.body.payment.trip.load).toBeTruthy()
     })
   })
+
+  describe('search, per-truck matching & role-aware surfaces (recent work)', () => {
+    let supOrgId: string
+    let trOrgId: string
+    let jaipurLoadId: string
+    let jaipurFare: number
+    let chennaiListingId: string
+    let jaipurListingId: string
+    let trRequestId: string
+
+    beforeAll(async () => {
+      const ref = await request(app.getHttpServer())
+        .get('/api/v1/reference')
+        .set('Authorization', `Bearer ${supToken}`)
+        .expect(200)
+      const model = ref.body.models.find((m: { type: string }) => m.type === 'container')
+      const material = ref.body.materials[0]
+
+      // Org memberships let the supplier/transporter post market supply/demand.
+      const supOrg = await request(app.getHttpServer())
+        .post('/api/v1/foundation/organizations')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ name: 'E2E Search Shipper', kind: 'shipper', countryCode: 'IN' })
+        .expect(201)
+      supOrgId = supOrg.body.organization.id
+      const trOrg = await request(app.getHttpServer())
+        .post('/api/v1/foundation/organizations')
+        .set('Authorization', `Bearer ${trToken}`)
+        .send({ name: 'E2E Search Hauler', kind: 'transporter', countryCode: 'IN' })
+        .expect(201)
+      trOrgId = trOrg.body.organization.id
+
+      // A deterministic load on a well-known lane for lane/price/sort + matching tests.
+      const load = await request(app.getHttpServer())
+        .post('/api/v1/loads')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({
+          pickupAddr: 'Jaipur, Rajasthan', dropAddr: 'Delhi, India',
+          pickupLat: 26.912, pickupLng: 75.787, dropLat: 28.613, dropLng: 77.209,
+          date: '2026-10-05T08:00:00Z', truckType: 'container',
+          modelId: model.id, weight: 32, distanceKm: 300, materialId: material.id,
+        })
+        .expect(201)
+      jaipurLoadId = load.body.load.id
+      jaipurFare = load.body.load.fareEstimate
+
+      // Market supply: two live capacity listings at different prices/origins.
+      const chennai = await request(app.getHttpServer())
+        .post('/api/v1/market/listings')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ kind: 'truck_capacity', originRef: 'Chennai', destinationRef: 'Pune', city: 'Chennai', capacityAvailable: 25, capacityUnit: 't', price: 45000, description: 'SearchCaseE2E Chennai fleet' })
+        .expect(201)
+      chennaiListingId = chennai.body.listing.id
+      const jaipur = await request(app.getHttpServer())
+        .post('/api/v1/market/listings')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ kind: 'truck_capacity', originRef: 'Jaipur', destinationRef: 'Delhi', city: 'Jaipur', capacityAvailable: 40, capacityUnit: 't', price: 30000, description: 'Jaipur capacity' })
+        .expect(201)
+      jaipurListingId = jaipur.body.listing.id
+
+      // Market demand from ANOTHER org, on the supplier's saved-search lane.
+      const req = await request(app.getHttpServer())
+        .post('/api/v1/market/requests')
+        .set('Authorization', `Bearer ${trToken}`)
+        .send({ kind: 'transport', originRef: 'Jaipur', destinationRef: 'Delhi', city: 'Jaipur', budget: 50000, capacityNeeded: 20000, capacityUnit: 'kg', description: 'SearchCaseReqE2E' })
+        .expect(201)
+      trRequestId = req.body.request.id
+
+      // Saved lane gives the supplier market context for relevance ranking.
+      await request(app.getHttpServer())
+        .post('/api/v1/favorites/search')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ name: 'Jaipur lane', query: { q: 'Jaipur' } })
+        .expect(201)
+    })
+
+    afterAll(async () => {
+      const prisma = app.get(PrismaService)
+      // Remove this suite's orgs + everything attached so the enablement suite
+      // starts from its own clean primary-org view.
+      await prisma.marketListing.deleteMany({ where: { id: { in: [chennaiListingId, jaipurListingId] } } })
+      await prisma.marketRequest.deleteMany({ where: { requesterOrgId: { in: [supOrgId, trOrgId] } } })
+      await prisma.shipmentLeg.deleteMany({ where: { shipment: { ownerOrgId: { in: [supOrgId, trOrgId] } } } })
+      await prisma.shipment.deleteMany({ where: { ownerOrgId: { in: [supOrgId, trOrgId] } } })
+      await prisma.organizationMember.deleteMany({ where: { organizationId: { in: [supOrgId, trOrgId] } } })
+      await prisma.organization.deleteMany({ where: { id: { in: [supOrgId, trOrgId] } } })
+    })
+
+    it('filters loads by drop lane (toLane) case-insensitively', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/loads?toLane=delhi')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      expect(res.body.items.some((l: { id: string }) => l.id === jaipurLoadId)).toBe(true)
+      expect(res.body.items.every((l: { dropAddr: string }) => /delhi/i.test(l.dropAddr))).toBe(true)
+    })
+
+    it('sorts loads by price (cheapest first)', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/loads?sort=cheapest')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      const fares = res.body.items.map((l: { fareEstimate: number }) => l.fareEstimate)
+      for (let i = 1; i < fares.length; i++) {
+        expect(fares[i]!).toBeGreaterThanOrEqual(fares[i - 1]!)
+      }
+    })
+
+    it('filters loads by fareEstimate price range', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/loads?minPrice=${jaipurFare - 1000}&maxPrice=${jaipurFare + 1000}`)
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      expect(res.body.items.some((l: { id: string }) => l.id === jaipurLoadId)).toBe(true)
+      expect(res.body.items.every((l: { fareEstimate: number }) => l.fareEstimate >= jaipurFare - 1000 && l.fareEstimate <= jaipurFare + 1000)).toBe(true)
+    })
+
+    it('enriches the transporter feed with per-truck match reasons', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/loads?q=Jaipur')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      const target = res.body.items.find((l: { id: string }) => l.id === jaipurLoadId)
+      expect(target).toBeTruthy()
+      expect(typeof target.matchScore).toBe('number')
+      expect(Array.isArray(target.reasons)).toBe(true)
+      expect(target.reasons.length).toBeGreaterThan(0)
+      expect(target.reasons.some((r: string) => /fits this truck type/i.test(r))).toBe(true)
+    })
+
+    it('searches market listings case-insensitively and by description', async () => {
+      const byCity = await request(app.getHttpServer())
+        .get('/api/v1/market/listings?q=CHENNAI')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      expect(byCity.body.listings.some((l: { id: string }) => l.id === chennaiListingId)).toBe(true)
+
+      const byDesc = await request(app.getHttpServer())
+        .get('/api/v1/market/listings?q=searchcasee2e')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      expect(byDesc.body.listings.some((l: { id: string }) => l.id === chennaiListingId)).toBe(true)
+    })
+
+    it('sorts market listings by price (priciest first)', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/market/listings?sort=priciest')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      const idx = (id: string) => res.body.listings.findIndex((l: { id: string }) => l.id === id)
+      expect(idx(chennaiListingId)).toBeGreaterThan(-1)
+      expect(idx(jaipurListingId)).toBeGreaterThan(-1)
+      expect(idx(chennaiListingId)).toBeLessThan(idx(jaipurListingId))
+    })
+
+    it('filters market requests by budget, capacity and q', async () => {
+      const byBudget = await request(app.getHttpServer())
+        .get('/api/v1/market/requests?maxBudget=60000')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      expect(byBudget.body.requests.some((r: { id: string }) => r.id === trRequestId)).toBe(true)
+      expect(byBudget.body.requests.every((r: { budget: number | null }) => r.budget === null || r.budget <= 60000)).toBe(true)
+
+      const byCapacity = await request(app.getHttpServer())
+        .get('/api/v1/market/requests?minCapacity=10000')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      expect(byCapacity.body.requests.some((r: { id: string }) => r.id === trRequestId)).toBe(true)
+
+      const byQ = await request(app.getHttpServer())
+        .get('/api/v1/market/requests?q=searchcasereqe2e')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      expect(byQ.body.requests.some((r: { id: string }) => r.id === trRequestId)).toBe(true)
+    })
+
+    it('ranks for-you demand by saved-search lane relevance', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/market/for-you')
+        .set('Authorization', `Bearer ${supToken}`)
+        .expect(200)
+      const demand = res.body.shipmentsForMe.find((r: { id: string }) => r.id === trRequestId)
+      expect(demand).toBeTruthy()
+      expect(demand.hitsKnownLane).toBe(true)
+      expect(demand.relevance).toBeGreaterThanOrEqual(25)
+    })
+
+    it('exposes role-aware home blocks (driver / enablement / admin / transporter)', async () => {
+      // Transporter: transporter block, never driver/admin blocks.
+      const trHome = await request(app.getHttpServer())
+        .get('/api/v1/home/summary')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      expect(trHome.body.transporter).toBeTruthy()
+      expect(trHome.body.driver).toBeUndefined()
+      expect(trHome.body.admin).toBeUndefined()
+
+      // Driver: the seeded driver user gets the driver block.
+      const drvCode = await requestOtp('9000099999')
+      const drvRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/verify')
+        .send({ mobile: '9000099999', code: drvCode })
+        .expect(201)
+      const drvHome = await request(app.getHttpServer())
+        .get('/api/v1/home/summary')
+        .set('Authorization', `Bearer ${drvRes.body.accessToken}`)
+        .expect(200)
+      expect(drvHome.body.driver).toBeTruthy()
+      expect(typeof drvHome.body.driver.available).toBe('boolean')
+
+      // Enablement: adding a forwarder capability surfaces the enablement block.
+      await request(app.getHttpServer())
+        .patch('/api/v1/auth/capabilities')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ capabilities: ['supplier', 'forwarder'] })
+        .expect(200)
+      const supHome = await request(app.getHttpServer())
+        .get('/api/v1/home/summary')
+        .set('Authorization', `Bearer ${supToken}`)
+        .expect(200)
+      expect(supHome.body.enablement.capabilities).toContain('forwarder')
+      expect(supHome.body.supplier).toBeTruthy()
+      // Restore the combined capabilities for the gamification test below.
+      await request(app.getHttpServer())
+        .patch('/api/v1/auth/capabilities')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ capabilities: ['supplier', 'transporter'] })
+        .expect(200)
+
+      // Admin: platform KPI block only for admins.
+      const admHome = await request(app.getHttpServer())
+        .get('/api/v1/home/summary')
+        .set('Authorization', `Bearer ${admToken}`)
+        .expect(200)
+      expect(admHome.body.admin).toBeTruthy()
+    })
+
+    it('derives gamification quests from capabilities, not just role', async () => {
+      await request(app.getHttpServer())
+        .patch('/api/v1/auth/capabilities')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ capabilities: ['supplier'] })
+        .expect(200)
+      const solo = await request(app.getHttpServer())
+        .get('/api/v1/gamification')
+        .set('Authorization', `Bearer ${supToken}`)
+        .expect(200)
+      const soloIds = solo.body.quests.map((q: { id: string }) => q.id)
+      expect(soloIds).toContain('load') // supplier-only quest
+      expect(soloIds).not.toContain('truck') // transporter-only quest
+
+      await request(app.getHttpServer())
+        .patch('/api/v1/auth/capabilities')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ capabilities: ['supplier', 'transporter'] })
+        .expect(200)
+      const both = await request(app.getHttpServer())
+        .get('/api/v1/gamification')
+        .set('Authorization', `Bearer ${supToken}`)
+        .expect(200)
+      const bothIds = both.body.quests.map((q: { id: string }) => q.id)
+      expect(bothIds).toContain('load')
+      expect(bothIds).toContain('truck')
+    })
+
+    it('exposes my received reviews with reviewer name (ratings/mine)', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/ratings/mine')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      expect(Array.isArray(res.body.reviews)).toBe(true)
+      expect(res.body.reviews.length).toBeGreaterThanOrEqual(1)
+      const rated = res.body.reviews.find((r: { rating: number }) => r.rating === 5)
+      expect(rated).toBeTruthy()
+      expect(typeof rated.reviewerName).toBe('string')
+      expect(rated.route).toContain('→')
+    })
+  })
 })

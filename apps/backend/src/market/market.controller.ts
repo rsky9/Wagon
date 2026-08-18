@@ -1,8 +1,42 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
+import { Type } from 'class-transformer'
+import { IsIn, IsNumber, IsOptional, IsString, Min } from 'class-validator'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { CurrentUser } from '../auth/guards/current-user.decorator'
 import { MarketService } from './market.service'
 import type { User } from '@prisma/client'
+
+// Numeric query params must be transformed (class-transformer) — strings on an
+// Int filter make Prisma throw. Mirrors ListLoadsQuery in loads.dto.ts.
+class BrowseListingsQuery {
+  @IsOptional() @IsString() kind?: string
+  @IsOptional() @IsString() city?: string
+  @IsOptional() @IsString() origin?: string
+  @IsOptional() @IsString() destination?: string
+  @IsOptional() @IsString() status?: string
+  @IsOptional() @Type(() => Number) @IsNumber() lat?: number
+  @IsOptional() @Type(() => Number) @IsNumber() lng?: number
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) radiusKm?: number
+  @IsOptional() @IsString() q?: string
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) minPrice?: number
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) maxPrice?: number
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) minCapacity?: number
+  @IsOptional() @IsIn(['newest', 'cheapest', 'priciest', 'capacity']) sort?: 'newest' | 'cheapest' | 'priciest' | 'capacity'
+}
+
+class BrowseRequestsQuery {
+  @IsOptional() @IsString() kind?: string
+  @IsOptional() @IsString() city?: string
+  @IsOptional() @IsString() status?: string
+  @IsOptional() @Type(() => Number) @IsNumber() lat?: number
+  @IsOptional() @Type(() => Number) @IsNumber() lng?: number
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) radiusKm?: number
+  @IsOptional() @IsString() q?: string
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) minBudget?: number
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) maxBudget?: number
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) minCapacity?: number
+  @IsOptional() @IsIn(['newest', 'budgetLow', 'budgetHigh', 'capacity']) sort?: 'newest' | 'budgetLow' | 'budgetHigh' | 'capacity'
+}
 
 @Controller('market')
 @UseGuards(JwtAuthGuard)
@@ -32,7 +66,7 @@ export class MarketController {
   }
 
   @Get('listings')
-  browseListings(@Query() query: Record<string, unknown>) {
+  browseListings(@Query() query: BrowseListingsQuery) {
     return this.market.browseListings(query as never)
   }
 
@@ -77,7 +111,7 @@ export class MarketController {
   }
 
   @Get('requests')
-  browseRequests(@Query() query: Record<string, unknown>) {
+  browseRequests(@Query() query: BrowseRequestsQuery) {
     return this.market.browseRequests(query as never)
   }
 
