@@ -170,7 +170,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
   }
   if (forYou && forYou.shipmentsForMe.length > 0) {
     const d = forYou.shipmentsForMe[0]!
-    needsAttention.push({ icon: KIND_ICON[d.kind] ?? '📢', text: `${forYou.shipmentsForMe.length} open ${d.kind} shipment${forYou.shipmentsForMe.length > 1 ? 's' : ''} you can quote`, onPress: onOpenMarketRequests ?? onOpenMarket ?? onOpenMarketplace })
+    needsAttention.push({ icon: KIND_ICON[d.kind] ?? '📦', text: `${forYou.shipmentsForMe.length} open ${d.kind} shipment${forYou.shipmentsForMe.length > 1 ? 's' : ''} you can quote`, onPress: onOpenMarketRequests ?? onOpenMarket ?? onOpenMarketplace })
   }
   if (data?.supplier && data.supplier.awaitingResponses > 0) {
     needsAttention.push({ icon: '⏳', text: `${data.supplier.awaitingResponses} loads awaiting responses`, onPress: onOpenMarketplace })
@@ -180,7 +180,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
   }
   if (forYou && forYou.capacityForMe.length > 0) {
     const s = forYou.capacityForMe[0]!
-    needsAttention.push({ icon: KIND_ICON[s.kind] ?? '🏪', text: `${s.providerOrg?.name ?? 'A partner'} lists ${KIND_LABEL[s.kind] ?? s.kind}`, onPress: onOpenMarket ?? onOpenMarketplace })
+    needsAttention.push({ icon: KIND_ICON[s.kind] ?? '🏗️', text: `${s.providerOrg?.name ?? 'A partner'} lists ${KIND_LABEL[s.kind] ?? s.kind}`, onPress: onOpenMarket ?? onOpenMarketplace })
   }
 
   return (
@@ -223,8 +223,8 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
         <View style={styles.quickRow}>
           {isSupplier && <QuickAction icon="➕" label="Post load" onPress={onPostLoad} tone="orange" />}
           <QuickAction icon="🔎" label={isTransporter ? 'Find loads' : isSupplier ? 'My loads' : 'Marketplace'} onPress={onOpenMarketplace} tone="navy" />
-          {onOpenMarket && <QuickAction icon="🏪" label="List capacity" onPress={onOpenMarket} tone="blue" />}
-          {onOpenMarketRequests && <QuickAction icon="📢" label="Post shipment" onPress={onOpenMarketRequests} tone="green" />}
+          {onOpenMarket && <QuickAction icon="🏗️" label="List capacity" onPress={onOpenMarket} tone="blue" />}
+          {onOpenMarketRequests && <QuickAction icon="📦" label="Post shipment" onPress={onOpenMarketRequests} tone="green" />}
         </View>
 
         {/* KPI hero grid */}
@@ -324,8 +324,8 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
           <>
             <SectionHeader title="Your market" subtitle="Capability marketplace" action="Open" onAction={onOpenMarket} />
             <View style={styles.marketGrid}>
-              <StatTile label="Live capacity" value={forYou.myActivity.listings} icon="🏪" onPress={onOpenMarket} />
-              <StatTile label="Open shipments" value={forYou.myActivity.openShipments} icon="📢" onPress={onOpenMarketRequests ?? onOpenMarket} />
+              <StatTile label="Live capacity" value={forYou.myActivity.listings} icon="🏗️" onPress={onOpenMarket} />
+              <StatTile label="Open shipments" value={forYou.myActivity.openShipments} icon="📦" onPress={onOpenMarketRequests ?? onOpenMarket} />
               <StatTile label="My quotes" value={forYou.myActivity.submittedQuotes} icon="🧾" onPress={onOpenMarketMine ?? onOpenMarket} />
             </View>
           </>
@@ -349,7 +349,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
           <View style={{ alignItems: 'center', paddingTop: 40, gap: spacing.lg }}>
             {onOpenMarket ? (
               <>
-                <Text style={{ fontSize: 48 }}>🏪</Text>
+                <Text style={{ fontSize: 48 }}>📦</Text>
                 <Text style={[styles.emptyTitle, { color: theme.foreground }]}>Capability marketplace</Text>
                 <Text style={[styles.emptySub, { color: theme.mutedForeground }]}>
                   {marketCounts ? `${marketCounts.listings ?? 0} capacity · ${marketCounts.requests ?? 0} shipments` : 'Browse & post across every capability'}

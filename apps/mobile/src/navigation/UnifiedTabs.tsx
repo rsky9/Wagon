@@ -32,7 +32,7 @@ const Tab = createBottomTabNavigator<UnifiedTabParamList>()
 
 const TAB_ICONS: Record<string, string> = {
   Home: '🏠',
-  Marketplace: '🧭',
+  Marketplace: '📦',
   Trips: '🚚',
   Finance: '💰',
   Account: '👤',

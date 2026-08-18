@@ -316,7 +316,7 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
   const renderListing = (l: MarketListing) => (
     <MarketCard
       key={l.id}
-      icon={KIND_ICON[l.kind] ?? '🏪'}
+                    icon={KIND_ICON[l.kind] ?? '🏗️'}
       title={KIND_LABEL[l.kind] ?? l.kind}
       subtitle={`${l.originRef ?? l.city ?? '—'} → ${l.destinationRef ?? '—'}`}
       status={l.onMarketNow === false ? 'not now' : l.status}
@@ -352,7 +352,7 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
   const renderRequest = (r: MarketRequest, withQuotes = false) => (
     <MarketCard
       key={r.id}
-      icon={KIND_ICON[r.kind] ?? '📢'}
+      icon={KIND_ICON[r.kind] ?? '📦'}
       title={`${r.kind} shipment`}
       subtitle={`${r.originRef ?? r.city ?? '—'} → ${r.destinationRef ?? '—'}`}
       status={r.status}
@@ -447,12 +447,12 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
       {/* Category grid: 3 cards per row */}
       <View style={styles.catGrid}>
         {([
-          ['listings', 'Capacity', '🏪'],
-          ['requests', 'Shipments', '📢'],
+          ['listings', 'Capacity', '🏗️'],
+          ['requests', 'Shipments', '📦'],
           ['carriers', 'Carriers', '🚢'],
           ['ai', 'AI', '🤖'],
           ['partners', 'Partners', '🤝'],
-          ['mine', 'My market', '🗂️'],
+          ['mine', 'My market', '📋'],
         ] as [Tab, string, string][]).map(([k, label, icon]) => {
           const active = tab === k
           return (
@@ -595,7 +595,7 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
           contentContainerStyle={styles.list}
           data={requests}
           keyExtractor={(r) => r.id}
-          ListEmptyComponent={loading ? undefined : <EmptyState title="No open shipments" message="Tap + Post shipment to post a shipment request" icon="📢" />}
+          ListEmptyComponent={loading ? undefined : <EmptyState title="No open shipments" message="Tap + Post shipment to post a shipment request" icon="📦" />}
           renderItem={({ item }) => renderRequest(item)}
         />
       )}
@@ -639,11 +639,11 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: theme.foreground }]}>My capacity ({myListings.length})</Text>
               {myListings.length === 0
-                ? <EmptyState title="No capacity published" message="Tap + List capacity to publish available capacity" icon="🏪" />
+                ? <EmptyState title="No capacity published" message="Tap + List capacity to publish available capacity" icon="🏗️" />
                 : myListings.map((l) => (
                   <MarketCard
                     key={l.id}
-                    icon={KIND_ICON[l.kind] ?? '🏪'}
+      icon={KIND_ICON[l.kind] ?? '🏗️'}
                     title={KIND_LABEL[l.kind] ?? l.kind}
                     subtitle={`${l.originRef ?? l.city ?? '—'} → ${l.destinationRef ?? '—'}`}
                     status={l.status}

@@ -62,8 +62,8 @@ export function EnablementHub({ capabilities = [], onOpen }: Props) {
   ]
 
   const allSections: Section[] = [
-    { key: 'market', title: 'Marketplace', subtitle: 'Browse capacity & post needs across every capability', icon: '🏪', count: 0, screen: 'market' },
-    { key: 'shipments', title: 'Shipments & Org', subtitle: 'Create and track shipments across modes', icon: '🚚', count: shipments, screen: 'shipments' },
+    { key: 'market', title: 'Marketplace', subtitle: 'Browse capacity & post shipments across every capability', icon: '📦', count: 0, screen: 'market' },
+    { key: 'shipments', title: 'Shipments & Org', subtitle: 'Create and track shipments across modes', icon: '📦', count: shipments, screen: 'shipments' },
     { key: 'planning', title: 'Multimodal Planning', subtitle: 'Compare routes, select plans, re-plan on failure', icon: '🗺️', count: plans, screen: 'planning' },
     { key: 'finance', title: 'Finance & Risk', subtitle: 'Claims, insurance, settlements & risk scores', icon: '💰', count: claims, screen: 'finance' },
     { key: 'forwarding', title: 'Forwarding', subtitle: 'Orders, margins, carrier bookings & consolidation', icon: '🧳', count: orders, screen: 'forwarding' },

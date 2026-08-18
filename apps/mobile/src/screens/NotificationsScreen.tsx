@@ -91,7 +91,7 @@ export function NotificationsScreen({ onBack, onNavigate }: Props) {
           contentContainerStyle={styles.list}
           ListHeaderComponent={
             <View style={{ flexDirection: 'row', gap: spacing.sm, paddingBottom: spacing.sm }}>
-              {([['all', 'All'], ['market', '🏪 Market']] as [typeof filter, string][]).map(([k, label]) => (
+              {([['all', 'All'], ['market', '📦 Market']] as [typeof filter, string][]).map(([k, label]) => (
                 <Pressable key={k} style={[styles.filterChip, filter === k && styles.filterActive]} onPress={() => setFilter(k)}>
                   <Text style={{ color: filter === k ? '#fff' : theme.foreground, fontSize: 12, fontWeight: '700' }}>{label}</Text>
                 </Pressable>

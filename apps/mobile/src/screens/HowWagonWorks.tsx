@@ -18,7 +18,7 @@ const STEPS = [
 const ROLES = [
   { icon: '📦', key: 'shipper', labelKey: 'role.shipper' },
   { icon: '🚛', key: 'transporter', labelKey: 'role.transporter' },
-  { icon: '🧭', key: 'forwarder', labelKey: 'role.forwarder' },
+  { icon: '📦', key: 'forwarder', labelKey: 'role.forwarder' },
   { icon: '🏬', key: 'warehouse', labelKey: 'role.warehouse' },
   { icon: '🧑‍✈️', key: 'driver', labelKey: 'role.driver' },
 ]

@@ -138,7 +138,7 @@ export function DriverHomeScreen({ onOpenTrip }: Props) {
             </Pressable>
           ) : null
         }
-        ListEmptyComponent={<EmptyState title={t('driver.noTripsToday')} message="Your assigned trips for today will appear here" icon="🧭" />}
+        ListEmptyComponent={<EmptyState title={t('driver.noTripsToday')} message="Your assigned trips for today will appear here" icon="🚚" />}
         renderItem={({ item }) => (
           <Pressable style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]} onPress={() => onOpenTrip(item.id)}>
             <View style={styles.cardTop}>

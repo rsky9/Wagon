@@ -118,7 +118,7 @@ export function LoadFeedScreen({ onSelect, onOpenTrips, onOpenKyc, filters, onOp
               <Text style={{ fontSize: 17 }}>🛡️</Text>
             </Pressable>
             <Pressable style={[styles.iconBtn, { backgroundColor: theme.muted }]} onPress={onOpenTrips}>
-              <Text style={{ fontSize: 17 }}>🧭</Text>
+              <Text style={{ fontSize: 17 }}>🚚</Text>
             </Pressable>
           </View>
         </View>
