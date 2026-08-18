@@ -164,7 +164,7 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
 
         {/* Marketplace & Operations */}
         <GroupTitle>Marketplace</GroupTitle>
-        <SettingRow icon="🏪" label="Capability marketplace" sub="Offer, demand & quotes" onPress={onOpenMarket ?? onOpenEnablement} />
+        <SettingRow icon="🏪" label="Capability marketplace" sub="Capacity, shipments & quotes" onPress={onOpenMarket ?? onOpenEnablement} />
         <SettingRow icon="🤝" label={t('profile.myBids')} sub="Bids you've submitted" onPress={onOpenBids} />
         <SettingRow icon="🔖" label={t('profile.saved')} sub={t('profile.savedSub')} onPress={onOpenSaved} />
         <SettingRow icon="🔍" label={t('profile.searchLoads')} onPress={onOpenSearch} />

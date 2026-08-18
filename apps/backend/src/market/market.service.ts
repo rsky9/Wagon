@@ -329,7 +329,7 @@ export class MarketService {
         kind: 'transport',
         capacityNeeded: shipment.weightKg ?? undefined,
         capacityUnit: 'kg',
-        description: `Transport demand for ${shipment.commodity ?? 'shipment'} ${shipment.id.slice(-6)}`,
+        description: `Transport shipment for ${shipment.commodity ?? 'shipment'} ${shipment.id.slice(-6)}`,
         sourceType: 'shipment',
         sourceId: shipment.id,
         status: 'open',
@@ -433,8 +433,8 @@ export class MarketService {
         await this.notifications.create({
           userId: a.transporter.userId,
           type: 'market_request',
-          title: 'New demand near your lane',
-          body: `${request.kind} demand: ${request.originRef} → ${request.destinationRef ?? '—'}`,
+          title: 'New shipment near your lane',
+          body: `${request.kind} shipment: ${request.originRef} → ${request.destinationRef ?? '—'}`,
           data: { requestId: request.id, kind: request.kind },
           category: 'market',
         }).catch(() => {})
@@ -534,8 +534,8 @@ export class MarketService {
       await this.notifications.create({
         userId: m.userId,
         type: 'market_ask',
-        title: 'Demand on your listing',
-        body: `Someone needs ${request.kind} from your ${listing.kind} listing`,
+        title: 'Shipment request on your listing',
+        body: `Someone requested ${request.kind} from your ${listing.kind} listing`,
         data: { requestId: request.id, listingId: listing.id },
         category: 'market',
       }).catch(() => {})
@@ -696,7 +696,7 @@ export class MarketService {
         userId: m.userId,
         type: 'market_quote',
         title: 'New quote received',
-        body: `Your ${request.kind} demand got a quote of ${quote.amount != null ? `${quote.currency} ${quote.amount}` : '—'}`,
+        body: `Your ${request.kind} shipment got a quote of ${quote.amount != null ? `${quote.currency} ${quote.amount}` : '—'}`,
         data: { requestId, quoteId: quote.id },
         category: 'market',
       }).catch(() => {})
@@ -776,7 +776,7 @@ export class MarketService {
         userId: m.userId,
         type: 'market_accepted',
         title: 'Your quote was accepted',
-        body: `Your quote of ${quote.amount != null ? `${quote.currency} ${quote.amount}` : '—'} for ${quote.request.kind} demand was accepted`,
+        body: `Your quote of ${quote.amount != null ? `${quote.currency} ${quote.amount}` : '—'} for ${quote.request.kind} shipment was accepted`,
         data: { requestId: quote.requestId, quoteId },
         category: 'market',
       }).catch(() => {})
@@ -1651,12 +1651,12 @@ export class MarketService {
 
     return {
       capabilities,
-      canOffer: offerKinds,
+      canProvide: offerKinds,
       canFulfill: fulfillKinds,
-      canGet: needKinds,
-      myLive: { listings: myListings, openRequests: myOpenRequests, submittedQuotes: mySubmittedQuotes },
-      demandForMe,
-      supplyForMe,
+      canRequest: needKinds,
+      myActivity: { listings: myListings, openShipments: myOpenRequests, submittedQuotes: mySubmittedQuotes },
+      shipmentsForMe: demandForMe,
+      capacityForMe: supplyForMe,
     }
   }
 

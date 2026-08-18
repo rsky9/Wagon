@@ -73,14 +73,14 @@ export function StorageScreen({ onBack }: Props) {
   }
 
   const postTransportNeed = () => {
-    alertPrompt('Post transport need', 'Origin (city)', [
+    alertPrompt('Post transport shipment', 'Origin (city)', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Next', onPress: (origin?: string) => {
-        alertPrompt('Destination (city)', 'Destination for the transport need', [
+        alertPrompt('Destination (city)', 'Destination for the transport shipment', [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Post', onPress: (dest?: string) => {
             api.post('/market/requests', { kind: 'transport', originRef: origin?.trim(), destinationRef: dest?.trim() })
-              .then(() => Alert.alert('Posted', 'Transport demand published to the marketplace'))
+              .then(() => Alert.alert('Posted', 'Transport shipment published to the marketplace'))
               .catch((e) => Alert.alert('Error', e.message))
           } },
         ])

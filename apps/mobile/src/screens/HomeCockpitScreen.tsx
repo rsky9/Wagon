@@ -61,12 +61,12 @@ interface HomeSummary {
 
 interface ForYou {
   capabilities: string[]
-  canOffer: string[]
+  canProvide: string[]
   canFulfill: string[]
-  canGet: string[]
-  myLive: { listings: number; openRequests: number; submittedQuotes: number }
-  demandForMe: Array<{ id: string; kind: string; originRef?: string | null; destinationRef?: string | null; city?: string | null; requesterOrg?: { name: string } | null }>
-  supplyForMe: Array<{ id: string; kind: string; originRef?: string | null; destinationRef?: string | null; city?: string | null; price?: number | null; currency: string; providerOrg?: { name: string; verified: boolean } | null }>
+  canRequest: string[]
+  myActivity: { listings: number; openShipments: number; submittedQuotes: number }
+  shipmentsForMe: Array<{ id: string; kind: string; originRef?: string | null; destinationRef?: string | null; city?: string | null; requesterOrg?: { name: string } | null }>
+  capacityForMe: Array<{ id: string; kind: string; originRef?: string | null; destinationRef?: string | null; city?: string | null; price?: number | null; currency: string; providerOrg?: { name: string; verified: boolean } | null }>
 }
 
 interface Props {
@@ -76,8 +76,10 @@ interface Props {
   onPostLoad: () => void
   onOpenMarket?: () => void
   onOpenMarketRequests?: () => void
+  onOpenMarketMine?: () => void
   onOpenNotifications?: () => void
   onOpenKyc?: () => void
+  onOpenFleet?: () => void
 }
 
 const CAP_LABEL: Record<string, string> = {
@@ -106,7 +108,7 @@ const KIND_ICON: Record<string, string> = {
   transport: '🚚', warehouse: '🏭', forwarding: '📦', carrier: '🚢', insurance: '🛡️',
 }
 
-export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, onPostLoad, onOpenMarket, onOpenMarketRequests, onOpenNotifications, onOpenKyc }: Props) {
+export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, onPostLoad, onOpenMarket, onOpenMarketRequests, onOpenMarketMine, onOpenNotifications, onOpenKyc, onOpenFleet }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
   const { session } = useAuth()
@@ -159,16 +161,16 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
       needsAttention.push({ icon: '🛡️', text: 'Complete your KYC to unlock bookings', onPress: onOpenKyc ?? onOpenMarketplace })
     }
     for (const d of alerts.expiringDocs) {
-      needsAttention.push({ icon: '📄', text: `${d.truckNo}: ${d.doc} expires in ${d.daysLeft}d`, onPress: onOpenMarketplace })
+      needsAttention.push({ icon: '📄', text: `${d.truckNo}: ${d.doc} expires in ${d.daysLeft}d`, onPress: onOpenFleet ?? onOpenMarketplace })
     }
   }
   // Setup nudges: a transporter with no fleet can't accept loads yet.
   if (showTransporter && data?.transporter && data.transporter.fleetSize === 0) {
-    needsAttention.push({ icon: '🚚', text: 'Add your first truck to start accepting loads', onPress: onOpenMarketplace })
+    needsAttention.push({ icon: '🚚', text: 'Add your first truck to start accepting loads', onPress: onOpenFleet ?? onOpenMarketplace })
   }
-  if (forYou && forYou.demandForMe.length > 0) {
-    const d = forYou.demandForMe[0]!
-    needsAttention.push({ icon: KIND_ICON[d.kind] ?? '📢', text: `${forYou.demandForMe.length} open ${d.kind} demand you can quote`, onPress: onOpenMarket ?? onOpenMarketplace })
+  if (forYou && forYou.shipmentsForMe.length > 0) {
+    const d = forYou.shipmentsForMe[0]!
+    needsAttention.push({ icon: KIND_ICON[d.kind] ?? '📢', text: `${forYou.shipmentsForMe.length} open ${d.kind} shipment${forYou.shipmentsForMe.length > 1 ? 's' : ''} you can quote`, onPress: onOpenMarketRequests ?? onOpenMarket ?? onOpenMarketplace })
   }
   if (data?.supplier && data.supplier.awaitingResponses > 0) {
     needsAttention.push({ icon: '⏳', text: `${data.supplier.awaitingResponses} loads awaiting responses`, onPress: onOpenMarketplace })
@@ -176,9 +178,9 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
   if (data?.transporter?.truckNowAvailable && data.transporter.lastTripDrop) {
     needsAttention.push({ icon: '🎯', text: `Truck free near ${data.transporter.lastTripDrop} — find return loads`, onPress: onOpenTrips })
   }
-  if (forYou && forYou.supplyForMe.length > 0) {
-    const s = forYou.supplyForMe[0]!
-    needsAttention.push({ icon: KIND_ICON[s.kind] ?? '🏪', text: `${s.providerOrg?.name ?? 'A partner'} offers ${KIND_LABEL[s.kind] ?? s.kind}`, onPress: onOpenMarket ?? onOpenMarketplace })
+  if (forYou && forYou.capacityForMe.length > 0) {
+    const s = forYou.capacityForMe[0]!
+    needsAttention.push({ icon: KIND_ICON[s.kind] ?? '🏪', text: `${s.providerOrg?.name ?? 'A partner'} lists ${KIND_LABEL[s.kind] ?? s.kind}`, onPress: onOpenMarket ?? onOpenMarketplace })
   }
 
   return (
@@ -210,7 +212,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
         {loading && <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 40 }}>{t('common.loading')}</Text>}
 
         {/* Greeting + capabilities */}
-        <Greeting name={userName ?? ''} role={`You can offer · ${(forYou?.canOffer ?? []).length > 0 ? forYou!.canOffer.map((k) => CAP_LABEL[k] ?? k).join(', ') : 'browse the network'}`} />
+        <Greeting name={userName ?? ''} role={`You can provide · ${(forYou?.canProvide ?? []).length > 0 ? forYou!.canProvide.map((k) => CAP_LABEL[k] ?? k).join(', ') : 'browse the network'}`} />
         {caps.length > 0 && (
           <View style={styles.capRow}>
             {caps.map((c) => <CapabilityChip key={c} label={CAP_LABEL[c] ?? c} />)}
@@ -219,10 +221,10 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
 
         {/* Quick actions */}
         <View style={styles.quickRow}>
-          <QuickAction icon="➕" label="Post load" onPress={onPostLoad} tone="orange" />
-          <QuickAction icon="🔎" label="Find loads" onPress={onOpenMarketplace} tone="navy" />
-          {onOpenMarket && <QuickAction icon="🏪" label="Offer" onPress={onOpenMarket} tone="blue" />}
-          {onOpenMarketRequests && <QuickAction icon="📢" label="Need" onPress={onOpenMarketRequests} tone="green" />}
+          {isSupplier && <QuickAction icon="➕" label="Post load" onPress={onPostLoad} tone="orange" />}
+          <QuickAction icon="🔎" label={isTransporter ? 'Find loads' : isSupplier ? 'My loads' : 'Marketplace'} onPress={onOpenMarketplace} tone="navy" />
+          {onOpenMarket && <QuickAction icon="🏪" label="List capacity" onPress={onOpenMarket} tone="blue" />}
+          {onOpenMarketRequests && <QuickAction icon="📢" label="Post shipment" onPress={onOpenMarketRequests} tone="green" />}
         </View>
 
         {/* KPI hero grid */}
@@ -234,7 +236,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
               sub={`${data.transporter.matchingLoads} matching loads`}
               gradient={gradients.navy}
               icon="🚚"
-              onPress={onOpenTrips}
+              onPress={onOpenFleet ?? onOpenTrips}
               style={styles.kpiFlex}
             />
           )}
@@ -245,7 +247,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
               sub={`${data.supplier.inTransit} in transit`}
               gradient={['#F97316', '#FB923C']}
               icon="📦"
-              onPress={onPostLoad}
+              onPress={onOpenMarketplace}
               style={styles.kpiFlex}
             />
           )}
@@ -296,8 +298,8 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
         {showTransporter && data?.transporter && (
           <View style={styles.statRow}>
             <StatTile label="Matching loads" value={data.transporter.matchingLoads} icon="🎯" onPress={onOpenMarketplace} />
-            <StatTile label="Fleet size" value={data.transporter.fleetSize} icon="🚚" onPress={onOpenMarketplace} />
-            <StatTile label="Available" value={data.transporter.availableTrucks} icon="🟢" onPress={onOpenMarketplace} />
+            <StatTile label="Fleet size" value={data.transporter.fleetSize} icon="🚚" onPress={onOpenFleet ?? onOpenMarketplace} />
+            <StatTile label="Available" value={data.transporter.availableTrucks} icon="🟢" onPress={onOpenFleet ?? onOpenMarketplace} />
           </View>
         )}
 
@@ -322,9 +324,9 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
           <>
             <SectionHeader title="Your market" subtitle="Capability marketplace" action="Open" onAction={onOpenMarket} />
             <View style={styles.marketGrid}>
-              <StatTile label="Live offers" value={forYou.myLive.listings} icon="🏪" onPress={onOpenMarket} />
-              <StatTile label="Open needs" value={forYou.myLive.openRequests} icon="📢" onPress={onOpenMarket} />
-              <StatTile label="My quotes" value={forYou.myLive.submittedQuotes} icon="🧾" onPress={onOpenMarket} />
+              <StatTile label="Live capacity" value={forYou.myActivity.listings} icon="🏪" onPress={onOpenMarket} />
+              <StatTile label="Open shipments" value={forYou.myActivity.openShipments} icon="📢" onPress={onOpenMarketRequests ?? onOpenMarket} />
+              <StatTile label="My quotes" value={forYou.myActivity.submittedQuotes} icon="🧾" onPress={onOpenMarketMine ?? onOpenMarket} />
             </View>
           </>
         )}
@@ -350,7 +352,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
                 <Text style={{ fontSize: 48 }}>🏪</Text>
                 <Text style={[styles.emptyTitle, { color: theme.foreground }]}>Capability marketplace</Text>
                 <Text style={[styles.emptySub, { color: theme.mutedForeground }]}>
-                  {marketCounts ? `${marketCounts.listings ?? 0} supply · ${marketCounts.requests ?? 0} demand` : 'Browse & post across every capability'}
+                  {marketCounts ? `${marketCounts.listings ?? 0} capacity · ${marketCounts.requests ?? 0} shipments` : 'Browse & post across every capability'}
                 </Text>
                 <Pressable style={[styles.emptyCta, { backgroundColor: theme.primary }]} onPress={onOpenMarket}>
                   <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>Open marketplace</Text>

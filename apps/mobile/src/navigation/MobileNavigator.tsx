@@ -174,6 +174,13 @@ function navigateToUrl(nav: any, url: string, item?: { data?: { loadId?: string;
       nav.navigate('LoadDetail', { id: d.loadId } as never)
       return
     }
+    // Param-required routes are only safe to open when their id is present;
+    // otherwise fall back to the tabs instead of crashing on undefined params.
+    const requiresId = ['Track', 'TripExecute', 'BidForm', 'LoadDetail', 'ShipmentDetail', 'DecisionRoom', 'Negotiation', 'TripExceptions', 'ReturnLoads']
+    if (requiresId.includes(url) && !Object.keys(params).length) {
+      nav.navigate('UnifiedTabs', { screen: 'Home' } as never)
+      return
+    }
     nav.navigate(url, Object.keys(params).length ? params : undefined)
     return
   }

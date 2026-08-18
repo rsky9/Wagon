@@ -118,8 +118,10 @@ function HomeTab({ navigation }: any) {
       onPostLoad={() => root?.navigate('PostLoadWizard')}
       onOpenMarket={() => root?.navigate('Market')}
       onOpenMarketRequests={() => root?.navigate('Market', { initialTab: 'requests' } as never)}
+      onOpenMarketMine={() => root?.navigate('Market', { initialTab: 'mine' } as never)}
       onOpenNotifications={() => root?.navigate('Notifications')}
       onOpenKyc={() => root?.navigate('Kyc')}
+      onOpenFleet={() => root?.navigate('Fleet')}
     />
   )
 }

@@ -241,7 +241,7 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
     api.post<{ plan?: { ref: string; status: string; legs: unknown[]; cost?: number | null }; unsatisfiable?: boolean; note?: string }>(`/market/requests/${decomposeFor.id}/decompose`, { legs })
       .then((res) => {
         setDecomposeFor(null)
-        if (res.unsatisfiable) { Alert.alert('Cannot assemble', res.note ?? 'One leg has no supply'); return }
+        if (res.unsatisfiable) { Alert.alert('Cannot assemble', res.note ?? 'One leg has no capacity'); return }
         const p = res.plan!
         Alert.alert('Plan ready', `${p.ref} · ${p.status}\n${(p.legs as Array<{ mode: string; origin?: string }>).map((l) => `${l.mode} ${l.origin ?? ''}`).join(' → ')}\n₹${(p.cost ?? 0).toLocaleString('en-IN')}\nSelect it in Planning to book.`)
         fetch()
@@ -353,7 +353,7 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
     <MarketCard
       key={r.id}
       icon={KIND_ICON[r.kind] ?? '📢'}
-      title={`${r.kind} demand`}
+      title={`${r.kind} shipment`}
       subtitle={`${r.originRef ?? r.city ?? '—'} → ${r.destinationRef ?? '—'}`}
       status={r.status}
       statusColor={r.status === 'open' ? theme.success : theme.warning}
@@ -430,25 +430,25 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
           {canPublishCarrier && (
             <Pressable onPress={() => setShowCarrier(true)} hitSlop={8}><Text style={{ color: '#F97316', fontSize: 14, fontWeight: '800' }}>🚢</Text></Pressable>
           )}
-          <Pressable onPress={() => setShowRequest(true)} hitSlop={8}><Text style={{ color: '#F97316', fontSize: 14, fontWeight: '800' }}>+ Need</Text></Pressable>
+          <Pressable onPress={() => setShowRequest(true)} hitSlop={8}><Text style={{ color: '#F97316', fontSize: 14, fontWeight: '800' }}>+ Shipment</Text></Pressable>
         </View>
       </View>
 
       {/* Action-first publish strip */}
       <View style={[styles.publishStrip, { backgroundColor: theme.card, borderColor: theme.border }]}>
         <Pressable style={[styles.publishBtn, { backgroundColor: '#F97316' }]} onPress={() => setShowListing(true)}>
-          <Text style={styles.publishBtnText}>+ Offer supply</Text>
+          <Text style={styles.publishBtnText}>+ List capacity</Text>
         </Pressable>
         <Pressable style={[styles.publishBtn, { backgroundColor: theme.foreground }]} onPress={() => setShowRequest(true)}>
-          <Text style={[styles.publishBtnText, { color: theme.background }]}>+ Post a need</Text>
+          <Text style={[styles.publishBtnText, { color: theme.background }]}>+ Post shipment</Text>
         </Pressable>
       </View>
 
       {/* Category grid: 3 cards per row */}
       <View style={styles.catGrid}>
         {([
-          ['listings', 'Supply', '🏪'],
-          ['requests', 'Demand', '📢'],
+          ['listings', 'Capacity', '🏪'],
+          ['requests', 'Shipments', '📢'],
           ['carriers', 'Carriers', '🚢'],
           ['ai', 'AI', '🤖'],
           ['partners', 'Partners', '🤝'],
@@ -487,7 +487,7 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
             contentContainerStyle={styles.list}
             data={listings}
             keyExtractor={(l) => l.id}
-            ListEmptyComponent={loading ? undefined : <EmptyState title="No supply listed" message="Tap + Offer to publish capacity" icon="📦" />}
+            ListEmptyComponent={loading ? undefined : <EmptyState title="No capacity listed" message="Tap + List capacity to publish available capacity" icon="📦" />}
             renderItem={({ item }) => renderListing(item)}
           />
         </>
@@ -595,7 +595,7 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
           contentContainerStyle={styles.list}
           data={requests}
           keyExtractor={(r) => r.id}
-          ListEmptyComponent={loading ? undefined : <EmptyState title="No open demand" message="Tap + Need to post a request" icon="📢" />}
+          ListEmptyComponent={loading ? undefined : <EmptyState title="No open shipments" message="Tap + Post shipment to post a shipment request" icon="📢" />}
           renderItem={({ item }) => renderRequest(item)}
         />
       )}
@@ -604,13 +604,13 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
         <FlatList
           style={styles.listScroll}
           contentContainerStyle={styles.list}
-          data={[{ type: 'requests' as const }, { type: 'quotes' as const }, { type: 'supply' as const }]}
+          data={[{ type: 'requests' as const }, { type: 'quotes' as const }, { type: 'capacity' as const }]}
           keyExtractor={(i) => i.type}
           renderItem={({ item }) => item.type === 'requests' ? (
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.foreground }]}>My requests ({mine.length})</Text>
+              <Text style={[styles.sectionTitle, { color: theme.foreground }]}>My shipments ({mine.length})</Text>
               {mine.length === 0
-                ? <EmptyState title="No requests yet" message="Your requests and their quotes appear here" icon="📋" />
+                ? <EmptyState title="No shipments yet" message="Your shipment requests and their quotes appear here" icon="📋" />
                 : mine.map((m) => renderRequest(m, true))}
             </View>
           ) : item.type === 'quotes' ? (
@@ -637,9 +637,9 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
             </View>
           ) : (
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.foreground }]}>My supply ({myListings.length})</Text>
+              <Text style={[styles.sectionTitle, { color: theme.foreground }]}>My capacity ({myListings.length})</Text>
               {myListings.length === 0
-                ? <EmptyState title="No supply published" message="Tap + Offer to publish capacity" icon="🏪" />
+                ? <EmptyState title="No capacity published" message="Tap + List capacity to publish available capacity" icon="🏪" />
                 : myListings.map((l) => (
                   <MarketCard
                     key={l.id}
@@ -669,7 +669,7 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
         <KeyboardAvoidingView style={styles.modalWrap} behavior="padding">
           <View style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
-              <Text style={[styles.modalTitle, { color: theme.foreground }]}>Publish supply</Text>
+              <Text style={[styles.modalTitle, { color: theme.foreground }]}>Publish capacity</Text>
               <View style={styles.filters}>
                 {Object.keys(KIND_LABEL).map((k) => (
                   <Pressable key={k} style={[styles.filterChip, listKind === k && styles.filterActive]} onPress={() => setListKind(k)}>
@@ -698,7 +698,7 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
         <KeyboardAvoidingView style={styles.modalWrap} behavior="padding">
           <View style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
-              <Text style={[styles.modalTitle, { color: theme.foreground }]}>Post a need</Text>
+              <Text style={[styles.modalTitle, { color: theme.foreground }]}>Post shipment</Text>
               <View style={styles.filters}>
                 {REQ_KINDS.map((k) => (
                   <Pressable key={k} style={[styles.filterChip, reqKind === k && styles.filterActive]} onPress={() => setReqKind(k)}>
@@ -726,7 +726,7 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
       <Modal visible={!!quoteFor} transparent animationType="slide">
         <KeyboardAvoidingView style={styles.modalWrap} behavior="padding">
           <View style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.modalTitle, { color: theme.foreground }]}>Quote on {quoteFor?.kind} demand</Text>
+            <Text style={[styles.modalTitle, { color: theme.foreground }]}>Quote on {quoteFor?.kind} shipment</Text>
             <Text style={{ color: theme.mutedForeground, fontSize: 13 }}>
               {quoteFor?.originRef ?? quoteFor?.city ?? '—'} → {quoteFor?.destinationRef ?? '—'}
             </Text>

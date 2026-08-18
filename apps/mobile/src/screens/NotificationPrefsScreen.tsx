@@ -28,7 +28,7 @@ const ROWS: Array<{ key: keyof Prefs; icon: string; label: string; desc: string 
   { key: 'kyc', icon: '🛡️', label: 'KYC alerts', desc: 'Verification status changes' },
   { key: 'docExpiry', icon: '📄', label: 'Document expiry', desc: 'Insurance, permit, fitness reminders' },
   { key: 'promo', icon: '🎁', label: 'Promotions', desc: 'Offers and product updates' },
-  { key: 'market', icon: '🏪', label: 'Marketplace', desc: 'Demand, quotes and asks on the capability market' },
+  { key: 'market', icon: '🏪', label: 'Marketplace', desc: 'Shipments, quotes and asks on the capability market' },
 ]
 
 export function NotificationPrefsScreen({ onBack }: Props) {
