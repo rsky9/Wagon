@@ -53,6 +53,16 @@ export default function Payments() {
     fetchPayments(status);
   }, [status]);
 
+  // Debounced route/trip search (backed by pg_trgm indexes).
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (!search.trim()) return;
+      api.get<{ payments: Payment[] }>(`/admin/payments?q=${encodeURIComponent(search.trim())}`).then((res) => setPayments(res.payments)).catch(() => {});
+    }, 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
   const refund = async (p: Payment) => {
     if (!window.confirm(`Refund ₹${p.amount}? This creates a refund transaction.`)) return;
     setBusy(p.id);
@@ -90,6 +100,13 @@ export default function Payments() {
           <div className="mt-2 text-2xl font-extrabold tabular-nums text-red-600">{failed}</div>
         </Card>
       </div>
+
+      <input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search payments by route…"
+        className="mb-4 w-full max-w-md rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-orange-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+      />
 
       <div className="mb-4 flex gap-2">
         {["all", "escrow", "payout", "refund", "failed"].map((s) => (

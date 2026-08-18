@@ -20,6 +20,7 @@ interface LoadRef {
   fareEstimate: number
   matchScore?: number
   material?: { name: string } | null
+  reasons?: string[]
 }
 
 interface SupplierSummary {
@@ -390,6 +391,9 @@ function LoadCard({ load, onPress, theme }: { load: LoadRef; onPress: () => void
       <Text style={[styles.loadMeta, { color: theme.mutedForeground }]}>
         {load.weight}t · {load.distanceKm} km{load.material?.name ? ` · ${load.material.name}` : ''}
       </Text>
+      {load.reasons?.[0] ? (
+        <Text style={[styles.loadReason, { color: theme.primary }]} numberOfLines={1}>{load.reasons[0]}</Text>
+      ) : null}
     </Pressable>
   )
 }
@@ -415,6 +419,7 @@ const styles = StyleSheet.create({
   alertRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
   alertText: { flex: 1, fontSize: 14, fontWeight: '600' },
   loadCard: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, gap: spacing.sm, marginBottom: spacing.md },
+  loadReason: { fontSize: 12, fontWeight: '700' },
   loadTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   loadFare: { fontSize: 18, fontWeight: '800' },
   matchChip: { borderRadius: radius.full, paddingHorizontal: spacing.sm, paddingVertical: 3 },

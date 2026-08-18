@@ -73,11 +73,29 @@ export default function Loads() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Debounced route search across loads + trips (backed by pg_trgm indexes).
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (!search.trim()) return;
+      api.get<{ loads: LoadRow[] }>(`/admin/loads?q=${encodeURIComponent(search.trim())}`).then((r) => setLoads(r.loads)).catch(() => {});
+      api.get<{ trips: TripRow[] }>(`/admin/trips?q=${encodeURIComponent(search.trim())}`).then((r) => setTrips(r.trips)).catch(() => {});
+    }, 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
   return (
     <ShellLayout>
       <PageHeader title="Loads & Trips" subtitle="Platform-wide activity" />
 
       {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+
+      <input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search loads & trips by route…"
+        className="mb-4 w-full max-w-md rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-orange-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+      />
 
       {loading ? (
         <div className="card-shadow overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">

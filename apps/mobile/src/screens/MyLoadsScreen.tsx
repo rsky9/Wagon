@@ -7,6 +7,7 @@ import {
   Pressable,
   RefreshControl,
   Alert,
+  TextInput,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius, formatINR, formatWeight } from '@wagon/design'
@@ -45,11 +46,14 @@ export function MyLoads({ onPostLoad, onLogout, onSelectLoad, onOpenKyc, onOpenD
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
 
   const fetchLoads = useCallback(async () => {
     setError(null)
     try {
-      const res = await api.get<{ items: Load[] }>('/loads?mine=true')
+      const params = new URLSearchParams({ mine: 'true' })
+      if (query.trim()) params.set('q', query.trim())
+      const res = await api.get<{ items: Load[] }>(`/loads?${params.toString()}`)
       setLoads(res.items)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load your loads')
@@ -57,7 +61,7 @@ export function MyLoads({ onPostLoad, onLogout, onSelectLoad, onOpenKyc, onOpenD
       setLoading(false)
       setRefreshing(false)
     }
-  }, [])
+  }, [query])
 
   useEffect(() => {
     fetchLoads()
@@ -126,6 +130,14 @@ export function MyLoads({ onPostLoad, onLogout, onSelectLoad, onOpenKyc, onOpenD
       <View style={styles.toolbar}>
         <Text style={[styles.title, { color: theme.foreground }]}>{t('myLoads.title')}</Text>
       </View>
+
+      <TextInput
+        style={[styles.searchBar, { backgroundColor: theme.muted, color: theme.foreground, borderColor: theme.border }]}
+        placeholder="Search your loads by route…"
+        placeholderTextColor={theme.mutedForeground}
+        value={query}
+        onChangeText={setQuery}
+      />
 
       {error && <Text style={[styles.error, { color: theme.danger }]}>{error}</Text>}
 
@@ -215,6 +227,14 @@ const styles = StyleSheet.create({
   iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   toolbar: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   title: { fontSize: 20, fontWeight: '800' },
+  searchBar: {
+    borderRadius: radius.full,
+    borderWidth: 1,
+    marginHorizontal: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    fontSize: 14,
+  },
   list: { padding: spacing.lg, gap: spacing.md, paddingBottom: 120 },
   card: { borderRadius: radius.xl, padding: spacing.lg, borderWidth: 1, gap: spacing.sm },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

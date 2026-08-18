@@ -8,6 +8,7 @@ interface Props {
   distanceKm?: number
   fare?: number
   matchScore?: number
+  matchReason?: string
   meta?: string[]
   footer?: string
   status?: React.ReactNode
@@ -21,6 +22,7 @@ export function LoadCard({
   distanceKm,
   fare,
   matchScore,
+  matchReason,
   meta = [],
   footer,
   status,
@@ -101,6 +103,14 @@ export function LoadCard({
           {footer}
         </Text>
       )}
+
+      {matchReason && (
+        <View style={[styles.reasonPill, { backgroundColor: theme.accent }]}>
+          <Text style={{ color: theme.accentForeground, fontSize: 12, fontWeight: '700' }} numberOfLines={1}>
+            {matchReason}
+          </Text>
+        </View>
+      )}
     </Pressable>
   )
 }
@@ -127,4 +137,5 @@ const styles = StyleSheet.create({
   meta: { fontSize: 13, fontWeight: '500' },
   separator: { width: 3, height: 3, borderRadius: 2 },
   footer: { fontSize: 13 },
+  reasonPill: { alignSelf: 'flex-start', borderRadius: radius.full, paddingHorizontal: spacing.sm, paddingVertical: 3 },
 })

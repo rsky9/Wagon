@@ -17,8 +17,8 @@ export class AdminController {
   }
 
   @Get('loads')
-  loads(@Query('status') status?: string) {
-    return this.admin.loads(status ? { status } : undefined)
+  loads(@Query('status') status?: string, @Query('q') q?: string) {
+    return this.admin.loads({ ...(status ? { status } : {}), ...(q ? { q } : {}) })
   }
 
   @Get('loads/:id')
@@ -27,8 +27,8 @@ export class AdminController {
   }
 
   @Get('trips')
-  trips() {
-    return this.admin.trips()
+  trips(@Query('status') status?: string, @Query('q') q?: string) {
+    return this.admin.trips({ ...(status ? { status } : {}), ...(q ? { q } : {}) })
   }
 
   @Get('users')
@@ -122,11 +122,12 @@ export class AdminController {
   }
 
   @Get('payments')
-  payments(@Query('type') type?: string, @Query('status') status?: string) {
-    const q: { type?: string; status?: string } = {}
-    if (type) q.type = type
-    if (status) q.status = status
-    return this.admin.payments(q)
+  payments(@Query('type') type?: string, @Query('status') status?: string, @Query('q') q?: string) {
+    const filters: { type?: string; status?: string; q?: string } = {}
+    if (type) filters.type = type
+    if (status) filters.status = status
+    if (q) filters.q = q
+    return this.admin.payments(filters)
   }
 
   @Get('payments/:id')

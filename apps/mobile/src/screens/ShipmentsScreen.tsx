@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { StyleSheet, Text, View, FlatList, Pressable, Alert, TextInput } from 'react-native'
+import { StyleSheet, Text, View, FlatList, Pressable, Alert, TextInput, ScrollView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
@@ -21,10 +21,16 @@ export function ShipmentsScreen({ onBack, onOpen }: Props) {
   const [value, setValue] = useState('')
   const [origin, setOrigin] = useState('')
   const [destination, setDestination] = useState('')
+  const [query, setQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
 
   const fetch = useCallback(() => {
-    api.get<{ shipments: Shipment[] }>('/foundation/shipments').then((r) => setShipments(r.shipments)).catch(() => {}).finally(() => setLoading(false))
-  }, [])
+    const params = new URLSearchParams()
+    if (query.trim()) params.set('q', query.trim())
+    if (statusFilter) params.set('status', statusFilter)
+    const qs = params.toString() ? `?${params.toString()}` : ''
+    api.get<{ shipments: Shipment[] }>(`/foundation/shipments${qs}`).then((r) => setShipments(r.shipments)).catch(() => {}).finally(() => setLoading(false))
+  }, [query, statusFilter])
   useEffect(() => { fetch() }, [fetch])
 
   const create = () => {
@@ -85,6 +91,22 @@ export function ShipmentsScreen({ onBack, onOpen }: Props) {
         </Pressable>
       </View>
 
+      {/* Search + status filter */}
+      <View style={[styles.searchWrap, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <TextInput
+          style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]}
+          placeholder="Search shipments (commodity, ref, route)" placeholderTextColor={theme.mutedForeground}
+          value={query} onChangeText={setQuery}
+        />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+          {[['', 'All'], ['draft', 'Draft'], ['planned', 'Planned'], ['booked', 'Booked'], ['in_transit', 'In transit'], ['delivered', 'Delivered']].map(([k, label]) => (
+            <Pressable key={k} onPress={() => setStatusFilter(k)} style={[styles.filterChip, { backgroundColor: statusFilter === k ? theme.primary : theme.background, borderColor: statusFilter === k ? theme.primary : theme.border }]}>
+              <Text style={{ color: statusFilter === k ? '#fff' : theme.mutedForeground, fontSize: 12, fontWeight: '700' }}>{label}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
+
       {loading ? (
         <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>Loading…</Text>
       ) : (
@@ -92,7 +114,7 @@ export function ShipmentsScreen({ onBack, onOpen }: Props) {
           data={shipments}
           keyExtractor={(s) => s.id}
           contentContainerStyle={styles.list}
-          ListEmptyComponent={<EmptyState title="No shipments yet" message="Create one above to get started" icon="📦" />}
+          ListEmptyComponent={<EmptyState title="No shipments match" message={query.trim() ? `Nothing found for "${query}"` : 'Create one above to get started'} icon="📦" />}
           renderItem={({ item }) => (
             <Pressable style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => onOpen(item.id)}>
               <View style={styles.cardTop}>
@@ -122,6 +144,8 @@ const styles = StyleSheet.create({
   half: { flex: 1 },
   createBtn: { borderRadius: radius.md, padding: spacing.md, alignItems: 'center', marginTop: spacing.xs },
   createBtnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  searchWrap: { margin: spacing.lg, marginTop: spacing.xs, marginBottom: spacing.sm, borderRadius: radius.lg, borderWidth: 1, padding: spacing.md, gap: spacing.sm },
+  filterChip: { borderRadius: radius.full, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: 6 },
   list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, gap: spacing.md },
   card: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, gap: 4 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

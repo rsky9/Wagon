@@ -385,6 +385,9 @@ model Load {
   @@index([truckType, modelId])
   @@index([date])
   @@index([supplierId])
+  @@index([status])
+  @@index([weight])
+  @@index([fareEstimate])
 }
 
 model Report {
@@ -913,6 +916,7 @@ model Shipment {
   @@index([status])
   @@index([ownerOrgId])
   @@unique([ref])
+  @@index([createdAt])
 }
 
 /// One physical movement within a shipment — mode + equipment + route.
@@ -1079,6 +1083,7 @@ model Facility {
 
   appointments WarehouseOperation[]
   @@index([kind])
+  @@index([city])
 }
 
 /// One warehouse lifecycle: appointment -> gate-in -> receive -> put-away -> stored -> pick -> stage -> load -> gate-out.
@@ -1445,6 +1450,8 @@ model MarketListing {
   @@index([kind, status])
   @@index([providerOrgId])
   @@index([city])
+  @@index([price])
+  @@index([capacityAvailable])
 }
 
 /// Demand-side request: "I need X on lane Y" — the universal RFQ (any capability).

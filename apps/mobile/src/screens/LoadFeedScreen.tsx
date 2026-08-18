@@ -9,7 +9,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { useTheme, spacing, formatINR, formatWeight, timeAgo } from '@wagon/design'
+import { useTheme, spacing, radius, formatINR, formatWeight, timeAgo } from '@wagon/design'
 import { LoadCard, StatusChip, FeedSkeleton, EmptyState, type StatusTone } from '@wagon/components'
 import { api } from '../config'
 import { useI18n } from '@wagon/i18n'
@@ -25,6 +25,7 @@ interface Props {
   onOpenKyc: () => void
   filters?: LoadFilters
   onOpenFilters: () => void
+  onOpenSearch?: () => void
   /** Render without the app header (used when embedded in a parent with its own header). */
   embedded?: boolean
 }
@@ -40,7 +41,7 @@ const TONE: Record<string, StatusTone> = {
   cancelled: 'danger',
 }
 
-export function LoadFeedScreen({ onSelect, onOpenTrips, onOpenKyc, filters, onOpenFilters, embedded = false }: Props) {
+export function LoadFeedScreen({ onSelect, onOpenTrips, onOpenKyc, filters, onOpenFilters, onOpenSearch, embedded = false }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
   const [filter, setFilter] = useState<Filter>('all')
@@ -132,6 +133,17 @@ export function LoadFeedScreen({ onSelect, onOpenTrips, onOpenKyc, filters, onOp
         </View>
       )}
 
+      {onOpenSearch && (
+        <Pressable
+          style={[styles.searchBar, { backgroundColor: theme.muted, borderColor: theme.border }]}
+          onPress={onOpenSearch}
+          accessibilityRole="button"
+        >
+          <Text style={{ fontSize: 15 }}>🔍</Text>
+          <Text style={[styles.searchPlaceholder, { color: theme.mutedForeground }]}>Search loads by route, city or description…</Text>
+        </Pressable>
+      )}
+
       <View style={[styles.tabs, { borderBottomColor: theme.border }]}>
         {tabDefs.map((f) => (
           <Pressable key={f.key} style={styles.tab} onPress={() => setFilter(f.key)}>
@@ -185,6 +197,7 @@ export function LoadFeedScreen({ onSelect, onOpenTrips, onOpenKyc, filters, onOp
               distanceKm={item.distanceKm}
               fare={item.fareEstimate}
               matchScore={(item as Load & { matchScore?: number }).matchScore}
+              matchReason={(item as Load & { reasons?: string[] }).reasons?.[0]}
               status={<StatusChip label={item.status.replace('_', ' ')} tone={TONE[item.status]} />}
               meta={[
                 formatWeight(item.weight),
@@ -215,6 +228,18 @@ const styles = StyleSheet.create({
   greeting: { fontSize: 13, marginTop: 1 },
   headerActions: { flexDirection: 'row', gap: spacing.sm },
   iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  searchPlaceholder: { fontSize: 14, fontWeight: '600' },
   offlineBar: { paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, alignItems: 'center' },
   tabs: {
     flexDirection: 'row',

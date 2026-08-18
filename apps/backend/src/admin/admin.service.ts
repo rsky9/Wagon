@@ -66,22 +66,41 @@ export class AdminService {
     return { users }
   }
 
-  async loads(query?: { status?: string }) {
-    const where = query?.status ? { status: query.status as never } : undefined
+  async loads(query?: { status?: string; q?: string }) {
+    const where: Record<string, unknown> = {}
+    if (query?.status) where.status = query.status
+    if (query?.q?.trim()) {
+      const q = query.q.trim()
+      where.OR = [
+        { pickupAddr: { contains: q, mode: 'insensitive' } },
+        { dropAddr: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
+      ]
+    }
     const loads = await this.prisma.load.findMany({
-      where,
+      where: where as never,
       include: { material: true, supplier: { include: { user: true } } },
       orderBy: { createdAt: 'desc' },
-      take: 100,
+      take: 200,
     })
     return { loads }
   }
 
-  async trips() {
+  async trips(query?: { status?: string; q?: string }) {
+    const where: Record<string, unknown> = {}
+    if (query?.status) where.status = query.status
+    if (query?.q?.trim()) {
+      const q = query.q.trim()
+      where.OR = [
+        { load: { pickupAddr: { contains: q, mode: 'insensitive' } } },
+        { load: { dropAddr: { contains: q, mode: 'insensitive' } } },
+      ]
+    }
     const trips = await this.prisma.trip.findMany({
+      where: where as never,
       include: { load: { include: { material: true } }, payments: true },
       orderBy: { createdAt: 'desc' },
-      take: 100,
+      take: 200,
     })
     return { trips }
   }
@@ -510,12 +529,20 @@ export class AdminService {
 
   // ---------- Payments / finance ----------
 
-  async payments(query?: { type?: string; status?: string }) {
+  async payments(query?: { type?: string; status?: string; q?: string }) {
     const where: Record<string, unknown> = {}
     if (query?.type) where.type = query.type
     if (query?.status) where.status = query.status
+    if (query?.q?.trim()) {
+      const q = query.q.trim()
+      where.OR = [
+        { id: { contains: q, mode: 'insensitive' } },
+        { trip: { load: { pickupAddr: { contains: q, mode: 'insensitive' } } } },
+        { trip: { load: { dropAddr: { contains: q, mode: 'insensitive' } } } },
+      ]
+    }
     const payments = await this.prisma.payment.findMany({
-      where,
+      where: where as never,
       include: { trip: { include: { load: true } } },
       orderBy: { createdAt: 'desc' },
       take: 200,

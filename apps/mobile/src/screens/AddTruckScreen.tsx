@@ -39,7 +39,17 @@ export function AddTruckScreen({ onBack, onDone }: Props) {
     if (!truckNo.trim()) { Alert.alert(t('ui.required'), 'Enter truck number'); return }
     setSubmitting(true)
     try {
-      await api.post('/trucks', { truckNo, type, modelId, origin: origin || undefined, gpsLogin: gpsLogin || undefined })
+      // Geocode the truck's home base so the matching engine can rank loads by
+      // proximity to this truck (not just type/capacity).
+      let lat: number | null = null
+      let lng: number | null = null
+      if (origin.trim()) {
+        try {
+          const g = await api.get<{ found: boolean; coords: [number, number] | null }>(`/reference/geocode?q=${encodeURIComponent(origin)}`)
+          if (g.found && g.coords) { lat = g.coords[0]; lng = g.coords[1] }
+        } catch {}
+      }
+      await api.post('/trucks', { truckNo, type, modelId, origin: origin || undefined, lat, lng, gpsLogin: gpsLogin || undefined })
       completeQuestWithXp('truck', 60)
       Alert.alert(t('ui.added'), `${truckNo.toUpperCase()} added · +60 XP`)
       onDone()

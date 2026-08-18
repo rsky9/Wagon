@@ -169,6 +169,7 @@ function MarketplaceTab({ navigation }: any) {
             onOpenKyc={() => root?.navigate('Kyc')}
             filters={filters}
             onOpenFilters={() => root?.navigate('Filters')}
+            onOpenSearch={() => root?.navigate('Search')}
             embedded
           />
         ) : (
@@ -194,6 +195,7 @@ function MarketplaceTab({ navigation }: any) {
         onOpenKyc={() => root?.navigate('Kyc')}
         filters={filters}
         onOpenFilters={() => root?.navigate('Filters')}
+        onOpenSearch={() => root?.navigate('Search')}
       />
     )
   }

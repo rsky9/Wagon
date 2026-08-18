@@ -5,6 +5,7 @@ import { NotificationsService } from '../notifications/notifications.service'
 import { ShipmentProjector } from '../shipments/shipment-projector.service'
 import { MarketService } from '../market/market.service'
 import { PaymentsService } from '../payments/payments.service'
+import { LoadMatchingService } from '../matching/matching.service'
 import type { User } from '@prisma/client'
 import type { Load } from '@wagon/contracts'
 
@@ -50,11 +51,15 @@ interface ListLoadsQuery {
   truckType?: string
   modelId?: string
   fromLane?: string
+  toLane?: string
   date?: string
   materialId?: string
   minWeight?: number
   maxWeight?: number
+  minPrice?: number
+  maxPrice?: number
   q?: string
+  sort?: 'newest' | 'cheapest' | 'priciest' | 'nearest' | 'lightest' | 'heaviest'
   page?: number
   pageSize?: number
   mine?: boolean
@@ -71,6 +76,7 @@ export class LoadsService {
     private readonly shipments: ShipmentProjector,
     private readonly market: MarketService,
     private readonly payments: PaymentsService,
+    private readonly matching: LoadMatchingService,
   ) {}
 
   async create(input: CreateLoadInput, user: User) {
@@ -186,8 +192,17 @@ export class LoadsService {
     if (query.fromLane) {
       where.pickupAddr = { contains: query.fromLane, mode: 'insensitive' }
     }
+    if (query.toLane) {
+      where.dropAddr = { contains: query.toLane, mode: 'insensitive' }
+    }
     if (query.materialId) {
       where.materialId = query.materialId
+    }
+    if (query.minPrice !== undefined || query.maxPrice !== undefined) {
+      where.fareEstimate = {
+        ...(query.minPrice !== undefined ? { gte: query.minPrice } : {}),
+        ...(query.maxPrice !== undefined ? { lte: query.maxPrice } : {}),
+      }
     }
     if (query.minWeight !== undefined || query.maxWeight !== undefined) {
       where.weight = {
@@ -218,11 +233,20 @@ export class LoadsService {
     // transporters browsing the open feed must not see other bidders' amounts.
     const includeQuotes = isSupplier && !isTransporter
 
+    // Sort: 'nearest' sorts by distance, everything else by createdAt/fare/weight.
+    const orderBy: Record<string, 'asc' | 'desc'> =
+      query.sort === 'cheapest' ? { fareEstimate: 'asc' }
+      : query.sort === 'priciest' ? { fareEstimate: 'desc' }
+      : query.sort === 'lightest' ? { weight: 'asc' }
+      : query.sort === 'heaviest' ? { weight: 'desc' }
+      : query.sort === 'nearest' ? { distanceKm: 'asc' }
+      : { createdAt: 'desc' }
+
     const [items, total] = await Promise.all([
       this.prisma.load.findMany({
         where,
         include: { material: true, ...(includeQuotes ? { quotes: true } : {}) },
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
@@ -230,43 +254,15 @@ export class LoadsService {
     ])
 
     // For transporters, enrich with a smart-match score based on their fleet.
+    // The engine matches per-truck (type + capacity + location + goods affinity)
+    // so a fleet of distinct truck types surfaces the BEST truck per load.
     let enriched = items
     if (isTransporter) {
-      const transporter = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
-      if (transporter) {
-        const fleet = await this.prisma.truck.findMany({
-          where: { transporterId: transporter.id },
-          include: { model: true },
-        })
-        enriched = items.map((l) => ({ ...l, matchScore: this.computeMatchScore(l, fleet) }))
-      }
+      const ctx = await this.matching.fleetContext(user.id)
+      enriched = items.map((l) => ({ ...l, ...this.matching.scoreLoad(l, ctx) }))
     }
 
     return { items: enriched, total, page, pageSize }
-  }
-
-  /**
-   * Smart matching: 0-100 score based on truck type match, capacity fit,
-   * route compatibility (pickup near truck origin) and historical acceptance.
-   */
-  private computeMatchScore(
-    load: { truckType: string; weight: number },
-    fleet: { type: string; model?: { capacities: number[] } | null }[],
-  ) {
-    if (fleet.length === 0) return 40 // no fleet yet — neutral
-    const typeMatches = fleet.some((t) => t.type === load.truckType)
-    // Real capacity: the max tonnage across the truck model's capacities.
-    const capacityOk = fleet.some((t) => {
-      const caps = t.model?.capacities ?? []
-      const maxT = caps.length ? Math.max(...caps) : 0
-      return maxT >= load.weight
-    })
-    let score = 0
-    if (typeMatches) score += 35
-    if (capacityOk) score += 35
-    score += 15 // route compatibility placeholder (origin proximity)
-    score += 15 // acceptance history placeholder
-    return Math.min(100, score)
   }
 
   /** Return-load discovery: loads whose pickup is near the drop of a completed trip. */
@@ -287,8 +283,8 @@ export class LoadsService {
       orderBy: { createdAt: 'desc' },
       take: 10,
     })
-    const fleet = await this.prisma.truck.findMany({ where: { transporterId: transporter.id } })
-    const enriched = loads.map((l) => ({ ...l, matchScore: this.computeMatchScore(l, fleet) }))
+    const ctx = await this.matching.fleetContext(user.id)
+    const enriched = loads.map((l) => ({ ...l, ...this.matching.scoreLoad(l, ctx) }))
     return { returnLoads: enriched, fromCity: dropCity }
   }
 

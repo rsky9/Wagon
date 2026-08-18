@@ -63,6 +63,10 @@ export class ListLoadsQuery {
   fromLane?: string
 
   @IsOptional()
+  @IsString()
+  toLane?: string
+
+  @IsOptional()
   @IsDateString()
   date?: string
 
@@ -73,6 +77,22 @@ export class ListLoadsQuery {
   @IsOptional()
   @IsString()
   q?: string
+
+  @IsOptional()
+  @IsString()
+  sort?: 'newest' | 'cheapest' | 'priciest' | 'nearest' | 'lightest' | 'heaviest'
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  minPrice?: number
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  maxPrice?: number
 
   @IsOptional()
   @Type(() => Number)

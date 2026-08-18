@@ -52,6 +52,7 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
   const [filterKind, setFilterKind] = useState('')
   const [searchOrigin, setSearchOrigin] = useState('')
   const [searchDest, setSearchDest] = useState('')
+  const [searchQ, setSearchQ] = useState('')
   const [carrierServices, setCarrierServices] = useState<Array<{ id: string; carrierOrg?: { name: string; verified: boolean } | null; vessel?: string | null; flight?: string | null; originRef?: string | null; destinationRef?: string | null; rate?: number | null; currency: string; availableSlots: number; totalSlots: number; status: string }>>([])
   const [partners, setPartners] = useState<Array<{ id: string; name: string; kind: string; baseUrl?: string | null; org?: { name: string; verified: boolean } | null }>>([])
   const [aiRecs, setAiRecs] = useState<AiRec[]>([])
@@ -104,10 +105,11 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
     if (filterKind) params.set('kind', filterKind)
     if (searchOrigin) params.set('origin', searchOrigin)
     if (searchDest) params.set('destination', searchDest)
+    if (searchQ.trim()) params.set('q', searchQ.trim())
     const qs = params.toString() ? `?${params.toString()}` : ''
     Promise.all([
       api.get<{ listings: MarketListing[] }>(`/market/listings${qs}`).then((r) => r.listings),
-      api.get<{ requests: MarketRequest[] }>('/market/requests').then((r) => r.requests),
+      api.get<{ requests: MarketRequest[] }>(`/market/requests?${searchQ.trim() ? `q=${encodeURIComponent(searchQ.trim())}` : ''}`).then((r) => r.requests),
       api.get<{ requests: MarketRequest[] }>('/market/requests/mine').then((r) => { setMine(r.requests); return r.requests }).catch(() => [] as MarketRequest[]),
       api.get<{ services: typeof carrierServices }>(`/market/carrier-services${carOriginSearch || carDestSearch ? `?origin=${encodeURIComponent(carOriginSearch)}&destination=${encodeURIComponent(carDestSearch)}` : ''}`).then((r) => { setCarrierServices(r.services); return r.services }).catch(() => []),
       api.get<{ listings: MarketListing[] }>('/market/listings/mine').then((r) => { setMyListings(r.listings); return r.listings }).catch(() => [] as MarketListing[]),
@@ -128,7 +130,7 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
     })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [filterKind, searchOrigin, searchDest, carOriginSearch, carDestSearch])
+  }, [filterKind, searchOrigin, searchDest, searchQ, carOriginSearch, carDestSearch])
 
   // Debounce search keystrokes so the 8-parallel fetch doesn't fire per key.
   useEffect(() => {
@@ -482,6 +484,9 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
             <TextInput style={[styles.input, styles.half, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="From (city)" placeholderTextColor={theme.mutedForeground} value={searchOrigin} onChangeText={setSearchOrigin} />
             <TextInput style={[styles.input, styles.half, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="To (city)" placeholderTextColor={theme.mutedForeground} value={searchDest} onChangeText={setSearchDest} />
           </View>
+          <View style={styles.searchRow}>
+            <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Search city, route, description…" placeholderTextColor={theme.mutedForeground} value={searchQ} onChangeText={setSearchQ} />
+          </View>
           <FlatList
             style={styles.listScroll}
             contentContainerStyle={styles.list}
@@ -595,6 +600,11 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
           contentContainerStyle={styles.list}
           data={requests}
           keyExtractor={(r) => r.id}
+          ListHeaderComponent={
+            <View style={styles.searchRow}>
+              <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Search city, route, description…" placeholderTextColor={theme.mutedForeground} value={searchQ} onChangeText={setSearchQ} />
+            </View>
+          }
           ListEmptyComponent={loading ? undefined : <EmptyState title="No open shipments" message="Tap + Post shipment to post a shipment request" icon="📦" />}
           renderItem={({ item }) => renderRequest(item)}
         />

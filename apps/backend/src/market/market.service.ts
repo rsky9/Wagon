@@ -65,8 +65,8 @@ export class MarketService {
 
   async lanes(query?: { origin?: string; destination?: string; mode?: string }) {
     const where: Record<string, unknown> = {}
-    if (query?.origin) where.originRef = { contains: query.origin.toLowerCase() }
-    if (query?.destination) where.destinationRef = { contains: query.destination.toLowerCase() }
+    if (query?.origin) where.originRef = { contains: query.origin.toLowerCase(), mode: 'insensitive' }
+    if (query?.destination) where.destinationRef = { contains: query.destination.toLowerCase(), mode: 'insensitive' }
     if (query?.mode) where.mode = query.mode
     const lanes = await this.prisma.lane.findMany({ where: where as never, take: 100, orderBy: { createdAt: 'desc' } })
     return { lanes }
@@ -136,6 +136,11 @@ export class MarketService {
     lat?: number
     lng?: number
     radiusKm?: number
+    q?: string
+    minPrice?: number
+    maxPrice?: number
+    minCapacity?: number
+    sort?: 'newest' | 'cheapest' | 'priciest' | 'capacity'
   }) {
     // Expiry sweep: listings past their availableTo window go off-market.
     await this.prisma.marketListing.updateMany({
@@ -144,13 +149,36 @@ export class MarketService {
     })
     const where: Record<string, unknown> = { status: query?.status ?? 'live' }
     if (query?.kind) where.kind = query.kind
-    if (query?.city) where.city = { contains: query.city.toLowerCase() }
-    if (query?.origin) where.originRef = { contains: query.origin.toLowerCase() }
-    if (query?.destination) where.destinationRef = { contains: query.destination.toLowerCase() }
+    if (query?.city) where.city = { contains: query.city.toLowerCase(), mode: 'insensitive' }
+    if (query?.origin) where.originRef = { contains: query.origin.toLowerCase(), mode: 'insensitive' }
+    if (query?.destination) where.destinationRef = { contains: query.destination.toLowerCase(), mode: 'insensitive' }
+    if (query?.q?.trim()) {
+      const q = query.q.trim().toLowerCase()
+      where.OR = [
+        { originRef: { contains: q, mode: 'insensitive' } },
+        { destinationRef: { contains: q, mode: 'insensitive' } },
+        { city: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
+      ]
+    }
+    if (query?.minPrice !== undefined || query?.maxPrice !== undefined) {
+      where.price = {
+        ...(query.minPrice !== undefined ? { gte: query.minPrice } : {}),
+        ...(query.maxPrice !== undefined ? { lte: query.maxPrice } : {}),
+      }
+    }
+    if (query?.minCapacity !== undefined) {
+      where.capacityAvailable = { gte: query.minCapacity }
+    }
+    const orderBy: Record<string, 'asc' | 'desc'> =
+      query?.sort === 'cheapest' ? { price: 'asc' }
+      : query?.sort === 'priciest' ? { price: 'desc' }
+      : query?.sort === 'capacity' ? { capacityAvailable: 'desc' }
+      : { createdAt: 'desc' }
     const listings = await this.prisma.marketListing.findMany({
       where: where as never,
       include: { providerOrg: { select: { id: true, name: true, verified: true, verifiedCapabilities: true } }, lane: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy,
       take: 100,
     })
     // Radius filter: keep listings whose lane origin is within radiusKm of lat/lng.
@@ -544,7 +572,19 @@ export class MarketService {
   }
 
   /** Browse open demand — PUBLIC read (providers discover what's needed). */
-  async browseRequests(query?: { kind?: string; city?: string; status?: string; lat?: number; lng?: number; radiusKm?: number }) {
+  async browseRequests(query?: {
+    kind?: string
+    city?: string
+    status?: string
+    lat?: number
+    lng?: number
+    radiusKm?: number
+    q?: string
+    minBudget?: number
+    maxBudget?: number
+    minCapacity?: number
+    sort?: 'newest' | 'budgetLow' | 'budgetHigh' | 'capacity'
+  }) {
     // Request expiry: open/quoted requests older than 30 days with no booking auto-close.
     const expiryCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     await this.prisma.marketRequest.updateMany({
@@ -553,11 +593,34 @@ export class MarketService {
     })
     const where: Record<string, unknown> = { status: query?.status ?? 'open' }
     if (query?.kind) where.kind = query.kind
-    if (query?.city) where.city = { contains: query.city.toLowerCase() }
+    if (query?.city) where.city = { contains: query.city.toLowerCase(), mode: 'insensitive' }
+    if (query?.q?.trim()) {
+      const q = query.q.trim().toLowerCase()
+      where.OR = [
+        { originRef: { contains: q, mode: 'insensitive' } },
+        { destinationRef: { contains: q, mode: 'insensitive' } },
+        { city: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
+      ]
+    }
+    if (query?.minBudget !== undefined || query?.maxBudget !== undefined) {
+      where.budget = {
+        ...(query.minBudget !== undefined ? { gte: query.minBudget } : {}),
+        ...(query.maxBudget !== undefined ? { lte: query.maxBudget } : {}),
+      }
+    }
+    if (query?.minCapacity !== undefined) {
+      where.capacityNeeded = { gte: query.minCapacity }
+    }
+    const orderBy: Record<string, 'asc' | 'desc'> =
+      query?.sort === 'budgetLow' ? { budget: 'asc' }
+      : query?.sort === 'budgetHigh' ? { budget: 'desc' }
+      : query?.sort === 'capacity' ? { capacityNeeded: 'desc' }
+      : { createdAt: 'desc' }
     const requests = await this.prisma.marketRequest.findMany({
       where: where as never,
       include: { requesterOrg: { select: { id: true, name: true, verified: true } }, lane: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy,
       take: 100,
     })
     // Radius filter on the request's lane origin.
@@ -1406,8 +1469,8 @@ export class MarketService {
   /** Public browse of carrier schedules. */
   async browseCarrierServices(query?: { origin?: string; destination?: string; mode?: string }) {
     const where: Record<string, unknown> = { status: 'active' }
-    if (query?.origin) where.originRef = { contains: query.origin.toLowerCase() }
-    if (query?.destination) where.destinationRef = { contains: query.destination.toLowerCase() }
+    if (query?.origin) where.originRef = { contains: query.origin.toLowerCase(), mode: 'insensitive' }
+    if (query?.destination) where.destinationRef = { contains: query.destination.toLowerCase(), mode: 'insensitive' }
     if (query?.mode) where.mode = query.mode
     const services = await this.prisma.carrierService.findMany({
       where: where as never,

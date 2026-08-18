@@ -547,11 +547,19 @@ export class FoundationService {
     return { units }
   }
 
-  async listShipments(user: User, query?: { status?: string; mode?: string; skip?: number; take?: number }) {
+  async listShipments(user: User, query?: { status?: string; mode?: string; q?: string; skip?: number; take?: number }) {
     const orgIds = await this.orgAccess.memberOrgIds(user)
     const where: Record<string, unknown> = { ownerOrgId: { in: orgIds } }
     if (query?.status) where.status = query.status
     if (query?.mode) where.mode = query.mode
+    if (query?.q?.trim()) {
+      const q = query.q.trim()
+      where.OR = [
+        { commodity: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
+        { ref: { contains: q, mode: 'insensitive' } },
+      ]
+    }
     const take = Math.min(query?.take ?? 50, 100)
     const skip = query?.skip ?? 0
     const [shipments, total] = await this.prisma.$transaction([

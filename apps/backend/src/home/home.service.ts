@@ -1,17 +1,14 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { LoadMatchingService } from '../matching/matching.service'
 import type { User } from '@prisma/client'
-
-interface FleetTruck {
-  id: string
-  type: string
-  status?: string
-  model?: { capacities: number[] } | null
-}
 
 @Injectable()
 export class HomeService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly matching: LoadMatchingService,
+  ) {}
 
   /** Unified cockpit: answers "what is the most useful thing I can do right now?". */
   async summary(user: User) {
@@ -66,11 +63,8 @@ export class HomeService {
     if (isTransporter) {
       const transporter = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
       if (transporter) {
-        const fleet = await this.prisma.truck.findMany({
-          where: { transporterId: transporter.id },
-          include: { model: true },
-        })
-        const availableTrucks = fleet.filter((t) => t.activeStatus)
+        const ctx = await this.matching.fleetContext(user.id)
+        const availableTrucks = ctx.fleet.filter((t) => t.activeStatus)
 
         const openLoads = await this.prisma.load.findMany({
           where: { status: 'posted' },
@@ -79,7 +73,7 @@ export class HomeService {
           take: 20,
         })
         const scored = openLoads
-          .map((l) => ({ ...l, matchScore: this.matchScore(l, fleet) }))
+          .map((l) => ({ ...l, ...this.matching.scoreLoad(l, ctx) }))
           .sort((a, b) => b.matchScore - a.matchScore)
 
         // Return loads: loads starting near the drop of this transporter's most recent delivered trip.
@@ -122,7 +116,7 @@ export class HomeService {
 
         result.transporter = {
           availableTrucks: availableTrucks.length,
-          fleetSize: fleet.length,
+          fleetSize: ctx.fleet.length,
           matchingLoads: scored.filter((l) => l.matchScore >= 60).length,
           recommended: scored.slice(0, 3),
           returnLoads,
@@ -185,21 +179,5 @@ export class HomeService {
 
   private async supplierId(user: User) {
     return (await this.prisma.supplier.findUnique({ where: { userId: user.id } }))?.id
-  }
-
-  private matchScore(load: { truckType: string; weight: number }, fleet: FleetTruck[]) {
-    if (fleet.length === 0) return 40
-    const typeMatches = fleet.some((t) => t.type === load.truckType)
-    const capacityOk = fleet.some((t) => {
-      const caps = t.model?.capacities ?? []
-      const maxT = caps.length ? Math.max(...caps) : 0
-      return maxT >= load.weight
-    })
-    let score = 0
-    if (typeMatches) score += 35
-    if (capacityOk) score += 35
-    score += 15
-    score += 15
-    return Math.min(100, score)
   }
 }
