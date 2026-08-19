@@ -169,20 +169,21 @@ export class HomeService {
     if (enablementCaps.length > 0) {
       const orgIds = await this.orgIds(user)
       if (orgIds.length > 0) {
-        const [shipments, forwardOrders, facilities, policies, activePlans] = await Promise.all([
+        const [shipments, forwardOrders, facilities, policies, activePlans, openShipments] = await Promise.all([
           this.prisma.shipment.count({ where: { ownerOrgId: { in: orgIds } } }),
           this.prisma.forwardOrder.count({ where: { forwarderId: { in: orgIds } } }),
           this.prisma.facility.count({ where: { operatorId: { in: orgIds } } }),
           this.prisma.insurancePolicy.count({ where: { OR: [{ insurerId: { in: orgIds } }, { shipment: { ownerOrgId: { in: orgIds } } }] } }),
           this.prisma.plan.count({ where: { shipment: { ownerOrgId: { in: orgIds } }, status: { in: ['proposed', 'selected'] } } }),
+          this.prisma.shipment.count({ where: { ownerOrgId: { in: orgIds }, status: { in: ['booked', 'in_transit'] } } }),
         ])
         result.enablement = {
           capabilities: enablementCaps,
           orgIds,
-          counts: { shipments, forwardOrders, facilities, policies, activePlans },
+          counts: { shipments, forwardOrders, facilities, policies, activePlans, openShipments },
         }
       } else {
-        result.enablement = { capabilities: enablementCaps, orgIds: [], counts: { shipments: 0, forwardOrders: 0, facilities: 0, policies: 0, activePlans: 0 } }
+        result.enablement = { capabilities: enablementCaps, orgIds: [], counts: { shipments: 0, forwardOrders: 0, facilities: 0, policies: 0, activePlans: 0, openShipments: 0 } }
       }
     }
 

@@ -67,7 +67,7 @@ interface HomeSummary {
   enablement?: {
     capabilities: string[]
     orgIds: string[]
-    counts: { shipments: number; forwardOrders: number; facilities: number; policies: number; activePlans: number }
+    counts: { shipments: number; forwardOrders: number; facilities: number; policies: number; activePlans: number; openShipments: number }
   }
   admin?: { activeUsers: number; loadsWeek: number; openDisputes: number; liveListings: number; openRequests: number }
   alerts?: HomeAlerts
@@ -403,7 +403,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
             <View style={styles.statRow}>
               <StatTile label="Facilities" value={data.enablement.counts.facilities} icon="🏭" onPress={onOpenTrips} />
               <StatTile label="Policies" value={data.enablement.counts.policies} icon="🛡️" onPress={onOpenTrips} />
-              <StatTile label="Open shipments" value={0} icon="📢" onPress={onOpenMarketRequests ?? onOpenTrips} />
+              <StatTile label="Open shipments" value={data.enablement.counts.openShipments} icon="📢" onPress={onOpenMarketRequests ?? onOpenTrips} />
             </View>
           </>
         )}
@@ -420,7 +420,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
             <View style={styles.statRow}>
               <StatTile label="Live capacity" value={data.admin.liveListings} icon="🏗️" onPress={onOpenMarket} />
               <StatTile label="Open shipments" value={data.admin.openRequests} icon="📦" onPress={onOpenMarketRequests ?? onOpenMarket} />
-              <StatTile label="Marketplace" value={0} icon="📦" onPress={onOpenMarket} />
+              <StatTile label="Marketplace" value={data.admin.liveListings} icon="📦" onPress={onOpenMarket} />
             </View>
           </>
         )}

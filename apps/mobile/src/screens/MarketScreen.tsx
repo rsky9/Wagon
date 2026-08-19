@@ -100,6 +100,31 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
 
   const [busy, setBusy] = useState(false)
 
+  // Listing detail drill-in
+  const [detail, setDetail] = useState<MarketListing & { orgRating?: number | null; ratingCount?: number | null; completionRate?: number | null; claimRate?: number | null; activeTrips?: number | null; fresh?: number | null; lastEvent?: string | null } | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  // Inbound requests on my listings (supply owners)
+  const [inbound, setInbound] = useState<Array<{ id: string; kind: string; originRef?: string | null; destinationRef?: string | null; capacityNeeded?: number | null; budget?: number | null; currency: string; status: string; requesterOrg?: { name: string } | null }>>([])
+
+  const openDetail = async (l: MarketListing) => {
+    setDetailLoading(true)
+    setDetail(l as never)
+    try {
+      const res = await api.get<{ listing: (typeof detail) }>(`/market/listings/${l.id}`)
+      setDetail(res.listing)
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to load listing')
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  const fetchInbound = useCallback(() => {
+    api.get<{ requests: (typeof inbound) }>('/market/requests/inbound')
+      .then((r) => setInbound(r.requests))
+      .catch(() => {})
+  }, [])
+
   const fetch = useCallback(() => {
     const params = new URLSearchParams()
     if (filterKind) params.set('kind', filterKind)
@@ -137,6 +162,10 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
     const t = setTimeout(fetch, 350)
     return () => clearTimeout(t)
   }, [fetch])
+
+  useEffect(() => {
+    fetchInbound()
+  }, [fetchInbound])
 
   const postListing = () => {
     if (!listOrigin && !listCity) { Alert.alert('Origin or city required'); return }
@@ -341,10 +370,13 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
         <TrustBadge rating={l.orgRating?.avg} completion={l.completionRate} />
       </View>
       <View style={styles.actions}>
-        <Pressable style={[styles.actionBtn, { backgroundColor: '#F97316' }]} onPress={() => askProvider(l)}>
+        <Pressable style={[styles.actionBtn, { backgroundColor: '#F97316' }]} onPress={() => openDetail(l)}>
+          <Text style={styles.actionText}>Details</Text>
+        </Pressable>
+        <Pressable style={[styles.actionBtn, { backgroundColor: theme.success }]} onPress={() => askProvider(l)}>
           <Text style={styles.actionText}>Ask</Text>
         </Pressable>
-        <Pressable style={[styles.actionBtn, { backgroundColor: theme.success }]} onPress={() => rateOrg(l)}>
+        <Pressable style={[styles.actionBtn, { backgroundColor: theme.mutedForeground }]} onPress={() => rateOrg(l)}>
           <Text style={styles.actionText}>Rate</Text>
         </Pressable>
       </View>
@@ -614,7 +646,7 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
         <FlatList
           style={styles.listScroll}
           contentContainerStyle={styles.list}
-          data={[{ type: 'requests' as const }, { type: 'quotes' as const }, { type: 'capacity' as const }]}
+          data={[{ type: 'requests' as const }, { type: 'inbound' as const }, { type: 'quotes' as const }, { type: 'capacity' as const }]}
           keyExtractor={(i) => i.type}
           renderItem={({ item }) => item.type === 'requests' ? (
             <View style={styles.section}>
@@ -622,6 +654,36 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
               {mine.length === 0
                 ? <EmptyState title="No shipments yet" message="Your shipment requests and their quotes appear here" icon="📋" />
                 : mine.map((m) => renderRequest(m, true))}
+            </View>
+          ) : item.type === 'inbound' ? (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: theme.foreground }]}>Inbound requests ({inbound.length})</Text>
+              {inbound.length === 0
+                ? <EmptyState title="No inbound requests" message="Shipment requests against your published capacity appear here" icon="📥" />
+                : inbound.map((r) => (
+                  <MarketCard
+                    key={r.id}
+                    icon="📥"
+                    title={`${r.kind} shipment`}
+                    subtitle={`${r.originRef ?? '—'} → ${r.destinationRef ?? '—'}`}
+                    status={r.status}
+                    statusColor={r.status === 'open' ? theme.success : theme.warning}
+                  >
+                    <View style={styles.cardMid}>
+                      <Text style={[styles.price, { color: theme.foreground }]}>
+                        {r.budget ? `${r.currency} ${r.budget.toLocaleString('en-IN')}` : '—'}
+                      </Text>
+                      <Text style={[styles.meta, { color: theme.mutedForeground }]}>
+                        {r.capacityNeeded ?? '—'} {r.requesterOrg?.name ? `· ${r.requesterOrg.name}` : ''}
+                      </Text>
+                    </View>
+                    <View style={styles.actions}>
+                      <Pressable style={[styles.actionBtn, { backgroundColor: '#F97316' }]} onPress={() => setQuoteFor(r as never)}>
+                        <Text style={styles.actionText}>Quote</Text>
+                      </Pressable>
+                    </View>
+                  </MarketCard>
+                ))}
             </View>
           ) : item.type === 'quotes' ? (
             <View style={styles.section}>
@@ -825,6 +887,52 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Listing detail modal */}
+      <Modal visible={detail !== null} transparent animationType="slide" onRequestClose={() => setDetail(null)}>
+        <View style={styles.modalWrap}>
+          <View style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            {detail && (
+              <ScrollView contentContainerStyle={{ paddingBottom: spacing.md }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
+                  <Text style={[styles.modalTitle, { color: theme.foreground }]}>Listing details</Text>
+                  <Pressable onPress={() => setDetail(null)} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 18 }}>✕</Text></Pressable>
+                </View>
+                {detailLoading ? (
+                  <Text style={{ color: theme.mutedForeground, textAlign: 'center', padding: spacing.lg }}>Loading…</Text>
+                ) : (
+                  <>
+                    <Text style={[styles.sectionTitle, { color: theme.foreground }]}>{KIND_LABEL[detail.kind] ?? detail.kind}</Text>
+                    <Text style={[styles.meta, { color: theme.mutedForeground }]}>{detail.originRef ?? detail.city ?? '—'} → {detail.destinationRef ?? '—'}</Text>
+                    <Text style={[styles.price, { color: theme.foreground, marginTop: spacing.sm }]}>
+                      {detail.price != null ? `${detail.currency} ${detail.price.toLocaleString('en-IN')}` : '—'}
+                    </Text>
+                    <View style={[styles.divider, { borderBottomColor: theme.border }]} />
+                    <Text style={[styles.meta, { color: theme.mutedForeground }]}>
+                      Capacity: {detail.capacityAvailable ?? '—'} {detail.capacityUnit}{detail.equipment ? ` · ${detail.equipment}` : ''}
+                    </Text>
+                    <Text style={[styles.meta, { color: theme.mutedForeground }]}>
+                      Provider: {detail.providerOrg?.name ?? '—'}{detail.providerOrg?.verified ? ' ✓' : ''}
+                    </Text>
+                    <Text style={[styles.meta, { color: theme.mutedForeground }]}>
+                      Active trips: {detail.activeTrips ?? 0} · Completion: {detail.completionRate != null ? `${Math.round(detail.completionRate * 100)}%` : '—'}
+                    </Text>
+                    <Text style={[styles.meta, { color: theme.mutedForeground }]}>
+                      Claim rate: {detail.claimRate != null ? `${Math.round(detail.claimRate * 100)}%` : '—'}
+                    </Text>
+                    <Text style={[styles.meta, { color: theme.mutedForeground }]}>
+                      {detail.lastEvent ? `Last event: ${detail.lastEvent}` : ''}{detail.fresh != null ? ` · ${detail.fresh}h ago` : ''}
+                    </Text>
+                    {detail.description ? (
+                      <Text style={[styles.meta, { color: theme.foreground, marginTop: spacing.sm }]}>{detail.description}</Text>
+                    ) : null}
+                  </>
+                )}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   )
 }
@@ -860,6 +968,7 @@ const styles = StyleSheet.create({
   smallBtn: { borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   smallActionBtn: { borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, alignSelf: 'center' },
   smallActionText: { color: '#fff', fontWeight: '800', fontSize: 12 },
+  divider: { borderBottomWidth: 1, marginVertical: spacing.md },
   quoteRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderTopWidth: 1, paddingTop: spacing.sm },
   modalWrap: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modal: { borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, borderTopWidth: 1, padding: spacing.xl, gap: spacing.md, maxHeight: '80%' },

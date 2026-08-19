@@ -8,6 +8,7 @@ const nav = [
   { label: "Dashboard", href: "/", key: "/", icon: "▦" },
   { label: "Users", href: "/users", key: "/users", icon: "👥" },
   { label: "Loads & Trips", href: "/loads", key: "/loads", icon: "🚛" },
+  { label: "Trips", href: "/trips", key: "/trips", icon: "🧭" },
   { label: "E-Way Bills", href: "/ewb", key: "/ewb", icon: "🧾" },
   { label: "Exceptions", href: "/exceptions", key: "/exceptions", icon: "⚠️" },
   { label: "Ops Tower", href: "/ops", key: "/ops", icon: "🛰️" },

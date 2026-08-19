@@ -68,6 +68,11 @@ export function NotificationsScreen({ onBack, onNavigate }: Props) {
     fetch()
   }
 
+  const markUnread = async (id: string) => {
+    await api.patch(`/notifications/${id}/unread`).catch(() => {})
+    fetch()
+  }
+
   const [prefs, setPrefs] = useState<Record<string, boolean> | null>(null)
   useEffect(() => { api.get<{ preferences: Record<string, boolean> }>('/notifications/preferences').then((r) => setPrefs(r.preferences)).catch(() => {}) }, [])
   const togglePref = async (key: string, value: boolean) => {
@@ -159,7 +164,13 @@ export function NotificationsScreen({ onBack, onNavigate }: Props) {
                 <Text style={[styles.rowBodyText, { color: theme.mutedForeground }]} numberOfLines={2}>{item.body}</Text>
                 <Text style={[styles.time, { color: theme.mutedForeground }]}>{timeAgo(item.createdAt)}</Text>
               </View>
-              {!item.isRead && <View style={[styles.unreadDot, { backgroundColor: theme.primary }]} />}
+              {item.isRead ? (
+                <Pressable onPress={() => markUnread(item.id)} hitSlop={8}>
+                  <Text style={{ color: theme.mutedForeground, fontSize: 14 }}>↩</Text>
+                </Pressable>
+              ) : (
+                <View style={[styles.unreadDot, { backgroundColor: theme.primary }]} />
+              )}
             </Pressable>
           )}
         />

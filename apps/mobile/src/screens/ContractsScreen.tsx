@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { StyleSheet, Text, View, FlatList, Pressable } from 'react-native'
+import { StyleSheet, Text, View, FlatList, Pressable, Modal, TextInput, ScrollView, Alert, KeyboardAvoidingView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
@@ -44,6 +44,81 @@ export function ContractsScreen({ onBack }: Props) {
   const [analytics, setAnalytics] = useState<OrgAnalytics | null>(null)
   const [compliance, setCompliance] = useState<ComplianceRow[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Create flows
+  const [showCreate, setShowCreate] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [f, setF] = useState<Record<string, string>>({})
+
+  const CREATABLE = ['contracts', 'invoices', 'containers', 'returns', 'handovers']
+
+  const refetch = () => {
+    setLoading(true)
+    Promise.all([
+      api.get<{ contracts: ContractRow[] }>('/contracts').then((r) => setContracts(r.contracts)).catch(() => {}),
+      api.get<{ invoices: InvoiceRow[] }>('/invoices').then((r) => setInvoices(r.invoices)).catch(() => {}),
+      api.get<{ containers: ContainerRow[] }>('/containers').then((r) => setContainers(r.containers)).catch(() => {}),
+      api.get<{ returns: ReturnRow[] }>('/returns').then((r) => setReturns(r.returns)).catch(() => {}),
+      api.get<{ handovers: HandoverRow[] }>('/handovers').then((r) => setHandovers(r.handovers)).catch(() => {}),
+    ]).finally(() => setLoading(false))
+  }
+
+  const submitCreate = () => {
+    if (tab === 'contracts' && (!f.type || !f.partyBOrgId)) { Alert.alert('Required', 'Contract type and counterparty org are required'); return }
+    if (tab === 'containers' && !f.number) { Alert.alert('Required', 'Container number is required'); return }
+    if (tab === 'returns' && !f.reason) { Alert.alert('Required', 'Return reason is required'); return }
+    if (tab === 'handovers' && !f.entityType) { Alert.alert('Required', 'Handover entity type is required'); return }
+    if (tab === 'invoices' && !f.tripId && !f.shipmentId) { Alert.alert('Required', 'A trip or shipment reference is required'); return }
+
+    setCreating(true)
+    let body: Record<string, unknown> = { ...f }
+    if (tab === 'invoices') {
+      if (f.accessorials) {
+        body.accessorials = f.accessorials.split(',').map((s) => s.trim()).filter(Boolean).map((kind) => ({ kind, amount: Number(f[`acc_${kind}`] ?? 0) }))
+      }
+      if (body.netAmount != null) body.netAmount = Number(body.netAmount)
+    }
+    if (tab === 'containers') body.type = f.type || '20GP'
+    const endpoint =
+      tab === 'contracts' ? '/contracts' :
+      tab === 'invoices' ? '/invoices' :
+      tab === 'containers' ? '/containers' :
+      tab === 'returns' ? '/returns' : '/handovers'
+    api.post(endpoint, body)
+      .then(() => { setShowCreate(false); setF({}); Alert.alert('Created', 'Record created'); refetch() })
+      .catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'Failed to create'))
+      .finally(() => setCreating(false))
+  }
+
+  const fieldsFor = (): Array<{ key: string; label: string; placeholder: string; keyboard?: 'numeric' }> => {
+    if (tab === 'contracts') return [
+      { key: 'type', label: 'Type', placeholder: 'customer | carrier | warehouse | service' },
+      { key: 'partyBOrgId', label: 'Counterparty org ID', placeholder: 'Org id of the other party' },
+      { key: 'title', label: 'Title', placeholder: 'Contract title' },
+      { key: 'incoterms', label: 'Incoterms', placeholder: 'e.g. CIF, FOB' },
+      { key: 'paymentTerms', label: 'Payment terms', placeholder: 'e.g. Net 30' },
+    ]
+    if (tab === 'invoices') return [
+      { key: 'tripId', label: 'Trip ID', placeholder: 'Trip id (or shipment id)' },
+      { key: 'shipmentId', label: 'Shipment ID', placeholder: 'Shipment id (optional if trip)' },
+      { key: 'accessorials', label: 'Accessorials', placeholder: 'Comma-separated kinds, e.g. detention,demurrage' },
+    ]
+    if (tab === 'containers') return [
+      { key: 'number', label: 'Container number', placeholder: 'e.g. MSCU1234567' },
+      { key: 'type', label: 'Type', placeholder: '20GP | 40GP | 40HC | reefer | …' },
+      { key: 'locationRef', label: 'Location', placeholder: 'Location reference' },
+    ]
+    if (tab === 'returns') return [
+      { key: 'reason', label: 'Reason', placeholder: 'customer_return | damage | repair | …' },
+      { key: 'shipmentId', label: 'Shipment ID', placeholder: 'Reference a shipment (or cargo unit)' },
+      { key: 'condition', label: 'Condition', placeholder: 'Condition on return' },
+    ]
+    return [
+      { key: 'entityType', label: 'Entity type', placeholder: 'cargo_unit | container | vehicle | shipment' },
+      { key: 'toOrgId', label: 'Receiving org ID', placeholder: 'Org id receiving the handover' },
+      { key: 'locationRef', label: 'Location', placeholder: 'Location reference' },
+    ]
+  }
 
   useEffect(() => {
     Promise.all([
@@ -101,7 +176,13 @@ export function ContractsScreen({ onBack }: Props) {
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
         <Text style={[styles.title, { color: theme.foreground }]}>Contracts & Assets</Text>
-        <View style={{ width: 20 }} />
+        {CREATABLE.includes(tab) ? (
+          <Pressable onPress={() => { setF({}); setShowCreate(true) }} hitSlop={8}>
+            <Text style={{ color: theme.primary, fontSize: 22, fontWeight: '800' }}>+</Text>
+          </Pressable>
+        ) : (
+          <View style={{ width: 20 }} />
+        )}
       </View>
 
       <View style={[styles.tabs, { borderBottomColor: theme.border }]}>
@@ -159,6 +240,35 @@ export function ContractsScreen({ onBack }: Props) {
           )}
         />
       )}
+
+      <Modal visible={showCreate} transparent animationType="slide" onRequestClose={() => setShowCreate(false)}>
+        <KeyboardAvoidingView behavior="padding" style={styles.modalWrap}>
+          <View style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={[styles.modalTitle, { color: theme.foreground }]}>New {tab.slice(0, -1)}</Text>
+              <Pressable onPress={() => setShowCreate(false)} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 18 }}>✕</Text></Pressable>
+            </View>
+            <ScrollView contentContainerStyle={{ gap: spacing.sm, paddingBottom: spacing.md }}>
+              {fieldsFor().map((field) => (
+                <View key={field.key}>
+                  <Text style={[styles.fieldLabel, { color: theme.mutedForeground }]}>{field.label}</Text>
+                  <TextInput
+                    style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]}
+                    placeholder={field.placeholder}
+                    placeholderTextColor={theme.mutedForeground + '88'}
+                    value={f[field.key] ?? ''}
+                    onChangeText={(v) => setF((prev) => ({ ...prev, [field.key]: v }))}
+                    keyboardType={field.keyboard === 'numeric' ? 'numeric' : 'default'}
+                  />
+                </View>
+              ))}
+            </ScrollView>
+            <Pressable style={[styles.createBtn, { backgroundColor: theme.primary }]} onPress={submitCreate} disabled={creating}>
+              <Text style={{ color: '#fff', fontWeight: '800' }}>{creating ? 'Creating…' : 'Create'}</Text>
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   )
 }
@@ -175,4 +285,10 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 14, fontWeight: '700' },
   cardSub: { fontSize: 12, marginTop: 2 },
   meta: { fontSize: 12, fontWeight: '700', textTransform: 'capitalize' },
+  modalWrap: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modal: { borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, borderTopWidth: 1, padding: spacing.xl, maxHeight: '82%' },
+  modalTitle: { fontSize: 18, fontWeight: '800' },
+  fieldLabel: { fontSize: 12, fontWeight: '700', marginTop: spacing.sm },
+  input: { borderRadius: radius.md, borderWidth: 1, padding: spacing.md, fontSize: 14, marginTop: 2 },
+  createBtn: { borderRadius: radius.md, padding: spacing.md, alignItems: 'center', marginTop: spacing.md },
 })
