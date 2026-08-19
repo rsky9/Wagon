@@ -33,6 +33,7 @@ export default function Handovers() {
   const [handovers, setHandovers] = useState<HandoverRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
 
   const fetchHandovers = useCallback(() => {
     api
@@ -45,6 +46,19 @@ export default function Handovers() {
   useEffect(() => {
     fetchHandovers();
   }, [fetchHandovers]);
+
+  const transition = async (h: HandoverRow, status: string) => {
+    if (status === "disputed" && !window.confirm("Mark this handover as disputed?")) return;
+    setBusy(h.id);
+    try {
+      await api.patch(`/handovers/${h.id}/status`, { status });
+      setHandovers((prev) => prev.map((x) => (x.id === h.id ? { ...x, status } : x)));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update handover");
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const completed = handovers.filter((h) => h.status === "completed").length;
   const disputed = handovers.filter((h) => h.status === "disputed").length;
@@ -78,10 +92,11 @@ export default function Handovers() {
                 <Th>Next responsibility</Th>
                 <Th>When</Th>
                 <Th>Status</Th>
+                <Th className="text-right">Actions</Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {handovers.length === 0 && <EmptyRow colSpan={8}>No handovers yet.</EmptyRow>}
+              {handovers.length === 0 && <EmptyRow colSpan={9}>No handovers yet.</EmptyRow>}
               {handovers.map((h) => (
                 <tr key={h.id}>
                   <Td className="font-mono text-xs">{h.ref}</Td>
@@ -98,6 +113,16 @@ export default function Handovers() {
                   <Td className="text-xs">{h.nextResponsibility ?? "—"}</Td>
                   <Td className="text-xs tabular-nums text-slate-500">{new Date(h.performedAt).toLocaleString()}</Td>
                   <Td><Badge tone={h.status === "completed" ? "emerald" : h.status === "disputed" ? "red" : "amber"}>{h.status}</Badge></Td>
+                  <Td className="text-right">
+                    {h.status !== "completed" && (
+                      <div className="flex justify-end gap-2">
+                        {h.status !== "disputed" && (
+                          <button onClick={() => transition(h, "disputed")} disabled={busy === h.id} className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600 disabled:opacity-50">Dispute</button>
+                        )}
+                        <button onClick={() => transition(h, "completed")} disabled={busy === h.id} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">Complete</button>
+                      </div>
+                    )}
+                  </Td>
                 </tr>
               ))}
             </tbody>
