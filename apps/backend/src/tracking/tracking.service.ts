@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException, Inject, forwardRef } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
 import Redis from 'ioredis'
 import { REDIS } from '../redis/redis.module'
 import { PrismaService } from '../prisma/prisma.service'
@@ -12,6 +13,7 @@ export class TrackingService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
     @Inject(forwardRef(() => TrackingGateway)) private readonly gateway: TrackingGateway,
     @Inject(REDIS) private readonly redis: Redis,
     private readonly outbox: OutboxRelay,
@@ -35,8 +37,14 @@ export class TrackingService {
       throw new NotFoundException('Trip not found')
     }
     const transporter = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
-    if (!transporter || transporter.id !== trip.transporterId) {
-      throw new BadRequestException('Only the assigned transporter can share location')
+    const isTransporter = transporter && transporter.id === trip.transporterId
+    // The assigned driver may also share their live position while in transit
+    // (the truck IS the driver). Matched by mobile — same as trip execution.
+    const isAssignedDriver = trip.driverId
+      ? (await this.prisma.driver.findUnique({ where: { id: trip.driverId } }))?.mobile === user.mobile
+      : false
+    if (!isTransporter && !isAssignedDriver) {
+      throw new BadRequestException('Only the assigned transporter or driver can share location')
     }
     if (trip.status !== 'in_transit') {
       throw new BadRequestException('Location sharing requires in-transit trip')
@@ -99,10 +107,21 @@ export class TrackingService {
       }
     }
 
-    // ETA from live speed (if any) + remaining distance to drop.
+    // ETA from live speed (if any) + remaining distance to drop. Prefer a
+    // route-aware OSRM distance (cached per location bucket); fall back to
+    // straight-line haversine when the router is unreachable.
     let etaMinutes: number | null = null
-    if (speedKmh && speedKmh > 5 && distDrop > 0) {
-      etaMinutes = Math.round((distDrop / speedKmh) * 60)
+    let remainingKm: number | null = null
+    let etaSource: 'osrm' | 'haversine' = 'haversine'
+    if (load?.dropLat != null && load.dropLng != null && distDrop > 0) {
+      remainingKm = await this.routeDistanceKm({ lat, lng }, { lat: load.dropLat, lng: load.dropLng })
+      if (remainingKm == null) {
+        remainingKm = Math.round(distDrop * 10) / 10
+      } else {
+        etaSource = 'osrm'
+      }
+      const speed = speedKmh && speedKmh > 5 ? speedKmh : 25
+      etaMinutes = Math.round((remainingKm / speed) * 60)
     }
 
     this.gateway.broadcast(tripId, {
@@ -112,9 +131,40 @@ export class TrackingService {
       recordedAt: record.recordedAt,
       zone,
       etaMinutes,
+      remainingKm,
+      etaSource,
     })
 
-    return { location: record, zone, etaMinutes }
+    return { location: record, zone, etaMinutes, remainingKm, etaSource }
+  }
+
+  /** Route-aware remaining distance via OSRM (Redis-cached per location bucket). */
+  private async routeDistanceKm(
+    from: { lat: number; lng: number },
+    to: { lat: number; lng: number },
+  ): Promise<number | null> {
+    const key = `osrm:${from.lat.toFixed(2)},${from.lng.toFixed(2)}:${to.lat.toFixed(2)},${to.lng.toFixed(2)}`
+    const cached = await this.redis.get(key)
+    if (cached) return Number(cached)
+    const base = this.config.get<string>('OSRM_URL') || 'https://router.project-osrm.org'
+    const url = `${base}/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=false&alternatives=false`
+    try {
+      const controller = new AbortController()
+      const t = setTimeout(() => controller.abort(), 4000)
+      t.unref()
+      const res = await fetch(url, { signal: controller.signal })
+      const json = (await res.json()) as { code: string; routes?: Array<{ distance: number }> }
+      if (json.code === 'Ok' && json.routes?.[0]) {
+        const km = Math.round((json.routes[0].distance / 1000) * 10) / 10
+        if (km > 0) {
+          await this.redis.set(key, String(km), 'EX', 3600)
+          return km
+        }
+      }
+    } catch {
+      // Router unreachable/timeout — caller falls back to haversine.
+    }
+    return null
   }
 
   private async shipmentIdFor(loadId: string): Promise<string | null> {

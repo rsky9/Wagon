@@ -14,6 +14,7 @@ interface ReviewRow {
   reviewerName?: string
   route: string
   deliveredAt?: string | null
+  orgRating?: boolean
 }
 
 interface Props {
@@ -47,7 +48,7 @@ export function ReviewsScreen({ onBack }: Props) {
       ) : (
         <FlatList
           data={reviews}
-          keyExtractor={(r) => r.tripId}
+          keyExtractor={(r, i) => r.tripId ?? `org-${i}`}
           contentContainerStyle={styles.list}
           ListEmptyComponent={<EmptyState title={t('review.none')} message="Reviews you receive appear here" icon="⭐" />}
           renderItem={({ item }) => (
@@ -57,6 +58,9 @@ export function ReviewsScreen({ onBack }: Props) {
                 <Text style={[styles.ratingNum, { color: theme.primary }, { fontVariant: ['tabular-nums'] }]}>{item.rating}.0</Text>
               </View>
               <Text style={[styles.route, { color: theme.foreground }]}>{item.route}</Text>
+              {item.orgRating && (
+                <Text style={[styles.badge, { color: theme.primary, borderColor: theme.primary }]}>Org rating</Text>
+              )}
               {item.review && <Text style={[styles.review, { color: theme.mutedForeground }]}>{item.review}</Text>}
               <Text style={[styles.reviewer, { color: theme.mutedForeground }]}>
                 {item.reviewerName ?? '—'}{item.role ? ` · ${item.role}` : ''}
@@ -80,4 +84,5 @@ const styles = StyleSheet.create({
   route: { fontSize: 14, fontWeight: '600' },
   review: { fontSize: 14, lineHeight: 20 },
   reviewer: { fontSize: 12, fontWeight: '600', marginTop: 2 },
+  badge: { fontSize: 11, fontWeight: '700', borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 6, paddingVertical: 2, alignSelf: 'flex-start', overflow: 'hidden' },
 })

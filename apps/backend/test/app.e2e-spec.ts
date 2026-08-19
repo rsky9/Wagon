@@ -122,6 +122,12 @@ describe('Wagon API (e2e)', () => {
         .set('Authorization', `Bearer ${admToken}`)
         .send({ capability: 'transporter' })
         .expect(201)
+      // Ensure the demo supplier passes the supplierVerified load-posting gate.
+      await request(app.getHttpServer())
+        .post('/api/v1/admin/verify/' + (await request(app.getHttpServer()).get('/api/v1/admin/users?q=' + SUP).set('Authorization', `Bearer ${admToken}`).expect(200)).body.users.find((u: { mobile: string }) => u.mobile === SUP).id)
+        .set('Authorization', `Bearer ${admToken}`)
+        .send({ capability: 'supplier' })
+        .expect(201)
     })
 
     it('rejects an invalid OTP', async () => {

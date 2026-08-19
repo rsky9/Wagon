@@ -83,4 +83,14 @@ export class FinanceController {
   summary(@Param('shipmentId') shipmentId: string, @CurrentUser() user: User) {
     return this.finance.summary(shipmentId, user)
   }
+
+  @Get('currencies')
+  supportedCurrencies() {
+    return this.finance.supportedCurrencies()
+  }
+
+  @Get('fx/convert')
+  convert(@Query('amount') amount: string, @Query('from') from: string, @Query('to') to: string) {
+    return this.finance.convert({ amount: parseFloat(amount || '0'), from, to })
+  }
 }

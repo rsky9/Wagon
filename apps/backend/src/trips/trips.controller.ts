@@ -57,6 +57,12 @@ export class TripsController {
     return this.trips.cancelTrip(id, body.reason, user)
   }
 
+  @Patch(':id/assign')
+  @Roles('transporter')
+  assignDriver(@Param('id') id: string, @Body() body: { driverId: string }, @CurrentUser() user: User) {
+    return this.trips.assignDriver(id, body.driverId, user)
+  }
+
   @Post(':id/otp/:kind')
   @Roles('transporter', 'driver')
   generateOtp(@Param('id') id: string, @Param('kind') kind: 'pickup' | 'delivery', @CurrentUser() user: User) {

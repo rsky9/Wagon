@@ -71,6 +71,32 @@ export class TrucksService {
     }
   }
 
+  /** Fleet earnings & utilization overview: aggregate trips, earnings, driver coverage. */
+  async fleetOverview(user: User) {
+    const transporterId = await this.transporterId(user)
+    if (!transporterId) return { fleet: { trucks: 0, activeTrips: 0 }, earnings: 0, drivers: 0, covered: 0, driverCoverage: 0 }
+
+    const [trucks, trips, drivers, earnedTrips] = await Promise.all([
+      this.prisma.truck.findMany({ where: { transporterId }, select: { id: true, activeStatus: true } }),
+      this.prisma.trip.findMany({ where: { transporterId }, select: { id: true, status: true, driverId: true, load: { select: { fareEstimate: true } }, booking: true } }),
+      this.prisma.driver.findMany({ where: { transporterId }, select: { id: true, payRate: true, status: true } }),
+      this.prisma.trip.findMany({ where: { transporterId, status: 'delivered' }, include: { load: true, booking: true } }),
+    ])
+
+    const activeTrips = trips.filter((t) => t.status === 'in_transit').length
+    const earnings = earnedTrips.reduce((s, t) => s + (t.booking?.rate ?? t.load.fareEstimate ?? 0), 0)
+    const assignedTrips = trips.filter((t) => t.driverId).length
+    const activeDrivers = drivers.filter((d) => d.status).length
+
+    return {
+      fleet: { trucks: trucks.length, activeTrucks: trucks.filter((t) => t.activeStatus).length, activeTrips },
+      drivers: { total: drivers.length, active: activeDrivers },
+      coverage: { assignedTrips, totalTrips: trips.length, driverCoverage: trips.length ? Math.round((assignedTrips / trips.length) * 100) / 100 : 0 },
+      earnings,
+      currency: 'INR',
+    }
+  }
+
   async create(input: CreateTruckInput, user: User) {
     const transporterId = await this.transporterId(user)
     if (!transporterId) throw new BadRequestException('Transporter profile not found')

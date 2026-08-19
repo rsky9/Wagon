@@ -354,4 +354,157 @@ export class PlanningService {
     })
     return { plans }
   }
+
+  /**
+   * Generate alternative multimodal plans for a shipment route. The caller
+   * describes origin → destination (+ optional weight); we synthesize a set of
+   * feasible plans across modes (road / rail / ocean / air / road+rail /
+   * road+ocean+road / road+air), sourcing live supply (truck capacity, carrier
+   * services, consolidations) where it exists, and propose them as real Plan
+   * rows. The orderer chooses — this is the Phase 4 "options and trade-offs"
+   * engine.
+   */
+  async multimodalOptions(input: {
+    shipmentId?: string
+    origin: string
+    destination: string
+    weightKg?: number
+    originCountry?: string
+    destinationCountry?: string
+    source?: string
+  }, user: User) {
+    const origin = input.origin?.trim().toLowerCase()
+    const destination = input.destination?.trim().toLowerCase()
+    if (!origin || !destination) throw new BadRequestException('origin and destination are required')
+    if (origin === destination) throw new BadRequestException('origin and destination must differ')
+
+    const isDomestic = (input.originCountry ?? 'IN') === (input.destinationCountry ?? 'IN')
+    const base = isDomestic ? 'INR' : 'USD'
+    const weight = input.weightKg ?? 1000
+
+    // Live supply: truck capacity on the lane, carrier services (ocean/air), consolidations.
+    const [trucks, carrierServices, consolidations] = await Promise.all([
+      this.prisma.marketListing.findMany({ where: { status: 'live', kind: 'truck_capacity' }, include: { providerOrg: { select: { name: true } } }, take: 50 }),
+      this.prisma.carrierService.findMany({ where: { status: 'live' }, include: { carrierOrg: { select: { name: true } } }, take: 50 }),
+      this.prisma.consolidation.findMany({ where: { status: { in: ['grouping', 'ready'] } }, include: { forwarder: { select: { name: true } } }, take: 20 }),
+    ])
+
+    const roadHit = trucks.find(
+      (t) =>
+        (t.originRef && t.originRef.toLowerCase() === origin) ||
+        (t.city && t.city.toLowerCase() === origin),
+    )
+    const roadRate = roadHit?.price ?? (weight > 5000 ? 38 : weight > 1000 ? 26 : 18) // ₹/km-ish heuristic
+    const roadCost = Math.round((roadRate * weight) / 100)
+    const roadEta = 12 + Math.round((Math.random() * 10 + 10)) // hrs heuristic for demo
+
+    const oceanServices = carrierServices.filter((c) => c.mode === 'ocean' || !c.mode || c.mode === 'sea')
+    const airServices = carrierServices.filter((c) => c.mode === 'air')
+    const oceanRate = oceanServices[0]?.rate ?? (isDomestic ? 0 : 620) // USD per container-ish
+    const airRate = airServices[0]?.rate ?? (isDomestic ? 0 : 1900)
+
+    const options: Array<{ label: string; mode: string; legs: PlanLeg[]; cost: number; etaHours: number; riskScore: number }> = []
+
+    // 1. Road-only (the default, always feasible).
+    options.push({
+      label: `Road direct (${roadHit?.providerOrg?.name ?? 'any carrier'})`,
+      mode: 'road',
+      legs: [{ mode: 'road', origin, destination, equipment: 'truck', cost: roadCost, etaHours: roadEta, providerId: roadHit?.providerOrgId, carrier: roadHit?.providerOrg?.name }],
+      cost: roadCost,
+      etaHours: roadEta,
+      riskScore: 0.15,
+    })
+
+    // 2. Rail (domestic long-haul) — one rail leg with drayage assumptions.
+    if (isDomestic) {
+      const railCost = Math.round(roadCost * 0.72)
+      const railEta = Math.round(roadEta * 1.4)
+      const drayCost = Math.round(roadCost * 0.15)
+      options.push({
+        label: 'Rail long-haul (with first/last-mile drayage)',
+        mode: 'rail',
+        legs: [
+          { mode: 'road', origin, destination: `${origin}-yard`, equipment: 'truck', cost: drayCost, etaHours: 6 },
+          { mode: 'rail', origin: `${origin}-yard`, destination: `${destination}-yard`, equipment: 'wagon', cost: railCost, etaHours: railEta },
+          { mode: 'road', origin: `${destination}-yard`, destination, equipment: 'truck', cost: drayCost, etaHours: 6 },
+        ],
+        cost: drayCost + railCost + drayCost,
+        etaHours: 12 + railEta,
+        riskScore: 0.3,
+      })
+    }
+
+    // 3. Ocean (international) — road drayage + ocean main-haul + road.
+    if (!isDomestic && oceanRate > 0) {
+      const oceanCost = Math.round(oceanRate * (weight > 5000 ? 2 : 1))
+      const oceanEta = 96 + Math.round(Math.random() * 48)
+      const drayCost = Math.round(roadCost * 0.3)
+      options.push({
+        label: `Ocean (${oceanServices[0]?.carrierOrg?.name ?? 'deep-sea carrier'}) with drayage`,
+        mode: 'ocean',
+        legs: [
+          { mode: 'road', origin, destination: `${origin}-port`, equipment: 'truck', cost: drayCost, etaHours: 8 },
+          { mode: 'ocean', origin: `${origin}-port`, destination: `${destination}-port`, equipment: 'container', cost: oceanCost, etaHours: oceanEta },
+          { mode: 'road', origin: `${destination}-port`, destination, equipment: 'truck', cost: drayCost, etaHours: 8 },
+        ],
+        cost: drayCost + oceanCost + drayCost,
+        etaHours: 16 + oceanEta,
+        riskScore: 0.45,
+      })
+    }
+
+    // 4. Air (international, urgent) — road drayage + air + road.
+    if (!isDomestic && airRate > 0) {
+      const airCost = Math.round(airRate * (weight > 500 ? 2.5 : 1))
+      options.push({
+        label: `Air (${airServices[0]?.carrierOrg?.name ?? 'air carrier'}) — fastest`,
+        mode: 'air',
+        legs: [
+          { mode: 'road', origin, destination: `${origin}-airport`, equipment: 'truck', cost: Math.round(roadCost * 0.2), etaHours: 5 },
+          { mode: 'air', origin: `${origin}-airport`, destination: `${destination}-airport`, equipment: 'uld', cost: airCost, etaHours: 18 },
+          { mode: 'road', origin: `${destination}-airport`, destination, equipment: 'truck', cost: Math.round(roadCost * 0.2), etaHours: 5 },
+        ],
+        cost: Math.round(roadCost * 0.2) + airCost + Math.round(roadCost * 0.2),
+        etaHours: 28,
+        riskScore: 0.35,
+      })
+    }
+
+    // 5. Road + rail split for very long domestic corridors.
+    if (isDomestic && roadEta > 36) {
+      const half = Math.round(roadEta / 2)
+      const roadSplit = Math.round(roadCost * 0.45)
+      const railSplit = Math.round(roadCost * 0.5)
+      const lastDray = Math.round(roadCost * 0.15)
+      options.push({
+        label: 'Road + rail split',
+        mode: 'multimodal',
+        legs: [
+          { mode: 'road', origin, destination: `${origin}-hub`, equipment: 'truck', cost: roadSplit, etaHours: half },
+          { mode: 'rail', origin: `${origin}-hub`, destination: `${destination}-hub`, equipment: 'wagon', cost: railSplit, etaHours: half },
+          { mode: 'road', origin: `${destination}-hub`, destination, equipment: 'truck', cost: lastDray, etaHours: Math.round(roadEta * 0.25) },
+        ],
+        cost: roadSplit + railSplit + lastDray,
+        etaHours: half + half + Math.round(roadEta * 0.25),
+        riskScore: 0.35,
+      })
+    }
+
+    // Propose each synthesized option as a real Plan row on the shipment.
+    const proposed: Array<Record<string, unknown>> = []
+    for (const option of options.slice(0, 6)) {
+      const plan = await this.propose({
+        shipmentId: input.shipmentId!,
+        source: input.source ?? 'multimodal',
+        legs: option.legs,
+        cost: option.cost,
+        etaHours: option.etaHours,
+        currency: base,
+        riskScore: option.riskScore,
+      }, user)
+      proposed.push({ plan: plan.plan, label: option.label, mode: option.mode })
+    }
+
+    return { shipmentId: input.shipmentId, currency: base, options: proposed, sourcedSupply: { trucks: trucks.length, carrierServices: carrierServices.length, consolidations: consolidations.length } }
+  }
 }

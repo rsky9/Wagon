@@ -10,6 +10,9 @@ const ROLES = [
   { value: "supplier", label: "Suppliers" },
   { value: "transporter", label: "Transporters" },
   { value: "driver", label: "Drivers" },
+  { value: "forwarder", label: "Forwarders" },
+  { value: "warehouse", label: "Warehouses" },
+  { value: "carrier", label: "Carriers" },
 ];
 
 interface Broadcast {
@@ -25,6 +28,9 @@ const ROLE_TONE: Record<string, "emerald" | "amber" | "red" | "sky" | "slate" | 
   supplier: "sky",
   transporter: "emerald",
   driver: "amber",
+  forwarder: "orange",
+  warehouse: "slate",
+  carrier: "red",
   all: "violet",
 };
 

@@ -98,6 +98,10 @@ export const WEBHOOK_EVENT_CATALOG: Array<{ code: string; label: string; source:
   { code: 'SETTLEMENT_PAID', label: 'Settlement paid', source: 'finance' },
   { code: 'AI_RECOMMENDED', label: 'AI recommendation', source: 'ai' },
   { code: 'AI_DECIDED', label: 'AI decision', source: 'ai' },
+  { code: 'TRIP_HEALTH_FLAGGED', label: 'Trip health flag (ETA/exception intelligence)', source: 'ai' },
+  { code: 'ETA_REFRESHED', label: 'Route-aware ETA refreshed', source: 'tracking' },
+  { code: 'TRIP_STALLED', label: 'Trip stalled (no movement)', source: 'tracking' },
+  { code: 'TRIP_DWELLING', label: 'Trip dwelling at pickup/drop', source: 'tracking' },
 ]
 
 @Injectable()

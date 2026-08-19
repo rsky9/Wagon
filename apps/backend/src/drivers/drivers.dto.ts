@@ -1,4 +1,4 @@
-import { IsBoolean, IsOptional, IsString } from 'class-validator'
+import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator'
 
 export class CreateDriverDto {
   @IsString()
@@ -14,4 +14,8 @@ export class CreateDriverDto {
   @IsOptional()
   @IsBoolean()
   status?: boolean
+
+  @IsOptional()
+  @IsNumber()
+  payRate?: number | null
 }

@@ -9,6 +9,7 @@ import { api } from '../config'
 import { useI18n } from '@wagon/i18n'
 import { useStepUp } from '../hooks/useStepUp'
 import { useAuth } from '../auth'
+import { showActionSheet } from '../components/ActionSheet'
 
 interface TripDetail {
   id: string
@@ -173,6 +174,32 @@ export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
     } finally { setBusy(false) }
   }
 
+  const assignDriver = async () => {
+    setBusy(true)
+    try {
+      const res = await api.get<{ drivers: Array<{ id: string; name: string; mobile: string; payRate: number | null }> }>('/drivers')
+      if (!res.drivers.length) { Alert.alert('No drivers', 'Add a driver in Fleet → Drivers first'); return }
+      showActionSheet({
+        title: 'Assign driver',
+        message: 'Choose the driver executing this trip',
+        options: res.drivers.map((d) => ({
+          text: `${d.name} · ${d.mobile}`,
+          onPress: async () => {
+            try {
+              await api.patch(`/trips/${tripId}/assign`, { driverId: d.id })
+              Alert.alert('Driver assigned', `${d.name} can now execute this trip from the driver app.`)
+              fetch()
+            } catch (e) {
+              Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to assign')
+            }
+          },
+        })),
+      })
+    } catch (e) {
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to load drivers')
+    } finally { setBusy(false) }
+  }
+
   const steps = STAGE_FLOW.map((s, i) => ({
     ...s,
     state: i < currentIdx ? ('done' as const) : i === currentIdx ? ('active' as const) : ('upcoming' as const),
@@ -197,6 +224,9 @@ export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
         <View style={styles.actions}>
           {onExceptions && (
             <Button label={t('tripExec.reportIssue')} onPress={onExceptions} variant="ghost" />
+          )}
+          {!isDriverOnly && (trip.status === 'accepted' || trip.status === 'in_transit') && (
+            <Button label="Assign driver 👤" onPress={assignDriver} loading={busy} variant="secondary" />
           )}
           {!isDelivered && currentIdx >= 0 && trip.status !== 'cancelled' && (
             <Button label={`Mark ${STAGE_FLOW[currentIdx + 1]?.label ?? 'next'} →`} onPress={advance} loading={busy} />

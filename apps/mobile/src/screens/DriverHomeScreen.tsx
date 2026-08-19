@@ -1,11 +1,12 @@
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useCallback, useEffect, useState } from 'react'
-import { StyleSheet, Text, View, FlatList, Pressable, RefreshControl, Switch } from 'react-native'
+import { StyleSheet, Text, View, FlatList, Pressable, RefreshControl, Switch, TextInput, Alert } from 'react-native'
 import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { StatusChip, EmptyState, type StatusTone } from '@wagon/components'
 import { api } from '../config'
 import { useI18n } from '@wagon/i18n'
 import { subscribeDataChanged } from '../lib/dataBus'
+import { LocationShare } from '../components/LocationShare'
 
 interface DriverTrip {
   id: string
@@ -16,6 +17,11 @@ interface DriverTrip {
 interface DriverEarnings {
   trips: number
   earned: number
+}
+
+interface DriverLedger {
+  payRate: number | null
+  trips: Array<{ tripId: string; pickup: string; drop: string; fare: number; earned: number; deliveredAt: string | null }>
 }
 
 interface DriverHome {
@@ -40,11 +46,15 @@ export function DriverHomeScreen({ onOpenTrip }: Props) {
   const { t } = useI18n()
   const [data, setData] = useState<DriverHome | null>(null)
   const [earnings, setEarnings] = useState<DriverEarnings | null>(null)
+  const [ledger, setLedger] = useState<DriverLedger | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [available, setAvailable] = useState(true)
   const [missingProfile, setMissingProfile] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [transporterMobile, setTransporterMobile] = useState('')
+  const [joining, setJoining] = useState(false)
+  const [showLedger, setShowLedger] = useState(false)
 
   const fetch = useCallback(() => {
     setMissingProfile(false)
@@ -60,6 +70,7 @@ export function DriverHomeScreen({ onOpenTrip }: Props) {
         })
         .finally(() => setLoading(false)),
       api.get<DriverEarnings>('/driver/earnings').then(setEarnings).catch(() => {}),
+      api.get<DriverLedger>('/driver/ledger').then(setLedger).catch(() => {}),
     ])
   }, [])
 
@@ -78,6 +89,19 @@ export function DriverHomeScreen({ onOpenTrip }: Props) {
     }
   }
 
+  const join = async () => {
+    if (!/^\d{10}$/.test(transporterMobile.trim())) { Alert.alert(t('ui.required'), 'Enter your transporter\'s 10-digit mobile'); return }
+    setJoining(true)
+    try {
+      const res = await api.post<{ driver: { id: string; name: string } }>('/driver/join', { transporterMobile: transporterMobile.trim() })
+      Alert.alert('Joined your fleet', `You are now registered as ${res.driver.name}.`)
+      setMissingProfile(false)
+      fetch()
+    } catch (e) {
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to join')
+    } finally { setJoining(false) }
+  }
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { backgroundColor: theme.background }]}>
@@ -91,11 +115,32 @@ export function DriverHomeScreen({ onOpenTrip }: Props) {
         <View style={{ flex: 1 }}>
           <Text style={[styles.availTitle, { color: theme.foreground }]}>{t('driver.availableForTrips')}</Text>
           <Text style={[styles.availSub, { color: theme.mutedForeground }]}>
-            {missingProfile ? 'Ask your transporter to add your mobile number' : available ? 'Transporters can assign you loads' : 'You are offline'}
+            {missingProfile ? 'Not linked to a fleet yet' : available ? 'Transporters can assign you loads' : 'You are offline'}
           </Text>
         </View>
         <Switch value={available && !missingProfile} onValueChange={toggleAvailability} disabled={missingProfile} trackColor={{ true: theme.primary, false: theme.border }} thumbColor="#fff" />
       </View>
+
+      {missingProfile && (
+        <View style={[styles.joinBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[styles.joinTitle, { color: theme.foreground }]}>Join your transporter's fleet</Text>
+          <Text style={[styles.joinSub, { color: theme.mutedForeground }]}>
+            Enter your transporter's mobile number. They can also add you from their Drivers screen.
+          </Text>
+          <TextInput
+            style={[styles.joinInput, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]}
+            value={transporterMobile}
+            onChangeText={setTransporterMobile}
+            placeholder="Transporter mobile (10 digits)"
+            placeholderTextColor={theme.mutedForeground + '88'}
+            keyboardType="number-pad"
+            maxLength={10}
+          />
+          <Pressable style={[styles.joinBtn, { backgroundColor: theme.primary }]} onPress={join} disabled={joining}>
+            <Text style={{ color: '#fff', fontWeight: '800' }}>{joining ? 'Joining…' : 'Join fleet'}</Text>
+          </Pressable>
+        </View>
+      )}
 
       {loadError && !missingProfile && (
         <View style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.sm }}>
@@ -106,16 +151,48 @@ export function DriverHomeScreen({ onOpenTrip }: Props) {
         </View>
       )}
 
+      {data?.activeTrip?.status === 'in_transit' && (
+        <View style={{ marginHorizontal: spacing.lg, marginBottom: spacing.md }}>
+          <LocationShare tripId={data.activeTrip.id} />
+        </View>
+      )}
+
       {earnings && (
         <View style={[styles.earningsCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.earningsLabel, { color: theme.mutedForeground }]}>{t('driver.earnings')}</Text>
             <Text style={[styles.earningsValue, { color: theme.foreground }]}>{formatINR(earnings.earned)}</Text>
+            {ledger?.payRate != null && (
+              <Text style={[styles.earningsLabel, { color: theme.mutedForeground }]}>Pay rate ₹{ledger.payRate}/trip</Text>
+            )}
           </View>
+          <Pressable onPress={() => setShowLedger((s) => !s)} hitSlop={8}>
+            <Text style={{ color: theme.primary, fontWeight: '800', fontSize: 13 }}>{showLedger ? 'Hide' : 'Ledger'}</Text>
+          </Pressable>
           <View style={styles.earningsRight}>
             <Text style={[styles.earningsTrips, { color: theme.primary }]}>{earnings.trips}</Text>
             <Text style={[styles.earningsLabel, { color: theme.mutedForeground }]}>{t('driver.tripsCompleted')}</Text>
           </View>
+        </View>
+      )}
+
+      {showLedger && ledger && ledger.trips.length > 0 && (
+        <View style={[styles.ledgerBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[styles.ledgerTitle, { color: theme.foreground }]}>Trip ledger</Text>
+          {ledger.trips.map((trip) => (
+            <View key={trip.tripId} style={styles.ledgerRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.ledgerRoute, { color: theme.foreground }]}>{trip.pickup} → {trip.drop}</Text>
+                <Text style={[styles.ledgerMeta, { color: theme.mutedForeground }]}>
+                  {trip.deliveredAt ? new Date(trip.deliveredAt).toLocaleDateString() : 'Delivered'}
+                </Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.ledgerEarned, { color: theme.foreground }]}>{formatINR(trip.earned)}</Text>
+                <Text style={[styles.ledgerFare, { color: theme.mutedForeground }]}>fare {formatINR(trip.fare)}</Text>
+              </View>
+            </View>
+          ))}
         </View>
       )}
 
@@ -174,4 +251,16 @@ const styles = StyleSheet.create({
   fare: { fontSize: 18, fontWeight: '800' },
   route: { fontSize: 15, fontWeight: '700' },
   meta: { fontSize: 13 },
+  joinBox: { margin: spacing.lg, marginTop: 0, borderRadius: radius.xl, borderWidth: 1, padding: spacing.lg, gap: spacing.sm },
+  joinTitle: { fontSize: 15, fontWeight: '800' },
+  joinSub: { fontSize: 12, lineHeight: 16 },
+  joinInput: { borderRadius: radius.md, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, fontSize: 15 },
+  joinBtn: { borderRadius: radius.md, paddingVertical: spacing.md, alignItems: 'center' },
+  ledgerBox: { marginHorizontal: spacing.lg, marginBottom: spacing.md, borderRadius: radius.xl, borderWidth: 1, padding: spacing.lg },
+  ledgerTitle: { fontSize: 14, fontWeight: '800', marginBottom: spacing.sm },
+  ledgerRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#8884' },
+  ledgerRoute: { fontSize: 13, fontWeight: '700' },
+  ledgerMeta: { fontSize: 11, marginTop: 1 },
+  ledgerEarned: { fontSize: 14, fontWeight: '800' },
+  ledgerFare: { fontSize: 11 },
 })

@@ -16,6 +16,16 @@ export class DriverController {
     return this.driver.home(user)
   }
 
+  @Post('join')
+  join(@Body() body: { transporterMobile: string }, @CurrentUser() user: User) {
+    return this.driver.join(body.transporterMobile, user)
+  }
+
+  @Get('ledger')
+  ledger(@CurrentUser() user: User) {
+    return this.driver.ledger(user)
+  }
+
   @Get('trips')
   trips(@CurrentUser() user: User) {
     return this.driver.myTrips(user)

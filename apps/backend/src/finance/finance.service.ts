@@ -6,6 +6,19 @@ import { NotificationsService } from '../notifications/notifications.service'
 import { PAYMENT_PROVIDER, PaymentProvider } from '../payments/payment-provider.service'
 import type { User } from '@prisma/client'
 
+/** Reference FX table (INR base). Static internal rates for quoting/display;
+ *  not a live feed — the ledger always books in the party's own currency. */
+const FX_TO_INR: Record<string, number> = {
+  INR: 1,
+  USD: 83.5,
+  EUR: 90.2,
+  GBP: 105.6,
+  AED: 22.7,
+  SGD: 61.9,
+  JPY: 0.56,
+  CNY: 11.5,
+}
+
 @Injectable()
 export class FinanceService {
   constructor(
@@ -721,6 +734,21 @@ export class FinanceService {
     const cleared = settlements.filter((s) => s.status === 'cleared').reduce((a, s) => a + (s.amount ?? 0), 0)
     const openClaims = claims.filter((c) => ['filed', 'assessed'].includes(c.status)).length
     return { claims, policies, settlements, riskAssessments: risks, totals: { due, cleared, openClaims } }
+  }
+
+  /** Convert an amount between supported currencies for quoting/display. */
+  convert(input: { amount: number; from: string; to: string }) {
+    if (input.amount < 0) throw new BadRequestException('amount cannot be negative')
+    const from = input.from.toUpperCase()
+    const to = input.to.toUpperCase()
+    if (!FX_TO_INR[from]) throw new BadRequestException(`Unsupported currency ${from}`)
+    if (!FX_TO_INR[to]) throw new BadRequestException(`Unsupported currency ${to}`)
+    const amount = Math.round((input.amount * (FX_TO_INR[from]! / FX_TO_INR[to]!)) * 100) / 100
+    return { amount, from, to, rate: Math.round((FX_TO_INR[from]! / FX_TO_INR[to]!) * 10000) / 10000, at: new Date() }
+  }
+
+  async supportedCurrencies() {
+    return { currencies: Object.keys(FX_TO_INR) }
   }
 
   private async tx() {

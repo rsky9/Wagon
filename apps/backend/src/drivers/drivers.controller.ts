@@ -31,4 +31,9 @@ export class DriversController {
   remove(@Param('id') id: string, @CurrentUser() user: User) {
     return this.drivers.remove(id, user)
   }
+
+  @Get(':id/performance')
+  performance(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.drivers.performance(id, user)
+  }
 }

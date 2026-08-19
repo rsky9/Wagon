@@ -1,0 +1,166 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { api } from "../../lib/api";
+import { ShellLayout } from "../../components/ShellLayout";
+import { PageHeader, Card, StatCard, SkeletonRows } from "../../components/ui";
+
+interface OpsData {
+  trips: { total: number; inTransit: number; delivered: number; cancelled: number; onTimeRate: number };
+  loads: Record<string, number>;
+  containers: { total: number; status: Record<string, number>; utilization: number };
+  yard: { total: number; completed: number; open: number; utilization: number };
+  finance: { invoicesTotal: number; invoicesPaid: number; invoicesOutstanding: number; gmv: number; avgSettlementHrs: number; settlementsDue: number };
+  exceptions: { open: number };
+  edi: { last7Days: number; inbound: number; outbound: number };
+  modeMix: Record<string, number>;
+  loadsLast7Days: number;
+  tripsLast7Days: number;
+}
+
+const fmt = (n: number) => (n >= 100000 ? `${(n / 100000).toFixed(1)}L` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+
+export default function Analytics() {
+  const [data, setData] = useState<OpsData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchOps = useCallback(() => {
+    api
+      .get<OpsData>("/analytics/ops")
+      .then(setData)
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load analytics"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    fetchOps();
+  }, [fetchOps]);
+
+  const loadEntries = Object.entries(data?.loads ?? {});
+  const containerEntries = Object.entries(data?.containers.status ?? {});
+  const modeEntries = Object.entries(data?.modeMix ?? {});
+
+  return (
+    <ShellLayout>
+      <PageHeader title="Network Analytics" subtitle="Cross-domain operational health: trips, yard, containers, finance, exceptions and integration throughput" />
+
+      {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+
+      {loading || !data ? (
+        <div className="card-shadow rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+          <SkeletonRows rows={8} cols={4} />
+        </div>
+      ) : (
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <StatCard label="Active trips" value={String(data.trips.inTransit)} icon="🚛" tone="blue" sub={`${data.trips.total} total`} />
+            <StatCard label="On-time rate" value={`${(data.trips.onTimeRate * 100).toFixed(0)}%`} icon="⏱️" tone="emerald" sub={`${data.trips.delivered} delivered`} />
+            <StatCard label="Open exceptions" value={String(data.exceptions.open)} icon="⚠️" tone="red" />
+            <StatCard label="GMV (invoiced)" value={`₹${fmt(data.finance.gmv)}`} icon="💰" tone="orange" sub={`${data.finance.invoicesOutstanding} outstanding`} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <Card>
+              <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">Loads by status</h3>
+              <div className="space-y-1.5">
+                {loadEntries.length === 0 && <div className="text-xs text-slate-400">No loads.</div>}
+                {loadEntries.map(([k, v]) => (
+                  <div key={k} className="flex items-center justify-between text-xs">
+                    <span className="capitalize text-slate-500">{k}</span>
+                    <span className="font-semibold tabular-nums">{v}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 border-t border-slate-100 pt-2 text-xs text-slate-400 dark:border-slate-800">
+                {data.loadsLast7Days} new loads in last 7 days
+              </div>
+            </Card>
+
+            <Card>
+              <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">Containers</h3>
+              <div className="space-y-1.5">
+                {containerEntries.length === 0 && <div className="text-xs text-slate-400">No containers.</div>}
+                {containerEntries.map(([k, v]) => (
+                  <div key={k} className="flex items-center justify-between text-xs">
+                    <span className="capitalize text-slate-500">{k.replace(/_/g, " ")}</span>
+                    <span className="font-semibold tabular-nums">{v}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 border-t border-slate-100 pt-2 text-xs text-slate-400 dark:border-slate-800">
+                Utilization {(data.containers.utilization * 100).toFixed(0)}%
+              </div>
+            </Card>
+
+            <Card>
+              <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">Mode mix</h3>
+              <div className="space-y-1.5">
+                {modeEntries.length === 0 && <div className="text-xs text-slate-400">No legs.</div>}
+                {modeEntries.map(([k, v]) => (
+                  <div key={k} className="flex items-center justify-between text-xs">
+                    <span className="capitalize text-slate-500">{k.replace(/_/g, " ")}</span>
+                    <span className="font-semibold tabular-nums">{v}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 border-t border-slate-100 pt-2 text-xs text-slate-400 dark:border-slate-800">
+                EDI last 7d: <span className="font-semibold">{data.edi.last7Days}</span> ({data.edi.inbound} in / {data.edi.outbound} out)
+              </div>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <Card>
+              <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">Yard & docks</h3>
+              <div className="grid grid-cols-2 gap-2 text-center">
+                <div className="rounded bg-slate-50 p-3 dark:bg-slate-800">
+                  <div className="text-2xl font-bold tabular-nums">{data.yard.open}</div>
+                  <div className="text-[11px] text-slate-500">open slots</div>
+                </div>
+                <div className="rounded bg-slate-50 p-3 dark:bg-slate-800">
+                  <div className="text-2xl font-bold tabular-nums">{(data.yard.utilization * 100).toFixed(0)}%</div>
+                  <div className="text-[11px] text-slate-500">utilization</div>
+                </div>
+              </div>
+              <div className="mt-2 text-xs text-slate-400">{data.yard.completed} completed of {data.yard.total} appointments</div>
+            </Card>
+
+            <Card>
+              <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">Invoicing</h3>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="rounded bg-slate-50 p-3 dark:bg-slate-800">
+                  <div className="text-xl font-bold tabular-nums">{data.finance.invoicesTotal}</div>
+                  <div className="text-[11px] text-slate-500">total</div>
+                </div>
+                <div className="rounded bg-emerald-50 p-3 dark:bg-emerald-900/30">
+                  <div className="text-xl font-bold tabular-nums text-emerald-600 dark:text-emerald-300">{data.finance.invoicesPaid}</div>
+                  <div className="text-[11px] text-slate-500">paid</div>
+                </div>
+                <div className="rounded bg-amber-50 p-3 dark:bg-amber-900/30">
+                  <div className="text-xl font-bold tabular-nums text-amber-600 dark:text-amber-300">{data.finance.invoicesOutstanding}</div>
+                  <div className="text-[11px] text-slate-500">open</div>
+                </div>
+              </div>
+            </Card>
+
+            <Card>
+              <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">Settlement</h3>
+              <div className="grid grid-cols-2 gap-2 text-center">
+                <div className="rounded bg-slate-50 p-3 dark:bg-slate-800">
+                  <div className="text-2xl font-bold tabular-nums">{data.finance.avgSettlementHrs}</div>
+                  <div className="text-[11px] text-slate-500">avg cycle (hrs)</div>
+                </div>
+                <div className="rounded bg-slate-50 p-3 dark:bg-slate-800">
+                  <div className="text-2xl font-bold tabular-nums">{data.finance.settlementsDue}</div>
+                  <div className="text-[11px] text-slate-500">due now</div>
+                </div>
+              </div>
+              <div className="mt-2 text-xs text-slate-400">Clearance speed drives cash-flow liquidity</div>
+            </Card>
+          </div>
+        </div>
+      )}
+    </ShellLayout>
+  );
+}

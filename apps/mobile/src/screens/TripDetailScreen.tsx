@@ -26,6 +26,30 @@ interface TripInfo {
   load: Load
 }
 
+interface HealthFlag {
+  kind: string
+  severity: 'low' | 'medium' | 'high'
+  message: string
+}
+
+interface HealthSuggestion {
+  action: string
+  reason: string
+}
+
+interface Health {
+  score: number
+  band: 'healthy' | 'watch' | 'at_risk' | 'critical'
+  progress: number
+  distanceKm: number
+  remainingKm: number
+  etaMinutes: number | null
+  avgSpeedKmh: number | null
+  lastPingMinutesAgo: number | null
+  flags: HealthFlag[]
+  suggestions: HealthSuggestion[]
+}
+
 interface Props {
   loadId: string
   tripId?: string
@@ -40,6 +64,13 @@ const TONE: Record<string, StatusTone> = {
   in_transit: 'brand',
   delivered: 'success',
   cancelled: 'danger',
+}
+
+const HEALTH_TONE: Record<string, string> = {
+  healthy: '#16A34A',
+  watch: '#D97706',
+  at_risk: '#DC2626',
+  critical: '#991B1B',
 }
 
 export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipment }: Props) {
@@ -58,6 +89,17 @@ export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipme
   const [rating, setRating] = useState(0)
   const [ewb, setEwb] = useState<string | null>(null)
   const [shipmentId, setShipmentId] = useState<string | null>(null)
+  const [health, setHealth] = useState<Health | null>(null)
+  const [healthLoading, setHealthLoading] = useState(false)
+
+  const loadHealth = useCallback((id: string) => {
+    setHealthLoading(true)
+    api
+      .post<{ health: Health }>(`/ai/trip-health/${id}`, {})
+      .then((r) => setHealth(r.health))
+      .catch(() => setHealth(null))
+      .finally(() => setHealthLoading(false))
+  }, [])
 
   const fetchTrip = useCallback(() => {
     api
@@ -70,6 +112,7 @@ export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipme
         setTrip(t ?? null)
         if (t) {
           setSnapshotError(null)
+          loadHealth(t.id)
           api.get<{ snapshot: { rate: number; advanceAmount?: number | null; balanceAmount?: number | null; paymentTerms?: string | null } }>(`/bidding/trip/${t.id}/booking`)
             .then((r) => setSnapshot(r.snapshot))
             .catch(() => setSnapshotError('Could not load the booking terms'))
@@ -83,7 +126,7 @@ export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipme
     api.get<{ shipmentId: string | null }>(`/loads/${loadId}`)
       .then((r) => setShipmentId(r.shipmentId))
       .catch(() => {})
-  }, [loadId, tripId])
+  }, [loadId, tripId, loadHealth])
 
   useEffect(() => { fetchTrip() }, [fetchTrip])
 
@@ -228,6 +271,49 @@ export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipme
           <Text style={[styles.cardTitle, { color: theme.foreground }]}>{t('tripDetail.tripStatus')}</Text>
           <StatusStepper steps={steps} />
         </View>
+
+        {trip.status === 'in_transit' && health && (
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: theme.card, borderColor: HEALTH_TONE[health.band] ?? theme.border },
+            ]}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
+              <Text style={[styles.cardTitle, { color: theme.foreground }]}>🤖 Trip health</Text>
+              {healthLoading ? <ActivityIndicator size="small" color={theme.primary} /> : (
+                <Pressable hitSlop={8} onPress={() => loadHealth(trip.id)}>
+                  <Text style={{ color: theme.primary, fontWeight: '700', fontSize: 13 }}>Refresh</Text>
+                </Pressable>
+              )}
+            </View>
+            <View style={[styles.healthRow, { backgroundColor: HEALTH_TONE[health.band] ?? theme.muted }]}>
+              <Text style={{ color: '#fff', fontWeight: '800', textTransform: 'capitalize' }}>{health.band.replace('_', ' ')}</Text>
+              <Text style={{ color: '#fff', fontWeight: '700' }}>{Math.round(health.score * 100)}/100</Text>
+            </View>
+            <Row label="ETA" value={health.etaMinutes != null ? `~${Math.round(health.etaMinutes)} min` : '—'} theme={theme} />
+            <Row label="Progress" value={`${Math.round(health.progress * 100)}% · ${Math.round(health.remainingKm)} km left`} theme={theme} />
+            <Row label="Avg speed" value={health.avgSpeedKmh != null ? `${health.avgSpeedKmh.toFixed(1)} km/h` : '—'} theme={theme} />
+            {health.flags.length > 0 && (
+              <>
+                <Text style={{ color: theme.danger, fontWeight: '800', fontSize: 13, marginTop: spacing.sm }}>
+                  ⚠ {health.flags.length} issue{health.flags.length > 1 ? 's' : ''}
+                </Text>
+                {health.flags.map((f, i) => (
+                  <Text key={i} style={{ color: theme.mutedForeground, fontSize: 12, marginTop: 2 }}>• {f.message}</Text>
+                ))}
+              </>
+            )}
+            {health.suggestions.length > 0 && (
+              <>
+                <Text style={{ color: theme.foreground, fontWeight: '800', fontSize: 13, marginTop: spacing.sm }}>Recommended</Text>
+                {health.suggestions.map((s, i) => (
+                  <Text key={i} style={{ color: theme.mutedForeground, fontSize: 12, marginTop: 2 }}>→ {s.action}</Text>
+                ))}
+              </>
+            )}
+          </View>
+        )}
 
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <Text style={[styles.cardTitle, { color: theme.foreground }]}>{t('tripDetail.route')}</Text>
@@ -392,6 +478,15 @@ const styles = StyleSheet.create({
   escrowNote: { fontSize: 13 },
   card: { borderRadius: radius.xl, borderWidth: 1, padding: spacing.lg, gap: spacing.sm },
   cardTitle: { fontSize: 15, fontWeight: '700' },
+  healthRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.sm,
+  },
   route: { fontSize: 15, fontWeight: '600', marginBottom: spacing.xs },
   row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.xs },
   rowLabel: { fontSize: 14 },

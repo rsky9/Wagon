@@ -63,6 +63,7 @@ import { ShipmentDetailScreen } from '../screens/ShipmentDetailScreen'
 import { ForwardingScreen } from '../screens/ForwardingScreen'
 import { PlanningScreen } from '../screens/PlanningScreen'
 import { EnablementFinanceScreen } from '../screens/EnablementFinanceScreen'
+import { ContractsScreen } from '../screens/ContractsScreen'
 import { StorageScreen } from '../screens/StorageScreen'
 import { GlobalScreen } from '../screens/GlobalScreen'
 import { MarketScreen } from '../screens/MarketScreen'
@@ -131,6 +132,7 @@ export type RootStackParamList = {
   EnablementFinance: undefined
   Storage: undefined
   Global: undefined
+  Contracts: undefined
 }
 
 const Stack = createNativeStackNavigator<RootStackParamList>()
@@ -154,7 +156,7 @@ function navigateToUrl(nav: any, url: string, item?: { data?: { loadId?: string;
     'TripExceptions', 'Responses', 'Bookings', 'ReturnLoads', 'Track',
     'ShipmentDetail', 'Forwarding', 'Planning', 'EnablementFinance', 'Storage',
     'Global', 'Market', 'Integrations', 'EnablementHub', 'Shipments', 'TripExecute',
-    'LoadDetail', 'TripDetail',
+    'LoadDetail', 'TripDetail', 'Contracts',
   ])
   if (STACK_ROUTES.has(url)) {
     const params: Record<string, unknown> = {}
@@ -404,6 +406,7 @@ function EnablementHubRoute({ navigation }: any) {
         else if (screen === 'global') navigation.navigate('Global')
         else if (screen === 'market') navigation.navigate('Market')
         else if (screen === 'integrations') navigation.navigate('Integrations')
+        else if (screen === 'contracts') navigation.navigate('Contracts')
       }}
     />
   )
@@ -446,6 +449,10 @@ function StorageRoute({ navigation }: any) {
 
 function GlobalRoute({ navigation }: any) {
   return <GlobalScreen onBack={() => navigation.goBack()} />
+}
+
+function ContractsRoute({ navigation }: any) {
+  return <ContractsScreen onBack={() => navigation.goBack()} />
 }
 
 function MarketRoute({ navigation, route }: any) {
@@ -776,6 +783,7 @@ export function MobileNavigator() {
                 <Stack.Screen name="EnablementFinance" component={EnablementFinanceRoute} />
                 <Stack.Screen name="Storage" component={StorageRoute} />
                 <Stack.Screen name="Global" component={GlobalRoute} />
+                <Stack.Screen name="Contracts" component={ContractsRoute} />
                 <Stack.Screen name="Market" component={MarketRoute} />
                 <Stack.Screen name="Integrations" component={IntegrationsRoute} />
               </Stack.Navigator>

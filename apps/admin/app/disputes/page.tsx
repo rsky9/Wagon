@@ -19,6 +19,7 @@ export default function Disputes() {
   const [disputes, setDisputes] = useState<DisputeRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [resolution, setResolution] = useState<Record<string, string>>({});
+  const [outcome, setOutcome] = useState<Record<string, "release" | "block" | "partial">>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -40,9 +41,15 @@ export default function Disputes() {
       setError("Add a resolution note first");
       return;
     }
+    const decision = outcome[id] ?? "release";
+    if (decision !== "release" && !note.includes("Refund")) {
+      // Guard rail: blocking/partial payouts must be explicit about money.
+      setError('For block/partial add "Refund ₹<amount>" to the note so the payout freeze is explicit');
+      return;
+    }
     setBusy(id);
     try {
-      await api.patch(`/disputes/${id}/resolve`, { resolution: note });
+      await api.patch(`/disputes/${id}/resolve`, { resolution: note, outcome: decision });
       setResolution((r) => ({ ...r, [id]: "" }));
       fetchDisputes();
     } catch (e) {
@@ -77,20 +84,37 @@ export default function Disputes() {
                 </p>
               </div>
             </div>
-            <div className="mt-4 flex gap-2">
-              <input
-                className="input flex-1"
-                placeholder="Resolution note"
-                value={resolution[d.id] ?? ""}
-                onChange={(e) => setResolution((r) => ({ ...r, [d.id]: e.target.value }))}
-              />
-              <button
-                onClick={() => resolve(d.id)}
-                disabled={busy === d.id}
-                className="btn btn-success"
-              >
-                {busy === d.id ? "…" : "Resolve"}
-              </button>
+            <div className="mt-4 flex flex-col gap-2">
+              <div className="flex flex-wrap gap-2">
+                {([
+                  ["release", "Release payout", "bg-emerald-500 text-white border-transparent"],
+                  ["block", "Block payout", "bg-red-500 text-white border-transparent"],
+                  ["partial", "Partial payout", "bg-amber-500 text-white border-transparent"],
+                ] as const).map(([key, label, cls]) => (
+                  <button
+                    key={key}
+                    onClick={() => setOutcome((o) => ({ ...o, [d.id]: key }))}
+                    className={`rounded-md border px-3 py-1 text-xs font-semibold ${(outcome[d.id] ?? "release") === key ? cls : "border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400"}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  className="input flex-1"
+                  placeholder="Resolution note (add Refund ₹<amount> to block/partial)"
+                  value={resolution[d.id] ?? ""}
+                  onChange={(e) => setResolution((r) => ({ ...r, [d.id]: e.target.value }))}
+                />
+                <button
+                  onClick={() => resolve(d.id)}
+                  disabled={busy === d.id}
+                  className="btn btn-success"
+                >
+                  {busy === d.id ? "…" : "Resolve"}
+                </button>
+              </div>
             </div>
           </Card>
         ))}

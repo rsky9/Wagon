@@ -6,6 +6,43 @@ import type { User } from '@prisma/client'
 export class DriverService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Driver self-onboarding: claim a seat under a transporter by entering their
+   * mobile number. Creates a Driver row (linked by the driver's own mobile so
+   * trip assignment + login keep matching) and grants the driver capability.
+   */
+  async join(transporterMobile: string, user: User) {
+    const mobile = transporterMobile?.trim()
+    if (!/^\d{10}$/.test(mobile ?? '')) {
+      throw new BadRequestException('Enter a valid 10-digit transporter mobile')
+    }
+    const transporter = await this.prisma.transporter.findFirst({
+      where: { user: { mobile } },
+      include: { user: true },
+    })
+    if (!transporter) {
+      throw new BadRequestException('No transporter found with that mobile number')
+    }
+    // Guard: if a Driver row for this driver already exists, it must belong to
+    // the same transporter, otherwise a driver can't hop fleets silently.
+    const existing = await this.prisma.driver.findFirst({ where: { mobile: user.mobile } })
+    if (existing && existing.transporterId !== transporter.id) {
+      throw new BadRequestException('You are already registered with another transporter')
+    }
+    const driver = await this.prisma.driver.upsert({
+      where: { id: existing?.id ?? '__new__' },
+      create: { transporterId: transporter.id, name: user.name ?? 'Driver', mobile: user.mobile },
+      update: { transporterId: transporter.id },
+    })
+    // Ensure the user holds the driver capability so the driver surface unlocks.
+    const caps = new Set<string>(user.capabilities as string[] | undefined ?? [])
+    if (!caps.has('driver')) {
+      caps.add('driver')
+      await this.prisma.user.update({ where: { id: user.id }, data: { capabilities: [...caps] as never } })
+    }
+    return { driver }
+  }
+
   /** Lookup without the availability filter — self-service (availability toggle)
    *  must work even when the driver has marked themself unavailable, otherwise
    *  an unavailable driver is permanently locked out. */
@@ -69,6 +106,28 @@ export class DriverService {
     // Use the agreed booking rate when present (negotiated trips), not the estimate.
     const earned = trips.reduce((s, t) => s + this.driverPay(driver, t.booking?.rate ?? t.load.fareEstimate), 0)
     return { trips: trips.length, earned, payRate: driver.payRate ?? null }
+  }
+
+  /** Per-trip earnings ledger: every delivered trip with fare, driver pay, date. */
+  async ledger(user: User) {
+    const driver = await this.driverByMobile(user)
+    if (!driver) return { trips: [], payRate: null }
+    const trips = await this.prisma.trip.findMany({
+      where: { driverId: driver.id, status: 'delivered' },
+      include: { load: { select: { pickupAddr: true, dropAddr: true, fareEstimate: true } }, booking: true },
+      orderBy: { deliveredAt: 'desc' },
+    })
+    return {
+      payRate: driver.payRate ?? null,
+      trips: trips.map((t) => ({
+        tripId: t.id,
+        pickup: t.load.pickupAddr,
+        drop: t.load.dropAddr,
+        fare: t.booking?.rate ?? t.load.fareEstimate,
+        earned: this.driverPay(driver, t.booking?.rate ?? t.load.fareEstimate),
+        deliveredAt: t.deliveredAt,
+      })),
+    }
   }
 
   private driverPay(driver: { payRate: number | null }, fare: number) {

@@ -47,4 +47,9 @@ export class PlanningController {
   list(@Param('shipmentId') shipmentId: string, @CurrentUser() user: User) {
     return this.planning.list(shipmentId, user)
   }
+
+  @Post('multimodal')
+  multimodalOptions(@Body() body: { shipmentId?: string; origin: string; destination: string; weightKg?: number; originCountry?: string; destinationCountry?: string; source?: string }, @CurrentUser() user: User) {
+    return this.planning.multimodalOptions(body, user)
+  }
 }

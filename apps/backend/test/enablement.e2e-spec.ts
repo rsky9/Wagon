@@ -63,6 +63,8 @@ describe('Enablement platform (e2e)', () => {
 
     const prisma = app.get(PrismaService)
     await prisma.$transaction([
+      prisma.scheduledAppointment.deleteMany(),
+      prisma.dock.deleteMany(),
       prisma.warehouseOperation.deleteMany(),
       prisma.facility.deleteMany(),
       prisma.consolidation.deleteMany(),
@@ -70,6 +72,8 @@ describe('Enablement platform (e2e)', () => {
       prisma.carrierBooking.deleteMany(),
       prisma.forwardOrder.deleteMany(),
       prisma.settlement.deleteMany(),
+      prisma.invoiceLine.deleteMany(),
+      prisma.invoice.deleteMany(),
       prisma.insurancePolicy.deleteMany(),
       prisma.claim.deleteMany(),
       prisma.riskAssessment.deleteMany(),
@@ -89,6 +93,14 @@ describe('Enablement platform (e2e)', () => {
       prisma.orgRating.deleteMany(),
       prisma.carrierService.deleteMany(),
       prisma.lane.deleteMany(),
+      prisma.returnOrder.deleteMany(),
+      prisma.handover.deleteMany(),
+      prisma.customsDeclaration.deleteMany(),
+      prisma.container.deleteMany(),
+      prisma.contract.deleteMany(),
+      prisma.tradeDocument.deleteMany(),
+      prisma.organizationDocument.deleteMany(),
+      prisma.ediMessage.deleteMany(),
     ])
     // Keep the supplier's forwarder org for order ownership assertions.
     supToken = await verify(SUP, await requestOtp(SUP))
@@ -96,6 +108,8 @@ describe('Enablement platform (e2e)', () => {
     admToken = await verify(ADM, await requestOtp(ADM))
     // Ensure the demo transporter is KYC-verified so quote/bid gates pass.
     await prisma.user.update({ where: { mobile: TR }, data: { transporterVerified: true, verified: true, kycStatus: 'approved' } })
+    // Ensure the demo supplier is KYC-verified so the load-posting gate passes.
+    await prisma.user.update({ where: { mobile: SUP }, data: { supplierVerified: true, verified: true, kycStatus: 'approved' } })
   })
 
   afterAll(async () => {
@@ -822,6 +836,483 @@ describe('Enablement platform (e2e)', () => {
 
       // A bad key is rejected.
       await prog('/requests', { kind: 'transport' }).set('x-api-key', 'wgn_bogus').expect(401)
+    })
+  })
+
+  describe('contracts, invoicing, containers, returns, handovers & customs (e2e)', () => {
+    let trOrgId: string
+    let supOrgId: string
+
+    beforeAll(async () => {
+      // Both parties need an organization for contract/invoice party resolution.
+      const trOrgs = (await api(trToken).get('/foundation/organizations').expect(200)).body.organizations as Array<{ id: string; kind: string }>
+      const supOrgs = (await api(supToken).get('/foundation/organizations').expect(200)).body.organizations as Array<{ id: string; kind: string }>
+      trOrgId = trOrgs.find((o) => o.kind === 'transporter')?.id ?? trOrgs[0]!.id
+      supOrgId = supOrgs.find((o) => o.kind === 'shipper')?.id ?? supOrgs[0]!.id
+    })
+
+    it('creates and activates a contract binding two parties', async () => {
+      const res = await api(supToken).post('/contracts', {
+        type: 'carrier',
+        partyAOrgId: supOrgId,
+        partyBOrgId: trOrgId,
+        title: 'E2E quarterly carrier contract',
+        incoterms: 'DAP',
+        sla: { pickupSlaHours: 4, transitSlaHours: 48, responseSlaHours: 2 },
+        territory: [{ originRef: 'Hyderabad', destinationRef: 'Delhi', modes: ['road', 'rail'] }],
+        liability: { limit: 5000000, basis: 'per shipment', insuranceRequired: true },
+        paymentTerms: 'Net 30',
+      }).expect(201)
+      expect(res.body.contract.ref).toMatch(/^CT-/)
+      expect(res.body.contract.status).toBe('draft')
+
+      // A party can activate it.
+      const active = await api(trToken).patch(`/contracts/${res.body.contract.id}/status`, { status: 'active' }).expect(200)
+      expect(active.body.contract.status).toBe('active')
+
+      // Illegal transition is rejected.
+      await api(trToken).patch(`/contracts/${res.body.contract.id}/status`, { status: 'paid' }).expect(400)
+
+      // Admin is a global moderator and may terminate an active contract.
+      const terminated = await api(admToken).patch(`/contracts/${res.body.contract.id}/status`, { status: 'terminated' }).expect(200)
+      expect(terminated.body.contract.status).toBe('terminated')
+    })
+
+    it('issues a first-class invoice with tax lines and drives it to paid', async () => {
+      const shipment = await api(supToken).post('/foundation/shipments', {
+        ref: 'SHIP-E2E-INV',
+        commodity: 'Pharma APIs',
+        weightKg: 1200,
+        pieces: 24,
+        value: 2500000,
+        mode: 'road',
+      }).expect(201)
+      const shipmentId = shipment.body.shipment.id
+
+      const inv = await api(supToken).post('/invoices', {
+        shipmentId,
+        baseAmount: 42000,
+        accessorials: [{ kind: 'toll', description: 'Toll charges', amount: 500 }, { kind: 'waiting', description: 'Waiting', amount: 300 }],
+      }).expect(201)
+      expect(inv.body.invoice.invoiceNo).toMatch(/^INV-/)
+      expect(inv.body.invoice.baseAmount).toBe(42000)
+      expect(inv.body.invoice.lines.length).toBeGreaterThanOrEqual(4) // base + gst + tds + accessorials
+
+      const issued = await api(supToken).patch(`/invoices/${inv.body.invoice.id}/status`, { status: 'issued' }).expect(200)
+      expect(issued.body.invoice.issueDate).toBeTruthy()
+
+      const approved = await api(supToken).patch(`/invoices/${inv.body.invoice.id}/status`, { status: 'approved' }).expect(200)
+      expect(approved.body.invoice.status).toBe('approved')
+
+      const paid = await api(supToken).patch(`/invoices/${inv.body.invoice.id}/status`, { status: 'paid' }).expect(200)
+      expect(paid.body.invoice.paidAt).toBeTruthy()
+
+      // Reconciliation exposes the due balance even with no settlements attached.
+      const rec = await api(supToken).get(`/invoices/${inv.body.invoice.id}/reconcile`).expect(200)
+      expect(typeof rec.body.invoice.due).toBe('number')
+      expect(rec.body.invoice.due).toBe(rec.body.invoice.netAmount)
+    })
+
+    it('registers and moves a container through its lifecycle', async () => {
+      const res = await api(supToken).post('/containers', { number: 'E2E1234567', type: '40HC', locationRef: 'Hyderabad CFS' }).expect(201)
+      expect(res.body.container.number).toBe('E2E1234567')
+
+      // Duplicate number is rejected.
+      await api(supToken).post('/containers', { number: 'E2E1234567' }).expect(400)
+
+      const id = res.body.container.id
+      await api(supToken).patch(`/containers/${id}/status`, { status: 'reserved' }).expect(200)
+      await api(supToken).patch(`/containers/${id}/status`, { status: 'stuffed', sealNo: 'SEAL-777' }).expect(200)
+      await api(supToken).patch(`/containers/${id}/status`, { status: 'loaded' }).expect(200)
+      await api(supToken).patch(`/containers/${id}/status`, { status: 'discharged' }).expect(200)
+      await api(supToken).patch(`/containers/${id}/status`, { status: 'released' }).expect(200)
+      const emptyReturn = await api(supToken).patch(`/containers/${id}/status`, { status: 'empty_return', emptyReturnRequired: true }).expect(200)
+      expect(emptyReturn.body.container.emptyReturnRequired).toBe(true)
+
+      // Illegal skip (loaded -> empty_return) is rejected.
+      const second = await api(supToken).post('/containers', { number: 'E2E9876543' }).expect(201)
+      await api(supToken).patch(`/containers/${second.body.container.id}/status`, { status: 'empty_return' }).expect(400)
+
+      const inspected = await api(supToken).post(`/containers/${id}/inspect`, { note: 'Reefer compressor ok' }).expect(201)
+      expect(inspected.body.container.lastInspectionNote).toBe('Reefer compressor ok')
+    })
+
+    it('creates and closes a reverse-logistics return with disposition', async () => {
+      const shipment = await api(supToken).post('/foundation/shipments', { ref: 'SHIP-E2E-RTN', commodity: 'Machinery' }).expect(201)
+      const res = await api(supToken).post('/returns', { shipmentId: shipment.body.shipment.id, reason: 'customer_return', condition: 'Damaged corner', notes: 'Dent on the left edge' }).expect(201)
+      expect(res.body.return.ref).toMatch(/^RT-/)
+
+      const id = res.body.return.id
+      await api(supToken).patch(`/returns/${id}/status`, { status: 'scheduled', pickupAt: '2026-10-05T10:00:00Z' }).expect(200)
+      await api(supToken).patch(`/returns/${id}/status`, { status: 'picked_up' }).expect(200)
+      await api(supToken).patch(`/returns/${id}/status`, { status: 'received' }).expect(200)
+      await api(supToken).patch(`/returns/${id}/status`, { status: 'closed', disposition: 'repair' }).expect(200)
+
+      const done = await api(supToken).get(`/returns/${id}`).expect(200)
+      expect(done.body.return.status).toBe('closed')
+      expect(done.body.return.disposition).toBe('repair')
+
+      // Bad reason is rejected.
+      await api(supToken).post('/returns', { reason: 'nonsense' }).expect(400)
+    })
+
+    it('records a chain-of-custody handover with condition and evidence', async () => {
+      const res = await api(supToken).post('/handovers', {
+        entityType: 'container',
+        entityId: 'cont-1',
+        fromOrgId: supOrgId,
+        toOrgId: trOrgId,
+        locationRef: 'Hyderabad CFS',
+        condition: 'Good',
+        quantity: 1,
+        unit: 'unit',
+        evidenceKey: 'signed-gate-sheet.jpg',
+        nextResponsibility: 'Haul to Nagpur rail terminal',
+      }).expect(201)
+      expect(res.body.handover.ref).toMatch(/^HO-/)
+      expect(res.body.handover.status).toBe('completed')
+
+      // Same-party handover is rejected.
+      await api(supToken).post('/handovers', { entityType: 'cargo_unit', toOrgId: supOrgId, fromOrgId: supOrgId }).expect(400)
+    })
+
+    it('files a customs declaration and moves it through release', async () => {
+      const res = await api(supToken).post('/customs', {
+        direction: 'export',
+        hsCode: '3004.90',
+        commodity: 'Pharma APIs',
+        value: 2500000,
+        brokerOrgId: supOrgId,
+      }).expect(201)
+      expect(res.body.declaration.ref).toMatch(/^CD-/)
+      expect(res.body.declaration.status).toBe('draft')
+
+      const id = res.body.declaration.id
+      await api(supToken).patch(`/customs/${id}/status`, { status: 'filed' }).expect(200)
+      await api(supToken).patch(`/customs/${id}/status`, { status: 'under_examination' }).expect(200)
+      await api(supToken).patch(`/customs/${id}/status`, { status: 'cleared' }).expect(200)
+      const released = await api(supToken).patch(`/customs/${id}/status`, { status: 'released' }).expect(200)
+      expect(released.body.declaration.releasedAt).toBeTruthy()
+
+      // A held declaration requires the hold reason.
+      const held = await api(supToken).post('/customs', { direction: 'import', hsCode: '8517.12', commodity: 'Phones' }).expect(201)
+      await api(supToken).patch(`/customs/${held.body.declaration.id}/status`, { status: 'filed' }).expect(200)
+      const h = await api(supToken).patch(`/customs/${held.body.declaration.id}/status`, { status: 'held', holdReason: 'Valuation query' }).expect(200)
+      expect(h.body.declaration.holdReason).toBe('Valuation query')
+
+      // Invalid direction rejected.
+      await api(supToken).post('/customs', { direction: 'warp' }).expect(400)
+    })
+  })
+
+  describe('yard, trade documents, KYB & multimodal (e2e)', () => {
+    let facilityId: string
+    let dockId: string
+    let apptId: string
+
+    it('registers a dock and schedules a non-overlapping appointment', async () => {
+      const fac = await api(supToken).post('/storage/facilities', { name: 'E2E CFS Yard', kind: 'cfs', city: 'Hyderabad', capacitySlots: 4 }).expect(201)
+      facilityId = fac.body.facility.id
+
+      const dock = await api(supToken).post('/yard/docks', { facilityId, name: 'Dock A', kind: 'combined' }).expect(201)
+      dockId = dock.body.dock.id
+      expect(dock.body.dock.status).toBe('available')
+
+      const appt = await api(supToken).post('/yard/appointments', {
+        facilityId, dockId, vehicleNo: 'AP01AB1234', windowStart: '2026-10-01T08:00:00Z', windowEnd: '2026-10-01T10:00:00Z',
+      }).expect(201)
+      apptId = appt.body.appointment.id
+      expect(appt.body.appointment.ref).toMatch(/^APPT-/)
+
+      // Overlap on the same dock is rejected.
+      await api(supToken).post('/yard/appointments', {
+        facilityId, dockId, vehicleNo: 'AP02CD5678', windowStart: '2026-10-01T09:00:00Z', windowEnd: '2026-10-01T11:00:00Z',
+      }).expect(400)
+
+      // A non-overlapping slot on the same dock is fine.
+      await api(supToken).post('/yard/appointments', {
+        facilityId, dockId, vehicleNo: 'AP02CD5678', windowStart: '2026-10-01T12:00:00Z', windowEnd: '2026-10-01T14:00:00Z',
+      }).expect(201)
+
+      // Invalid window rejected.
+      await api(supToken).post('/yard/appointments', { facilityId, windowStart: '2026-10-01T16:00:00Z', windowEnd: '2026-10-01T15:00:00Z' }).expect(400)
+    })
+
+    it('drives an appointment through gate-in and gate-out', async () => {
+      const confirmed = await api(supToken).patch(`/yard/appointments/${apptId}/status`, { status: 'confirmed' }).expect(200)
+      expect(confirmed.body.appointment.status).toBe('confirmed')
+
+      const inProgress = await api(supToken).patch(`/yard/appointments/${apptId}/status`, { status: 'in_progress' }).expect(200)
+      expect(inProgress.body.appointment.gateInAt).toBeTruthy()
+
+      const done = await api(supToken).patch(`/yard/appointments/${apptId}/status`, { status: 'completed' }).expect(200)
+      expect(done.body.appointment.gateOutAt).toBeTruthy()
+
+      // Dock is released back to available after completion.
+      const docks = await api(supToken).get('/yard/docks').expect(200)
+      expect(docks.body.docks.find((d: { id: string }) => d.id === dockId)?.status).toBe('available')
+
+      // Illegal transition rejected.
+      await api(supToken).patch(`/yard/appointments/${apptId}/status`, { status: 'no_show' }).expect(400)
+    })
+
+    it('issues a trade document and drives it to released', async () => {
+      const shipment = await api(supToken).post('/foundation/shipments', { ref: 'SHIP-E2E-DOC', commodity: 'Textiles' }).expect(201)
+
+      const doc = await api(supToken).post('/trade-documents', {
+        docType: 'bol',
+        shipmentId: shipment.body.shipment.id,
+        lines: [{ description: 'Cotton bales', qty: 10, weightKg: 2500, value: 400000 }],
+        incoterms: 'CIF',
+        originRef: 'Mumbai',
+        destinationRef: 'Singapore',
+        currency: 'USD',
+        totalValue: 400000,
+      }).expect(201)
+      expect(doc.body.document.ref).toMatch(/^BOL-/)
+      expect(doc.body.document.docType).toBe('bol')
+
+      const id = doc.body.document.id
+      const signed = await api(supToken).patch(`/trade-documents/${id}/status`, { status: 'signed' }).expect(200)
+      expect(signed.body.document.signedAt).toBeTruthy()
+      expect(signed.body.document.signedBy).toBeTruthy()
+
+      const released = await api(supToken).patch(`/trade-documents/${id}/status`, { status: 'released' }).expect(200)
+      expect(released.body.document.released).toBe(true)
+      expect(released.body.document.releasedAt).toBeTruthy()
+
+      // Voiding a released doc is rejected.
+      await api(supToken).patch(`/trade-documents/${id}/status`, { status: 'void' }).expect(400)
+
+      // Invalid docType rejected.
+      await api(supToken).post('/trade-documents', { docType: 'manifesto' }).expect(400)
+    })
+
+    it('uploads KYB docs, verifies an org, and builds a hierarchy', async () => {
+      const org = await api(supToken).post('/foundation/organizations', { name: 'E2E KYB Sub', kind: 'warehouse' }).expect(201)
+      const orgId = org.body.organization.id
+
+      const uploaded = await api(supToken).post('/kyb/documents', { orgId, kind: 'registration', storageKey: 'kyb/reg.pdf' }).expect(201)
+      expect(uploaded.body.document.status).toBe('pending')
+
+      // Org is now pending review.
+      const before = (await api(supToken).get('/kyb/tree').expect(200)).body.tree
+      expect(before).toBeTruthy()
+
+      // Admin verifies the document → org kybcStatus flips to verified.
+      const decided = await api(admToken).patch(`/kyb/documents/${uploaded.body.document.id}/decide`, { status: 'verified' }).expect(200)
+      expect(decided.body.document.status).toBe('verified')
+
+      const tree = (await api(admToken).get(`/kyb/tree?rootId=${orgId}`).expect(200)).body.tree
+      expect(tree.id).toBe(orgId)
+      const verifiedOrg = await api(supToken).get(`/foundation/organizations/${orgId}`).expect(200)
+      expect(verifiedOrg.body.organization.kybcStatus).toBe('verified')
+
+      // Parent assignment + cycle guard.
+      const parent = (await api(supToken).get('/foundation/organizations').expect(200)).body.organizations[0]
+      await api(supToken).patch(`/kyb/organizations/${orgId}/parent`, { parentOrgId: parent.id }).expect(200)
+      await api(supToken).patch(`/kyb/organizations/${parent.id}/parent`, { parentOrgId: orgId }).expect(400) // cycle
+      void tree
+    })
+
+    it('converts between currencies for quoting/display', async () => {
+      const res = await api(supToken).get('/finance/fx/convert?amount=100&from=USD&to=INR').expect(200)
+      expect(res.body.amount).toBe(8350)
+      expect(res.body.to).toBe('INR')
+      expect(res.body.rate).toBe(83.5)
+
+      // Unsupported currency rejected.
+      await api(supToken).get('/finance/fx/convert?amount=1&from=XXX&to=INR').expect(400)
+
+      const list = await api(supToken).get('/finance/currencies').expect(200)
+      expect(list.body.currencies).toContain('USD')
+    })
+
+    it('generates multimodal plan options for a shipment route', async () => {
+      const shipment = await api(supToken).post('/foundation/shipments', { ref: 'SHIP-E2E-MM', commodity: 'Machinery', weightKg: 8000 }).expect(201)
+      const res = await api(supToken).post('/planning/multimodal', {
+        shipmentId: shipment.body.shipment.id,
+        origin: 'Hyderabad',
+        destination: 'Delhi',
+        originCountry: 'IN',
+        destinationCountry: 'IN',
+        weightKg: 8000,
+      }).expect(201)
+      expect(res.body.options.length).toBeGreaterThanOrEqual(2) // road + at least one alternative
+      expect(res.body.currency).toBe('INR')
+      // Every option is a real proposed Plan the orderer can select.
+      const plans = await api(supToken).get(`/planning/shipments/${shipment.body.shipment.id}/plans`).expect(200)
+      expect(plans.body.plans.length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  describe('EDI gateway, visibility & AI agents (e2e)', () => {
+    let shipmentId: string
+    let orgId: string
+
+    beforeAll(async () => {
+      const orgs = (await api(supToken).get('/foundation/organizations').expect(200)).body.organizations as Array<{ id: string }>
+      orgId = orgs[0]!.id
+    })
+
+    it('parses an inbound X12 PO and an EDIFACT ASN', async () => {
+      const x12 = `ISA*00*          *00*          *ZZ*PARTNER      *ZZ*WAGON        *20260819*0000*U*00401*000000001*0*P*>~GS*PO*PARTNER*WAGON*20260819*0000*1*X*004010~ST*850*0001~BEG*00*SA*PO-12345**20260819~SE*3*0001~GE*1*1~IEA*1*000000001~`
+      const recv = await api(supToken).post('/integrations/edi/receive', { orgId, raw: x12 }).expect(201)
+      expect(recv.body.message.format).toBe('X12')
+      expect(recv.body.message.documentType).toBe('PO')
+      expect(recv.body.message.payload.purchaseOrder.poNumber).toBe('PO-12345')
+
+      const edifact = `UNB+UNOC:3+PARTNER+WAGON+20260819:0000+1'UNH+1+DESADV:D:97A:UN'BGM+DESADV+ASN-999+9'CNT+2:1'UNT+4+1'UNZ+1+1'`
+      const recv2 = await api(supToken).post('/integrations/edi/receive', { orgId, raw: edifact }).expect(201)
+      expect(recv2.body.message.format).toBe('EDIFACT')
+      expect(recv2.body.message.documentType).toBe('ASN')
+
+      // Unrecognized format rejected.
+      await api(supToken).post('/integrations/edi/receive', { orgId, raw: 'not an edi message' }).expect(400)
+    })
+
+    it('generates and sends an outbound X12 load tender', async () => {
+      const gen = await api(supToken).post('/integrations/edi/generate', {
+        orgId, documentType: 'LOAD_TENDER', payload: { reference: 'LT-777' },
+      }).expect(201)
+      expect(gen.body.message.format).toBe('X12')
+      expect(gen.body.message.raw).toContain('B2*LT-777')
+
+      const sent = await api(supToken).post('/integrations/edi/send', {
+        orgId, documentType: 'PO', payload: { poNumber: 'PO-222' },
+      }).expect(201)
+      expect(sent.body.message.direction).toBe('outbound')
+      expect(sent.body.message.status).toBe('sent')
+
+      const list = await api(supToken).get('/integrations/edi').expect(200)
+      expect(list.body.messages.length).toBeGreaterThanOrEqual(3)
+    })
+
+    it('exposes a shipment visibility timeline', async () => {
+      const shipment = await api(supToken).post('/foundation/shipments', { ref: 'SHIP-E2E-VIS', commodity: 'Electronics' }).expect(201)
+      shipmentId = shipment.body.shipment.id
+
+      // Emit an operational event so the timeline is non-trivial.
+      const timeline = await api(supToken).get(`/visibility/shipments/${shipmentId}`).expect(200)
+      expect(timeline.body.shipment.id).toBe(shipmentId)
+      expect(Array.isArray(timeline.body.timeline)).toBe(true)
+
+      // Non-member cannot view another shipment's timeline.
+      await api(trToken).get(`/visibility/shipments/${shipmentId}`).expect(403)
+    })
+
+    it('AI drafts a document, predicts ETA and detects exceptions', async () => {
+      const draft = await api(supToken).post('/ai/draft-document', { shipmentId, docType: 'packing_list' }).expect(201)
+      expect(draft.body.draft.docType).toBe('packing_list')
+      expect(draft.body.recommendation.agent).toBe('document')
+
+      // Add a planned leg so ETA has something to predict.
+      await api(supToken).post(`/foundation/shipments/${shipmentId}/legs`, { mode: 'road', pickupAddr: 'Hyderabad', dropAddr: 'Delhi', distanceKm: 1400 }).expect(201)
+
+      const eta = await api(supToken).post(`/ai/eta/${shipmentId}`).expect(201)
+      expect(eta.body.etaHours).toBeGreaterThan(0)
+      expect(eta.body.recommendation.agent).toBe('eta')
+
+      const exc = await api(supToken).post(`/ai/exceptions/${shipmentId}`).expect(201)
+      expect(Array.isArray(exc.body.findings)).toBe(true)
+      expect(exc.body.recommendation.agent).toBe('exception')
+
+      // Recommendations appear in the caller's feed.
+      const feed = await api(supToken).get('/ai/recommendations/mine').expect(200)
+      expect(feed.body.recommendations.length).toBeGreaterThanOrEqual(3)
+    })
+  })
+
+  describe('e-way bill lifecycle & exception loop (e2e)', () => {
+    let loadId: string
+
+    it('generates, extends and cancels an e-way bill across the lifecycle', async () => {
+      const ref = await api(supToken).get('/reference').expect(200)
+      const model = ref.body.models.find((m: { type: string }) => m.type === 'container')
+      const material = ref.body.materials[0]
+
+      const loadRes = await api(supToken).post('/loads', {
+        pickupAddr: 'Hyderabad, Telangana 500001',
+        dropAddr: 'Vijayawada, AP 520001',
+        pickupLat: 17.385, pickupLng: 78.487, dropLat: 16.506, dropLng: 80.648,
+        date: '2026-10-01T08:00:00Z', truckType: 'container', modelId: model.id,
+        weight: 35, distanceKm: 250, materialId: material.id,
+      }).expect(201)
+      loadId = loadRes.body.load.id
+
+      const gen = await api(supToken).post(`/ewb/loads/${loadId}/generate`).expect(201)
+      expect(gen.body.ewbNumber).toMatch(/^EWB/)
+      expect(gen.body.status).toBe('generated')
+      expect(gen.body.validUntil).toBeTruthy()
+
+      // Idempotent — regenerating returns the same number.
+      const again = await api(supToken).post(`/ewb/loads/${loadId}/generate`).expect(201)
+      expect(again.body.alreadyGenerated).toBe(true)
+      expect(again.body.ewbNumber).toBe(gen.body.ewbNumber)
+
+      // Extend bumps validity.
+      const ext = await api(supToken).post(`/ewb/loads/${loadId}/extend`).expect(201)
+      expect(ext.body.status).toBe('extended')
+
+      // Status endpoint reflects the state.
+      const status = await api(supToken).get(`/ewb/loads/${loadId}`).expect(200)
+      expect(status.body.ewb.status).toBe('extended')
+      expect(status.body.ewb.ewbNumber).toBe(gen.body.ewbNumber)
+
+      // Cancel marks it cancelled.
+      const cancel = await api(supToken).post(`/ewb/loads/${loadId}/cancel`, { reason: 'Route changed' }).expect(201)
+      expect(cancel.body.status).toBe('cancelled')
+      expect(cancel.body.cancelledAt).toBeTruthy()
+
+      // Cancelling again is rejected.
+      await api(supToken).post(`/ewb/loads/${loadId}/cancel`).expect(400)
+    })
+
+    it('runs the exception scan and returns an actionable feed', async () => {
+      const scan = await api(supToken).post('/ai/exceptions/scan').expect(201)
+      expect(scan.body.scanned).toBeGreaterThanOrEqual(0)
+      expect(typeof scan.body.notified).toBe('number')
+
+      const feed = await api(supToken).get('/ai/exceptions/feed').expect(200)
+      expect(Array.isArray(feed.body.exceptions)).toBe(true)
+    })
+  })
+
+  describe('analytics control tower (e2e)', () => {
+    it('returns a network ops snapshot and an org summary', async () => {
+      const ops = await api(admToken).get('/analytics/ops').expect(200)
+      expect(typeof ops.body.trips.total).toBe('number')
+      expect(typeof ops.body.trips.onTimeRate).toBe('number')
+      expect(typeof ops.body.finance.invoicesTotal).toBe('number')
+      expect(typeof ops.body.containers.utilization).toBe('number')
+      expect(Array.isArray(Object.keys(ops.body.modeMix ?? {}))).toBe(true)
+
+      const org = await api(supToken).get('/analytics/org').expect(200)
+      expect(org.body.orgs).toBeGreaterThan(0)
+      expect(typeof org.body.shipments.total).toBe('number')
+      expect(typeof org.body.finance.invoicesTotal).toBe('number')
+    })
+  })
+
+  describe('driver performance & fleet overview (e2e)', () => {
+    it('reports driver performance and fleet earnings for a transporter', async () => {
+      const truck = await api(trToken).post('/trucks', { truckNo: `AP44DRV${Date.now().toString().slice(-4)}`, type: 'container', modelId: (await api(trToken).get('/reference').expect(200)).body.models.find((m: { type: string }) => m.type === 'container').id, origin: 'Hyderabad' }).expect(201)
+
+      const driver = await api(trToken).post('/drivers', { name: 'E2E Driver', mobile: '9876543210' }).expect(201)
+      const driverId = driver.body.driver.id
+
+      // Driver with no trips yet → zeroed summary.
+      const perf = await api(trToken).get(`/drivers/${driverId}/performance`).expect(200)
+      expect(perf.body.driver.id).toBe(driverId)
+      expect(perf.body.summary.trips).toBe(0)
+      expect(perf.body.summary.earned).toBe(0)
+
+      // Fleet overview returns the expected shape.
+      const ov = await api(trToken).get('/trucks/fleet/overview').expect(200)
+      expect(ov.body.fleet.trucks).toBeGreaterThanOrEqual(1)
+      expect(typeof ov.body.earnings).toBe('number')
+      expect(typeof ov.body.coverage.driverCoverage).toBe('number')
+      void truck
     })
   })
 })

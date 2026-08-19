@@ -264,6 +264,16 @@ export class AdminController {
     return this.admin.deleteQuote(id, actor)
   }
 
+  @Get('market/carrier-services')
+  carrierServices(@Query('status') status?: string) {
+    return this.admin.carrierServices({ status })
+  }
+
+  @Post('market/carrier-services/:id/cancel')
+  cancelCarrierService(@Param('id') id: string, @CurrentUser() actor: User) {
+    return this.admin.cancelCarrierService(id, actor)
+  }
+
   @Get('market/ratings')
   marketRatings() {
     return this.admin.marketRatings()
@@ -277,5 +287,37 @@ export class AdminController {
   @Get('market/analytics')
   marketAnalytics() {
     return this.admin.marketAnalytics()
+  }
+
+  // ---------- Operations control tower ----------
+
+  @Get('ops/triage')
+  opsTriage() {
+    return this.admin.opsTriage()
+  }
+
+  @Post('exceptions/:id/resolve')
+  resolveException(@Param('id') id: string, @Body() body: { note?: string }, @CurrentUser() actor: User) {
+    return this.admin.resolveException(id, actor, body.note)
+  }
+
+  @Post('trips/:id/nudge')
+  nudgeTrip(@Param('id') id: string, @Body() body: { message: string }, @CurrentUser() actor: User) {
+    return this.admin.nudgeTrip(id, actor, body.message)
+  }
+
+  @Get('trips/:id/tracking')
+  tripTracking(@Param('id') id: string) {
+    return this.admin.tripTracking(id)
+  }
+
+  @Post('outbox/:id/retry')
+  retryOutbox(@Param('id') id: string, @CurrentUser() actor: User) {
+    return this.admin.retryOutbox(id, actor)
+  }
+
+  @Post('outbox/retry-all')
+  retryAllOutbox(@CurrentUser() actor: User) {
+    return this.admin.retryAllDeadOutbox(actor)
   }
 }

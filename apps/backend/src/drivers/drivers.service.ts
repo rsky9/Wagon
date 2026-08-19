@@ -49,6 +49,7 @@ export class DriversService {
         mobile: input.mobile,
         licenseKey: input.licenseKey,
         status: input.status,
+        payRate: input.payRate,
       },
     })
     return { driver: updated }
@@ -61,6 +62,42 @@ export class DriversService {
     await this.prisma.driver.delete({ where: { id } })
     return { success: true }
   }
+
+  /** Per-driver performance: trips, delivered, cancelled, on-time and earnings. */
+  async performance(id: string, user: User) {
+    const transporterId = await this.transporterId(user)
+    const driver = await this.prisma.driver.findFirst({ where: { id, transporterId } })
+    if (!driver) throw new NotFoundException('Driver not found')
+    const trips = await this.prisma.trip.findMany({
+      where: { driverId: driver.id },
+      include: { load: true, booking: true },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    const delivered = trips.filter((t) => t.status === 'delivered')
+    const cancelled = trips.filter((t) => t.status === 'cancelled')
+    const inTransit = trips.filter((t) => t.status === 'in_transit')
+    const onTime = delivered.filter((t) => t.startedAt && t.deliveredAt && t.deliveredAt.getTime() - t.startedAt.getTime() <= 72 * 3600000).length
+    const earned = delivered.reduce((s, t) => s + this.driverPay(driver, t.booking?.rate ?? t.load.fareEstimate), 0)
+
+    return {
+      driver: { id: driver.id, name: driver.name, mobile: driver.mobile, payRate: driver.payRate, licenseVerified: driver.licenseVerified },
+      summary: {
+        trips: trips.length,
+        delivered: delivered.length,
+        cancelled: cancelled.length,
+        inTransit: inTransit.length,
+        onTime: onTime,
+        onTimeRate: delivered.length ? Math.round((onTime / delivered.length) * 100) / 100 : 0,
+        earned,
+      },
+    }
+  }
+
+  private driverPay(driver: { payRate: number | null }, fare: number) {
+    if (driver.payRate != null && driver.payRate > 0) return driver.payRate
+    return Math.round(fare * 0.25)
+  }
 }
 
 export interface CreateDriverInput {
@@ -68,4 +105,5 @@ export interface CreateDriverInput {
   mobile: string
   licenseKey?: string
   status?: boolean
+  payRate?: number | null
 }

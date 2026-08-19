@@ -20,6 +20,13 @@ interface FleetData {
   summary: { active: number; inactive: number; expiringSoon: number; expired: number }
 }
 
+interface FleetOverview {
+  fleet: { trucks: number; activeTrucks: number; activeTrips: number }
+  drivers: { total: number; active: number }
+  coverage: { assignedTrips: number; totalTrips: number; driverCoverage: number }
+  earnings: number
+}
+
 interface Props {
   onBack: () => void
   onOpenTruck: (truckId: string) => void
@@ -30,10 +37,12 @@ export function FleetDashboardScreen({ onBack, onOpenTruck, onAddTruck }: Props)
   const theme = useTheme()
   const { t } = useI18n()
   const [data, setData] = useState<FleetData | null>(null)
+  const [overview, setOverview] = useState<FleetOverview | null>(null)
   const [loading, setLoading] = useState(true)
 
   const fetch = useCallback(() => {
     api.get<FleetData>('/trucks/fleet/dashboard').then(setData).catch(() => {}).finally(() => setLoading(false))
+    api.get<FleetOverview>('/trucks/fleet/overview').then(setOverview).catch(() => {})
   }, [])
 
   useEffect(() => { fetch() }, [fetch])
@@ -66,6 +75,21 @@ export function FleetDashboardScreen({ onBack, onOpenTruck, onAddTruck }: Props)
                 <Summary label={t('fleet.expiring')} value={data?.summary.expiringSoon ?? 0} color={theme.warning} theme={theme} />
                 <Summary label={t('fleet.expired')} value={data?.summary.expired ?? 0} color={theme.danger} theme={theme} />
               </View>
+
+              {overview && (
+                <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, marginBottom: spacing.lg }]}>
+                  <Text style={[styles.sectionLabel, { color: theme.mutedForeground }]}>Fleet overview</Text>
+                  <View style={styles.summaryRow}>
+                    <Summary label="Active trips" value={overview.fleet.activeTrips} color={theme.primary} theme={theme} />
+                    <Summary label="Active trucks" value={overview.fleet.activeTrucks} color={theme.success} theme={theme} />
+                    <Summary label="Driver coverage" value={Math.round(overview.coverage.driverCoverage * 100)} color={theme.warning} theme={theme} />
+                  </View>
+                  <View style={{ marginTop: spacing.sm }}>
+                    <Text style={{ color: theme.foreground, fontSize: 22, fontWeight: '800' }}>₹{overview.earnings.toLocaleString()}</Text>
+                    <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>Total earned from delivered trips</Text>
+                  </View>
+                </View>
+              )}
 
               {(data?.alerts ?? []).length > 0 && (
                 <View style={styles.alerts}>

@@ -48,6 +48,18 @@ import { GlobalModule } from './global/global.module'
 import { OrgAccessModule } from './org-access/org-access.module'
 import { MarketModule } from './market/market.module'
 import { ProgrammaticMarketModule } from './market/programmatic/programmatic-market.module'
+import { ContractsModule } from './contracts/contracts.module'
+import { InvoicingModule } from './invoicing/invoicing.module'
+import { ContainersModule } from './containers/containers.module'
+import { ReturnsModule } from './returns/returns.module'
+import { HandoversModule } from './handovers/handovers.module'
+import { CustomsModule } from './customs/customs.module'
+import { YardModule } from './yard/yard.module'
+import { TradeDocumentsModule } from './trade-documents/trade-documents.module'
+import { KybModule } from './kyb/kyb.module'
+import { EdiModule } from './edi/edi.module'
+import { VisibilityModule } from './visibility/visibility.module'
+import { AnalyticsModule } from './analytics/analytics.module'
 
 @Module({
   imports: [
@@ -105,6 +117,18 @@ import { ProgrammaticMarketModule } from './market/programmatic/programmatic-mar
     OrgAccessModule,
     MarketModule,
     ProgrammaticMarketModule,
+    ContractsModule,
+    InvoicingModule,
+    ContainersModule,
+    ReturnsModule,
+    HandoversModule,
+    CustomsModule,
+    YardModule,
+    TradeDocumentsModule,
+    KybModule,
+    EdiModule,
+    VisibilityModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [

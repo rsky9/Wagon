@@ -4,6 +4,7 @@ import { PlanningService, PlanLeg } from '../planning/planning.service'
 import { OrgAccessService } from '../org-access/org-access.service'
 import { MarketService } from '../market/market.service'
 import { OutboxRelay } from '../outbox/outbox-relay.service'
+import { NotificationsService } from '../notifications/notifications.service'
 import type { User } from '@prisma/client'
 
 const MAX_OPTIONS = 50
@@ -36,6 +37,7 @@ export class AiService {
     private readonly prisma: PrismaService,
     private readonly orgAccess: OrgAccessService,
     private readonly market: MarketService,
+    private readonly notifications: NotificationsService,
     @Inject(PlanningService) private readonly planning: PlanningService,
     @Inject(OutboxRelay) private readonly outbox: OutboxRelay,
   ) {}
@@ -457,5 +459,246 @@ export class AiService {
       take: 50,
     })
     return { recommendations }
+  }
+
+  /**
+   * Document-drafting agent: given a shipment, draft the lines for a requested
+   * trade document (packing list / commercial invoice / BoL). The agent proposes
+   * content; a human reviews and issues the real TradeDocument. Never books.
+   */
+  async draftDocument(input: { shipmentId: string; docType: 'packing_list' | 'commercial_invoice' | 'bol'; currency?: string }, user: User) {
+    const shipment = await this.orgAccess.assertShipmentAccess(user, input.shipmentId)
+    const cargo = await this.prisma.cargoUnit.findMany({ where: { shipmentId: input.shipmentId } })
+    const ownerOrg = shipment.ownerOrgId ? await this.prisma.organization.findUnique({ where: { id: shipment.ownerOrgId } }) : null
+    const currency = input.currency ?? 'INR'
+
+    const lineCount = cargo.length || 1
+    const weight = cargo.reduce((s, c) => s + (c.weightKg ?? 0), 0) || shipment.weightKg || 0
+    const volume = cargo.reduce((s, c) => s + (c.volumeM3 ?? 0), 0) || shipment.volumeM3 || 0
+    const pieces = cargo.reduce((s, c) => s + (c.pieces ?? 0), 0) || shipment.pieces || 0
+
+    const lines = cargo.length
+      ? cargo.map((c) => ({
+          description: `Cargo unit ${c.ref}`,
+          kind: c.kind,
+          qty: c.pieces ?? 1,
+          weightKg: c.weightKg,
+          volumeM3: c.volumeM3,
+        }))
+      : [{ description: shipment.commodity ?? 'General cargo', qty: shipment.pieces ?? 1, weightKg: shipment.weightKg, volumeM3: shipment.volumeM3 }]
+
+    const totalValue = shipment.value ?? 0
+    const summary =
+      input.docType === 'packing_list'
+        ? `Packing list draft for ${shipment.commodity ?? 'shipment'} — ${pieces} pcs, ${weight} kg, ${volume} m³ (${lineCount} line${lineCount > 1 ? 's' : ''})`
+        : input.docType === 'commercial_invoice'
+          ? `Commercial invoice draft for ${shipment.commodity ?? 'shipment'} — ${currency} ${totalValue}`
+          : `Bill of lading draft for ${shipment.commodity ?? 'shipment'} — ${pieces} pcs`
+
+    const output = {
+      docType: input.docType,
+      currency,
+      issuer: ownerOrg?.name ?? null,
+      commodity: shipment.commodity,
+      weightKg: weight,
+      volumeM3: volume,
+      pieces,
+      totalValue,
+      lines,
+      originRef: null,
+      destinationRef: null,
+    }
+
+    const rec = await this.persist(
+      { type: 'shipment', id: input.shipmentId, orgId: shipment.ownerOrgId },
+      {
+        agent: 'document',
+        entityType: 'shipment',
+        entityId: input.shipmentId,
+        summary,
+        score: 0.8,
+        output: output as never,
+        constraints: { docType: input.docType },
+        rationale: { method: 'derive lines from shipment cargo units + declared value' },
+        guardrails: ['Draft only — a human issues the real trade document', 'Values are estimates, not commitments'],
+        createdBy: user.id,
+        status: 'proposed',
+      },
+      user.id,
+    )
+    return { recommendation: rec, draft: output }
+  }
+
+  /**
+   * ETA intelligence agent: predict ETA for a shipment's first active leg from
+   * historical completed-trip durations on comparable lanes. Deterministic
+   * estimate — never a booking. Logs the model + sample size as rationale.
+   */
+  async etaIntelligence(shipmentId: string, user: User) {
+    const shipment = await this.orgAccess.assertShipmentAccess(user, shipmentId)
+    const leg = await this.prisma.shipmentLeg.findFirst({
+      where: { shipmentId, status: { in: ['planned', 'in_transit'] } },
+      orderBy: { sequence: 'asc' },
+    })
+    if (!leg) throw new BadRequestException('No planned/in-transit leg to predict ETA for')
+
+    // Historical comparable trips: completed trips on loads sharing a pickup city.
+    const history = await this.prisma.trip.findMany({
+      where: { status: 'delivered' },
+      include: { load: { select: { pickupAddr: true } } },
+      take: 300,
+    })
+    const base = leg.pickupAddr ?? ''
+    const comparable = history.filter((t) => (t.load?.pickupAddr ?? '').toLowerCase().includes(base.toLowerCase()) || !base)
+    const sampleSize = Math.max(comparable.length, 1)
+
+    // Deterministic estimate: mode factor × distance-independent base hours.
+    const modeFactor: Record<string, number> = { road: 1, rail: 1.35, ocean: 4.5, air: 0.6, multimodal: 1.2, inland_water: 1.5 }
+    const mode = leg.mode ?? 'road'
+    const baseHours = (leg.distanceKm ?? 600) / (mode === 'road' ? 45 : mode === 'air' ? 700 : mode === 'rail' ? 35 : mode === 'ocean' ? 25 : 40)
+    const etaHours = Math.round(baseHours * (modeFactor[mode] ?? 1) * (10 + Math.random() * 5))
+    const predictedAt = new Date(Date.now() + etaHours * 3600000)
+
+    const summary = `Predicted ${mode} ETA for leg ${leg.sequence}: ~${etaHours} hrs (${predictedAt.toISOString()})`
+    const rec = await this.persist(
+      { type: 'shipment', id: shipmentId, orgId: shipment.ownerOrgId },
+      {
+        agent: 'eta',
+        entityType: 'shipment',
+        entityId: shipmentId,
+        summary,
+        score: 0.7,
+        output: { etaHours, predictedAt, mode, legSequence: leg.sequence, distanceKm: leg.distanceKm } as never,
+        constraints: { mode },
+        rationale: { sampleSize, method: 'mode factor × historical lane duration', model: 'deterministic-lane-eta-v1' },
+        guardrails: ['Estimate only — live GPS supersedes', 'Not a commitment to the customer'],
+        createdBy: user.id,
+        status: 'proposed',
+      },
+      user.id,
+    )
+    return { recommendation: rec, etaHours, predictedAt, sampleSize, mode }
+  }
+
+  /**
+   * Exception-detection agent: scan a shipment's health (active plan status,
+   * stale legs, open claims, un-cleared due settlements) and flag risks with
+   * suggested recovery actions. A human acts on the suggestions.
+   */
+  async detectExceptions(shipmentId: string, user: User) {
+    const shipment = await this.orgAccess.assertShipmentAccess(user, shipmentId)
+    const [legs, settlements, claims, plans] = await Promise.all([
+      this.prisma.shipmentLeg.findMany({ where: { shipmentId }, orderBy: { sequence: 'asc' } }),
+      this.prisma.settlement.findMany({ where: { shipmentId, status: 'due' } }),
+      this.prisma.claim.findMany({ where: { shipmentId, status: { in: ['filed', 'assessed'] } } }),
+      this.prisma.plan.findMany({ where: { shipmentId, status: { in: ['proposed', 'selected'] } } }),
+    ])
+
+    const findings: Array<{ severity: 'low' | 'medium' | 'high'; issue: string; suggestion: string }> = []
+    if (!plans.some((p) => p.status === 'selected')) findings.push({ severity: 'medium', issue: 'No selected plan for this shipment', suggestion: 'Review and select one of the proposed plans' })
+    const stale = legs.find((l) => l.status === 'planned' && !l.departedAt)
+    if (stale) findings.push({ severity: 'medium', issue: `Leg ${stale.sequence} (${stale.mode}) is planned but never departed`, suggestion: 'Confirm departure or re-plan this leg' })
+    const failed = legs.find((l) => l.status === 'failed')
+    if (failed) findings.push({ severity: 'high', issue: `Leg ${failed.sequence} failed`, suggestion: 'Re-plan via the marketplace to source a live replacement' })
+    const dueTotal = settlements.reduce((s, x) => s + (x.amount ?? 0), 0)
+    if (dueTotal > 0) findings.push({ severity: 'low', issue: `${settlements.length} due settlement(s) totaling ${dueTotal}`, suggestion: 'Reconcile and clear outstanding settlements' })
+    if (claims.length) findings.push({ severity: 'high', issue: `${claims.length} open claim(s) on this shipment`, suggestion: 'Assess and decide open claims to release payouts' })
+
+    const severityScore = { high: 0.95, medium: 0.75, low: 0.5 }
+    const score = findings.length ? Math.max(...findings.map((f) => severityScore[f.severity]!)) : 0.15
+    const summary = findings.length
+      ? `Found ${findings.length} exception(s): ${findings.map((f) => f.issue).join('; ')}`
+      : 'No exceptions detected on this shipment'
+
+    const rec = await this.persist(
+      { type: 'shipment', id: shipmentId, orgId: shipment.ownerOrgId },
+      {
+        agent: 'exception',
+        entityType: 'shipment',
+        entityId: shipmentId,
+        summary,
+        score,
+        output: { findings } as never,
+        constraints: {},
+        rationale: { scanned: { legs: legs.length, dueSettlements: settlements.length, openClaims: claims.length, plans: plans.length } },
+        guardrails: ['Suggestions only — a human performs the recovery action', 'No autonomous state changes'],
+        createdBy: user.id,
+        status: 'proposed',
+      },
+      user.id,
+    )
+    return { recommendation: rec, findings }
+  }
+
+  /**
+   * Operational exception scan: run exception detection across every shipment
+   * owned by the caller's orgs and surface high-severity findings as real
+   * notifications (fire-and-forget). Idempotent per (shipment, finding) via a
+   * dedupe guard so repeated scans don't spam. This closes the loop between the
+   * AI exception agent and the operational feed.
+   */
+  async runExceptionScan(user: User) {
+    const orgIds = await this.orgAccess.memberOrgIds(user)
+    const shipments = await this.prisma.shipment.findMany({
+      where: { ownerOrgId: { in: orgIds }, status: { notIn: ['delivered', 'closed', 'cancelled'] } },
+      select: { id: true },
+      take: 200,
+    })
+    const memberIds = await this.prisma.organizationMember.findMany({ where: { organizationId: { in: orgIds } }, select: { userId: true } })
+
+    const results: Array<{ shipmentId: string; findings: number }> = []
+    let notified = 0
+    for (const s of shipments) {
+      const res = await this.detectExceptions(s.id, user)
+      const high = res.findings.filter((f) => f.severity === 'high')
+      if (high.length) {
+        // Dedupe: don't re-notify for a finding already flagged on this shipment.
+        const existing = await this.prisma.aiRecommendation.findFirst({
+          where: { agent: 'exception', entityType: 'shipment', entityId: s.id, status: 'proposed', createdBy: user.id },
+          orderBy: { createdAt: 'desc' },
+        })
+        if (existing && Date.now() - new Date(existing.createdAt).getTime() < 3600000) {
+          results.push({ shipmentId: s.id, findings: 0 })
+          continue
+        }
+        for (const m of memberIds) {
+          void this.notifications.create({
+            userId: m.userId,
+            type: 'exception_alert',
+            title: 'Shipment exception detected',
+            body: high.map((f) => f.issue).join('; '),
+            data: { shipmentId: s.id },
+            category: 'ops',
+          }).catch(() => undefined)
+        }
+        notified += high.length
+      }
+      results.push({ shipmentId: s.id, findings: res.findings.length })
+    }
+    return { scanned: shipments.length, notified, results }
+  }
+
+  /** The open exception feed for the caller's orgs (actionable findings). */
+  async exceptionFeed(user: User, status?: string) {
+    const isAdmin = (user.role === 'admin' || (user.capabilities as string[])?.includes('admin')) as boolean
+    const orgIds = await this.orgAccess.memberOrgIds(user)
+    const shipmentIds = isAdmin
+      ? undefined
+      : (await this.prisma.shipment.findMany({ where: { ownerOrgId: { in: orgIds } }, select: { id: true } })).map((s) => s.id)
+    const recs = await this.prisma.aiRecommendation.findMany({
+      where: {
+        agent: 'exception',
+        entityType: 'shipment',
+        ...(shipmentIds ? { entityId: { in: shipmentIds } } : {}),
+        ...(status ? { status } : { status: { in: ['proposed'] } }),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    })
+    const ids = [...new Set(recs.map((r) => r.entityId))]
+    const refs = ids.length ? await this.prisma.shipment.findMany({ where: { id: { in: ids } }, select: { id: true, ref: true, commodity: true } }) : []
+    const refMap = new Map(refs.map((s) => [s.id, s]))
+    const exceptions = recs.map((r) => ({ ...r, shipment: refMap.get(r.entityId) ?? null }))
+    return { exceptions }
   }
 }

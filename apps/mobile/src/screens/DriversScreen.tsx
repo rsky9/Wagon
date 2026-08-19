@@ -13,6 +13,7 @@ interface DriverRow {
   mobile: string
   licenseVerified: boolean
   status: boolean
+  payRate: number | null
 }
 
 interface Props {
@@ -28,6 +29,7 @@ export function DriversScreen({ onBack }: Props) {
   const [name, setName] = useState('')
   const [mobile, setMobile] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [payRateInput, setPayRateInput] = useState<Record<string, string>>({})
 
   const fetch = useCallback(() => {
     api.get<{ drivers: DriverRow[] }>('/drivers').then((res) => setDrivers(res.drivers)).catch(() => {}).finally(() => setLoading(false))
@@ -54,6 +56,33 @@ export function DriversScreen({ onBack }: Props) {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: async () => { await api.request('DELETE', `/drivers/${id}`).catch(() => {}); fetch() } },
     ])
+  }
+
+  const setPayRate = async (id: string) => {
+    const raw = payRateInput[id]?.trim()
+    const value = raw ? Number(raw) : null
+    if (value != null && (!isFinite(value) || value < 0)) { Alert.alert(t('ui.error'), 'Enter a valid pay rate'); return }
+    setSubmitting(true)
+    try {
+      await api.patch(`/drivers/${id}`, { payRate: value })
+      setPayRateInput((r) => ({ ...r, [id]: '' }))
+      fetch()
+    } catch (e) {
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to update pay rate')
+    } finally { setSubmitting(false) }
+  }
+
+  const viewPerformance = async (id: string) => {
+    try {
+      const res = await api.get<{ summary: { trips: number; delivered: number; cancelled: number; onTime: number; onTimeRate: number; earned: number } }>(`/drivers/${id}/performance`)
+      const s = res.summary
+      Alert.alert(
+        'Driver performance',
+        `Trips: ${s.trips}\nDelivered: ${s.delivered}\nCancelled: ${s.cancelled}\nOn-time: ${s.onTime} (${Math.round(s.onTimeRate * 100)}%)\n\nEarned: ₹${s.earned.toLocaleString()}`,
+      )
+    } catch (e) {
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to load performance')
+    }
   }
 
   return (
@@ -87,9 +116,28 @@ export function DriversScreen({ onBack }: Props) {
                 {item.licenseVerified && <Text style={{ color: theme.success, fontSize: 12, fontWeight: '700' }}>✓ License</Text>}
               </View>
               <Text style={[styles.mobile, { color: theme.mutedForeground }]}>{item.mobile}</Text>
-              <Pressable onPress={() => remove(item.id, item.name)} hitSlop={8} style={{ alignSelf: 'flex-end' }}>
-                <Text style={{ color: theme.danger, fontSize: 13 }}>{t('drivers.remove')}</Text>
-              </Pressable>
+              <View style={styles.payRow}>
+                <Text style={[styles.payLabel, { color: theme.mutedForeground }]}>Pay / trip</Text>
+                <TextInput
+                  style={[styles.payInput, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]}
+                  value={payRateInput[item.id] ?? ''}
+                  onChangeText={(v) => setPayRateInput((r) => ({ ...r, [item.id]: v }))}
+                  placeholder={item.payRate != null ? `₹${item.payRate}` : '25% of fare'}
+                  placeholderTextColor={theme.mutedForeground + '88'}
+                  keyboardType="numeric"
+                />
+                <Pressable onPress={() => setPayRate(item.id)} hitSlop={8} disabled={submitting}>
+                  <Text style={{ color: theme.primary, fontWeight: '800', fontSize: 13 }}>Save</Text>
+                </Pressable>
+              </View>
+              <View style={styles.actions}>
+                <Pressable onPress={() => viewPerformance(item.id)} hitSlop={8}>
+                  <Text style={{ color: theme.primary, fontSize: 13, fontWeight: '700' }}>View performance</Text>
+                </Pressable>
+                <Pressable onPress={() => remove(item.id, item.name)} hitSlop={8}>
+                  <Text style={{ color: theme.danger, fontSize: 13 }}>{t('drivers.remove')}</Text>
+                </Pressable>
+              </View>
             </View>
           )}
         />
@@ -109,4 +157,8 @@ const styles = StyleSheet.create({
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   name: { fontSize: 17, fontWeight: '700' },
   mobile: { fontSize: 14 },
+  payRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs },
+  payLabel: { fontSize: 13 },
+  payInput: { flex: 1, borderRadius: radius.md, borderWidth: 1, paddingHorizontal: spacing.sm, paddingVertical: 6, fontSize: 14 },
+  actions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.sm },
 })

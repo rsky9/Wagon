@@ -94,6 +94,12 @@ export class LoadsService {
     if (!supplier) {
       throw new BadRequestException('Supplier profile not found — complete onboarding first')
     }
+    // Split-brain guard: posting a load is the supplier-side analogue of a
+    // transporter quoting — both must pass their per-capability KYC gate.
+    const supplierUser = await this.prisma.user.findUnique({ where: { id: user.id }, select: { supplierVerified: true } })
+    if (!supplierUser?.supplierVerified) {
+      throw new BadRequestException('Complete KYC verification to post loads')
+    }
 
     const model = await this.prisma.truckModel.findUnique({ where: { id: input.modelId } })
     if (!model) {
@@ -377,7 +383,7 @@ export class LoadsService {
     const { cancelled, trips } = await this.prisma.$transaction(async (tx) => {
       const cancelled = await tx.load.update({
         where: { id },
-        data: { status: 'cancelled', cancelReason: reason.trim() },
+        data: { status: 'cancelled', cancelReason: reason.trim(), ewbStatus: 'cancelled', ewbCancelledAt: new Date() },
       })
       // Cancel any active trips so none are left orphaned on a cancelled load.
       const trips = await tx.trip.findMany({

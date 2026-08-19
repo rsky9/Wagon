@@ -86,16 +86,42 @@ export class RatingsService {
       orderBy: { createdAt: 'desc' },
       take: 50,
     })
+    const mapped = reviews.map((r) => ({
+      tripId: r.tripId,
+      role: r.role,
+      rating: r.score,
+      review: r.review,
+      reviewerName: r.reviewer.name,
+      route: `${r.trip.load.pickupAddr} → ${r.trip.load.dropAddr}`,
+      createdAt: r.createdAt,
+    }))
+    // Merge enablement org ratings received by the user's organizations so
+    // forwarder/warehouse/carrier owners see their marketplace reputation too.
+    const memberships = await this.prisma.organizationMember.findMany({
+      where: { userId },
+      select: { organization: { select: { id: true, name: true, kind: true } } },
+    })
+    const orgIds = memberships.map((m) => m.organization.id)
+    const orgRatings = orgIds.length
+      ? await this.prisma.orgRating.findMany({
+          where: { subjectOrgId: { in: orgIds } },
+          include: { giverOrg: { select: { name: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        })
+      : []
+    const orgReviews = orgRatings.map((r) => ({
+      tripId: r.referenceId ?? undefined,
+      role: r.axis,
+      rating: r.score,
+      review: r.review,
+      reviewerName: r.giverOrg?.name ?? 'Org partner',
+      route: `${memberships.find((m) => m.organization.id === r.subjectOrgId)?.organization.name ?? 'Org'} (${r.axis})`,
+      createdAt: r.createdAt,
+      orgRating: true,
+    }))
     return {
-      reviews: reviews.map((r) => ({
-        tripId: r.tripId,
-        role: r.role,
-        rating: r.score,
-        review: r.review,
-        reviewerName: r.reviewer.name,
-        route: `${r.trip.load.pickupAddr} → ${r.trip.load.dropAddr}`,
-        createdAt: r.createdAt,
-      })),
+      reviews: [...mapped, ...orgReviews].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
     }
   }
 

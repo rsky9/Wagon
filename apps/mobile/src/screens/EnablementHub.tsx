@@ -7,7 +7,7 @@ import type { Shipment, ForwardOrder, Claim, Plan, Organization } from '@wagon/c
 
 interface Props {
   capabilities?: string[]
-  onOpen: (screen: 'shipments' | 'forwarding' | 'planning' | 'finance' | 'storage' | 'global' | 'market' | 'integrations') => void
+  onOpen: (screen: 'shipments' | 'forwarding' | 'planning' | 'finance' | 'storage' | 'global' | 'market' | 'integrations' | 'contracts') => void
 }
 
 interface Stat {
@@ -70,6 +70,7 @@ export function EnablementHub({ capabilities = [], onOpen }: Props) {
     { key: 'storage', title: 'Warehouse & Storage', subtitle: 'Facilities and gate-in → gate-out operations', icon: '🏭', count: 0, screen: 'storage' },
     { key: 'global', title: 'Global', subtitle: 'Country packs, FX and document checklists', icon: '🌍', count: 0, screen: 'global' },
     { key: 'integrations', title: 'Integrations', subtitle: 'Webhooks, connectors and event deliveries', icon: '🔗', count: 0, screen: 'integrations' },
+    { key: 'contracts', title: 'Contracts & Assets', subtitle: 'Agreements, invoices, containers, returns & handovers', icon: '📝', count: 0, screen: 'contracts' },
   ]
 
   // Gate sections to what the user can actually do.

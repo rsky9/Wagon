@@ -520,6 +520,41 @@ export class TripsService {
     return { trip: updated }
   }
 
+  /** Transporter assigns a fleet driver to their trip. Driver is matched to a
+   *  mobile account so the driver can execute it from the driver app. */
+  async assignDriver(tripId: string, driverId: string, user: User) {
+    const trip = await this.prisma.trip.findUnique({ where: { id: tripId } })
+    if (!trip) throw new NotFoundException('Trip not found')
+    if (trip.status === 'cancelled' || trip.status === 'delivered') {
+      throw new BadRequestException('Only active trips can be assigned')
+    }
+    const transporter = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
+    if (!transporter || transporter.id !== trip.transporterId) {
+      throw new BadRequestException('Only the assigned transporter can assign a driver')
+    }
+    const driver = await this.prisma.driver.findFirst({
+      where: { id: driverId, transporterId: transporter.id },
+    })
+    if (!driver) throw new NotFoundException('Driver not found in your fleet')
+    const updated = await this.prisma.trip.update({
+      where: { id: tripId },
+      data: { driverId: driver.id },
+    })
+    // Notify the driver's account (matched by mobile) so the trip appears for them.
+    const driverUser = await this.prisma.user.findUnique({ where: { mobile: driver.mobile } })
+    if (driverUser) {
+      await this.notifications.create({
+        userId: driverUser.id,
+        type: 'trip_assigned',
+        title: 'Trip assigned to you',
+        body: `Trip #${trip.loadId.slice(-6)} — ${driver.name}. Open the app to execute.`,
+        data: { tripId, loadId: trip.loadId },
+        category: 'trips',
+      })
+    }
+    return { trip: updated }
+  }
+
   private stageLabel(stage: string) {
     return stage.replace('_', ' ')
   }

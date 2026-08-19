@@ -17,6 +17,7 @@ import { uploadToPresignedUrl } from '@wagon/api-client'
 import * as DocumentPicker from 'expo-document-picker'
 import { LocationShare } from '../components/LocationShare'
 import { showActionSheet } from '../components/ActionSheet'
+import { prompt } from '../components/Prompt'
 import { notifyDataChanged } from '../lib/dataBus'
 import { useStepUp } from '../hooks/useStepUp'
 import type { Load } from '@wagon/contracts'
@@ -163,6 +164,26 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
     }
   }
 
+  const cancelTrip = (trip: TripInfo) => {
+    Alert.alert('Cancel trip', `Cancel trip for ${trip.load.pickupAddr} → ${trip.load.dropAddr}? The load returns to posted and any captures are refunded.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Cancel trip', style: 'destructive', onPress: () => {
+        void prompt({ title: 'Reason (required)', message: 'Tell the other party why you are cancelling' }).then(async (reason) => {
+          if (reason == null) return
+          if (!reason?.trim()) { Alert.alert(t('ui.error'), 'A reason is required to cancel'); return }
+          setBusy(trip.id)
+          try {
+            await api.post(`/trips/${trip.id}/cancel`, { reason: reason.trim() })
+            Alert.alert('Trip cancelled', 'The load is back open for other transporters.')
+            fetchTrips()
+          } catch (e) {
+            Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to cancel')
+          } finally { setBusy(null) }
+        })
+      } },
+    ])
+  }
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
@@ -220,6 +241,7 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
               canHaul={canHaul}
               onUploadPod={uploadPod}
               onPayout={requestPayout}
+              onCancel={cancelTrip}
               onOpenExecution={onOpenExecution}
               onReturnLoads={canHaul ? onReturnLoads : undefined}
               onRateSupplier={canHaul ? () => rateSupplier(item) : undefined}
@@ -237,6 +259,7 @@ function TripCard({
   canHaul,
   onUploadPod,
   onPayout,
+  onCancel,
   onOpenExecution,
   onReturnLoads,
   onRateSupplier,
@@ -246,6 +269,7 @@ function TripCard({
   canHaul: boolean
   onUploadPod: (t: TripInfo) => void
   onPayout: (t: TripInfo) => void
+  onCancel: (t: TripInfo) => void
   onOpenExecution: (tripId: string) => void
   onReturnLoads?: (tripId: string) => void
   onRateSupplier?: () => void
@@ -279,6 +303,9 @@ function TripCard({
         {canHaul && (
           <>
             <Button label="Execute trip →" onPress={() => onOpenExecution(trip.id)} size="md" variant="secondary" />
+            {(trip.status === 'accepted' || trip.status === 'in_transit') && (
+              <Button label="Cancel trip" onPress={() => onCancel(trip)} loading={busy} size="md" variant="secondary" />
+            )}
             {trip.status === 'delivered' && !trip.podUrl && (
               <Button label="Upload POD" onPress={() => onUploadPod(trip)} loading={busy} size="md" />
             )}

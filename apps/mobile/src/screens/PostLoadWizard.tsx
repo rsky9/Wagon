@@ -57,6 +57,7 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
   const [pickup, setPickup] = useState('')
   const [drop, setDrop] = useState('')
   const [weight, setWeight] = useState('')
+  const [truckCount, setTruckCount] = useState('1')
   const [distance, setDistance] = useState('')
   const [material, setMaterial] = useState('')
   const [bodyType, setBodyType] = useState('Open body')
@@ -91,7 +92,8 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
 
   const canNext =
     step === 0 ? !!pickup.trim() && !!drop.trim()
-    : step === 1 ? !!weight.trim() && !!material
+    : step === 1 ? !!weight.trim() && !!material && (() => { const n = Number(truckCount); return isFinite(n) && n >= 1 })()
+
     : step === 2 ? !!truckType && !!modelId
     : step === 3 ? !!pickupDate
     : step === 4 ? !!commercialModel
@@ -132,6 +134,7 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
         truckType,
         modelId,
         weight: Number(weight),
+        noOfTrucks: Number(truckCount) || 1,
         distanceKm,
         // Resolve the material explicitly — never silently fall back to the first
         // material (which would publish the wrong cargo type on the load).
@@ -200,6 +203,12 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
           </Field>
           <Field label={t('postLoad.weight')}>
             <TextInput style={inputStyle} value={weight} onChangeText={setWeight} placeholder={t('postLoad.weightExample')} keyboardType="decimal-pad" placeholderTextColor={theme.mutedForeground + '88'} />
+          </Field>
+          <Field label="Number of trucks">
+            <TextInput style={inputStyle} value={truckCount} onChangeText={setTruckCount} placeholder="1" keyboardType="number-pad" placeholderTextColor={theme.mutedForeground + '88'} />
+            <Text style={{ color: theme.mutedForeground, fontSize: 11, marginTop: 2 }}>
+              Post one load with multiple trucks so transporters can bid per truck.
+            </Text>
           </Field>
         </>
       )}
@@ -302,7 +311,7 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
         <View style={{ gap: spacing.sm }}>
           <Field label="Ready to publish — quick check:">{null}</Field>
           <PreviewRow label="Route" value={`${pickup} → ${drop}`} theme={theme} />
-          <PreviewRow label="Cargo" value={`${weight} t · ${material}`} theme={theme} />
+          <PreviewRow label="Cargo" value={`${weight} t · ${material} · ×${Number(truckCount) || 1} trucks`} theme={theme} />
           <PreviewRow label="Truck" value={`${truckType} · ${modelName} · ${bodyType}`} theme={theme} />
           <PreviewRow label="Pickup" value={pickupDate} theme={theme} />
           <PreviewRow label={t('postLoad.stepPricing')} value={commercialModels.find((m) => m.key === commercialModel)?.label ?? ''} theme={theme} />

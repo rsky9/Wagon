@@ -22,6 +22,11 @@ export class TrucksController {
     return this.trucks.fleetDashboard(user)
   }
 
+  @Get('fleet/overview')
+  overview(@CurrentUser() user: User) {
+    return this.trucks.fleetOverview(user)
+  }
+
   @Post()
   create(@Body() body: CreateTruckDto, @CurrentUser() user: User) {
     return this.trucks.create(body, user)

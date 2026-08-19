@@ -363,6 +363,11 @@ model Load {
   fareEstimate Float
   payLater    Boolean    @default(false)
   ewbNumber   String?
+  ewbStatus   String   @default("none") // none | generated | extended | cancelled | expired
+  ewbValidUntil DateTime?
+  ewbGeneratedAt DateTime?
+  ewbCancelledAt DateTime?
+  ewbDocKey   String?
   cancelReason String?
   status      LoadStatus @default(posted)
   // Commercial model + terms
@@ -493,6 +498,7 @@ model Trip {
   exceptions   TripException[]
   messages     Message[]
   reviews      Review[]
+  invoices     Invoice[]
   pod          ProofOfDelivery? @relation("TripPOD")
   supplierRating Int?
   supplierReview String?
@@ -694,6 +700,7 @@ model RateCard {
   status     Boolean     @default(true)
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
+  contracts  Contract[]
 }
 
 model Dispute {
@@ -710,6 +717,7 @@ model Dispute {
   status       String   @default("open")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  invoices     Invoice[]
   @@index([tripId])
 }
 
@@ -825,6 +833,17 @@ model Organization {
   countryCode String @default("IN")
   verified  Boolean  @default(false)
   verifiedCapabilities Json? // per-kind trust, e.g. ["transporter","forwarder","warehouse","carrier"]
+  // Group/tenant hierarchy: a parent may own or consolidate child orgs.
+  parentOrgId String?
+  parentOrg Organization? @relation("OrgHierarchy", fields: [parentOrgId], references: [id])
+  children  Organization[] @relation("OrgHierarchy")
+  // KYB (business verification): registration, address, verification status.
+  registrationNumber String?
+  registeredAddress String?
+  kybcStatus String @default("not_started") // not_started | pending | verified | rejected
+  kybcVerifiedAt DateTime?
+  kybcVerifiedBy String?
+  kybcNote String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -837,12 +856,30 @@ model Organization {
   legProviders ShipmentLeg[] @relation("LegProvider")
   facilities Facility[]
   warehouseOps WarehouseOperation[]
+  scheduledAppointments ScheduledAppointment[] @relation("ApptOrg")
   bookings  CarrierBooking[]
+  contractsAsA Contract[] @relation("ContractPartyA")
+  contractsAsB Contract[] @relation("ContractPartyB")
+  invoicesIssued Invoice[] @relation("InvoiceIssuer")
+  invoicesReceived Invoice[] @relation("InvoiceRecipient")
+  containersOwned Container[] @relation("ContainerOwner")
+  containersOperated Container[] @relation("ContainerOperator")
+  returnsOriginated ReturnOrder[] @relation("ReturnOrigin")
+  returnsHandled ReturnOrder[] @relation("ReturnHandler")
+  handoversFrom Handover[] @relation("HandoverFrom")
+  handoversTo Handover[] @relation("HandoverTo")
+  customsDeclarationsBrokered CustomsDeclaration[] @relation("CustomsBroker")
+  customsImports CustomsDeclaration[] @relation("CustomsImporter")
+  customsExports CustomsDeclaration[] @relation("CustomsExporter")
   forwarderOrders ForwardOrder[] @relation("ForwarderOrders")
   customerOrders ForwardOrder[] @relation("CustomerOrders")
   consolidations Consolidation[] @relation("Consolidations")
   bookedConsolidations Consolidation[] @relation("BookedConsolidations")
   documents ForwardDocument[]
+  tradeDocumentsIssued TradeDocument[] @relation("DocIssuer")
+  tradeDocumentsReceived TradeDocument[] @relation("DocRecipient")
+  tradeDocumentsCarried TradeDocument[] @relation("DocCarrier")
+  orgKycDocuments OrganizationDocument[]
   connectors IntegrationConnector[]
   webhookSubscriptions WebhookSubscription[]
   orgEvents LogisticsEvent[]
@@ -858,7 +895,10 @@ model Organization {
   carrierServices CarrierService[]
   orgRatingsGiven OrgRating[] @relation("RatingGiver")
   orgRatingsReceived OrgRating[] @relation("RatingSubject")
+  ediMessages EdiMessage[]
+  ediPartnerships EdiMessage[] @relation("EdiPartner")
   @@index([kind])
+  @@index([parentOrgId])
 }
 
 /// A person who belongs to an organization and acts on its behalf.
@@ -911,6 +951,12 @@ model Shipment {
   riskAssessments RiskAssessment[]
   consolidations Consolidation[]
   cargoUnits CargoUnit[]
+  invoices  Invoice[]
+  returns   ReturnOrder[]
+  handovers Handover[]
+  customsDeclarations CustomsDeclaration[]
+  tradeDocuments TradeDocument[]
+  appointments ScheduledAppointment[]
   activePlanId String?
   activePlan Plan? @relation("ActivePlan", fields: [activePlanId], references: [id])
   @@index([status])
@@ -970,6 +1016,8 @@ model CargoUnit {
   locationRef String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  container   Container?
+  returns     ReturnOrder[]
   @@index([shipmentId])
   @@index([parentId])
 }
@@ -1082,6 +1130,10 @@ model Facility {
   updatedAt DateTime @updatedAt
 
   appointments WarehouseOperation[]
+  containers   Container[]
+  handovers    Handover[]
+  docks        Dock[]
+  scheduledAppointments ScheduledAppointment[]
   @@index([kind])
   @@index([city])
 }
@@ -1159,6 +1211,8 @@ model CarrierBooking {
   rate        Float?
   currency    String   @default("INR")
   status      String   @default("requested") // requested | confirmed | cancelled
+  containerId String?
+  container   Container? @relation(fields: [containerId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   @@index([shipmentId])
@@ -1296,6 +1350,8 @@ model Settlement {
   currency   String   @default("INR")
   status     String   @default("due") // due | cleared
   settledAt  DateTime?
+  invoiceId  String?
+  invoice    Invoice? @relation(fields: [invoiceId], references: [id])
   payment    Payment?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -1303,6 +1359,7 @@ model Settlement {
   @@index([payerId])
   @@index([payeeId])
   @@index([type, status])
+  @@index([invoiceId])
 }
 
 /// A risk assessment of a shipment (score 0..1 + factors).
@@ -1546,4 +1603,393 @@ model CarrierService {
   listings      MarketListing[]
   @@index([carrierOrgId])
   @@index([status])
+}
+
+// ============================================================
+// Phase 3 — Contracting (customer/carrier/warehouse contracts + SLA)
+// ============================================================
+
+/// A commercial agreement between two organizations binding rate, SLA,
+/// territory, liability, Incoterms and payment terms to procurement/billing.
+model Contract {
+  id            String   @id @default(cuid())
+  ref           String
+  type          String   // customer | carrier | warehouse | service
+  partyAOrgId   String
+  partyAOrg     Organization @relation("ContractPartyA", fields: [partyAOrgId], references: [id])
+  partyBOrgId   String
+  partyBOrg     Organization @relation("ContractPartyB", fields: [partyBOrgId], references: [id])
+  title         String
+  rateCardId    String?
+  rateCard      RateCard? @relation(fields: [rateCardId], references: [id])
+  // SLA (hours/percentage): pickup | transit | delivery | response | claims
+  slaJson       Json?
+  // Service territory: [{ originRef, destinationRef, modes: [...] }]
+  territoryJson Json?
+  // Liability: { limit, basis, insuranceRequired }
+  liabilityJson Json?
+  incoterms     String?
+  paymentTerms  String?
+  currency      String   @default("INR")
+  status        String   @default("draft") // draft | active | expired | terminated
+  effectiveAt   DateTime?
+  expiresAt     DateTime?
+  signedByA     String?
+  signedByB     String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@index([partyAOrgId])
+  @@index([partyBOrgId])
+  @@index([status])
+}
+
+// ============================================================
+// Phase 3 — First-class Invoicing + reconciliation
+// ============================================================
+
+/// An invoice with a full lifecycle and lines for accessorials/taxes.
+/// Derived from executed trips but persisted as the settlement-of-record.
+model Invoice {
+  id            String   @id @default(cuid())
+  invoiceNo     String   @unique
+  type          String   @default("freight") // freight | advance | balance | claim | service
+  tripId        String?
+  trip          Trip?    @relation(fields: [tripId], references: [id])
+  shipmentId    String?
+  shipment      Shipment? @relation(fields: [shipmentId], references: [id])
+  billFromOrgId String?
+  billFromOrg   Organization? @relation("InvoiceIssuer", fields: [billFromOrgId], references: [id])
+  billToOrgId   String?
+  billToOrg     Organization? @relation("InvoiceRecipient", fields: [billToOrgId], references: [id])
+  status        String   @default("draft") // draft | issued | disputed | approved | paid
+  baseAmount    Float?
+  gstAmount     Float?
+  tdsAmount     Float?
+  netAmount     Float?
+  paidAmount    Float?   @default(0)
+  currency      String   @default("INR")
+  issueDate     DateTime?
+  dueDate       DateTime?
+  paidAt        DateTime?
+  disputeId     String?
+  dispute       Dispute? @relation(fields: [disputeId], references: [id])
+  lines         InvoiceLine[]
+  settlements   Settlement[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@index([tripId])
+  @@index([billFromOrgId])
+  @@index([billToOrgId])
+  @@index([status])
+}
+
+/// One line of an invoice: base freight or an accessorial/tax component.
+model InvoiceLine {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  kind        String   // base_freight | fuel_surcharge | waiting | detention | demurrage | toll | loading | unloading | storage | handling | customs | insurance | special_equipment | accessorial | gst | tds
+  description String?
+  qty         Float?
+  rate        Float?
+  amount      Float?
+  reference   String?
+  createdAt   DateTime @default(now())
+  @@index([invoiceId])
+}
+
+// ============================================================
+// Phase 3 — Container / equipment digital twin
+// ============================================================
+
+/// A physical container (or reusable asset) with status, seal, custody
+/// and empty-return obligations — the equipment twin per thesis §31.
+model Container {
+  id               String       @id @default(cuid())
+  number           String       @unique
+  type             String       @default("20GP") // 20GP | 40GP | 40HC | reefer | open_top | flat_rack | tank | special
+  ownerOrgId       String?
+  ownerOrg         Organization? @relation("ContainerOwner", fields: [ownerOrgId], references: [id])
+  operatorOrgId    String?
+  operatorOrg      Organization? @relation("ContainerOperator", fields: [operatorOrgId], references: [id])
+  cargoUnitId      String?   @unique
+  cargoUnit        CargoUnit?   @relation(fields: [cargoUnitId], references: [id])
+  currentFacilityId String?
+  currentFacility  Facility?    @relation(fields: [currentFacilityId], references: [id])
+  locationRef      String?
+  status           String       @default("available") // available | reserved | stuffed | gate_in | loaded | discharged | released | empty_return | repair | on_hold | scrap
+  sealNo           String?
+  bookingId        String?
+  vessel           String?
+  voyage           String?
+  emptyReturnRequired Boolean    @default(false)
+  lastInspectionAt DateTime?
+  lastInspectionNote String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  bookings         CarrierBooking[]
+  appointments     ScheduledAppointment[]
+  @@index([ownerOrgId])
+  @@index([status])
+  @@index([currentFacilityId])
+}
+
+// ============================================================
+// Phase 3 — Reverse logistics / returns
+// ============================================================
+
+/// A customer return with inspection condition and disposition
+/// (repair / refurbish / recycle / dispose / restock) per thesis §45.
+model ReturnOrder {
+  id           String       @id @default(cuid())
+  ref          String
+  shipmentId   String?
+  shipment     Shipment?    @relation(fields: [shipmentId], references: [id])
+  cargoUnitId  String?
+  cargoUnit    CargoUnit?   @relation(fields: [cargoUnitId], references: [id])
+  fromOrgId    String?
+  fromOrg      Organization? @relation("ReturnOrigin", fields: [fromOrgId], references: [id])
+  handlerOrgId String?
+  handlerOrg   Organization? @relation("ReturnHandler", fields: [handlerOrgId], references: [id])
+  reason       String       // customer_return | damage | repair | replacement | refurbishment | recycling | disposal | warranty
+  condition    String?
+  disposition  String       @default("pending") // pending | repair | refurbish | recycle | dispose | restock
+  status       String       @default("requested") // requested | scheduled | picked_up | in_transit | received | closed | cancelled
+  pickupAt     DateTime?
+  receivedAt   DateTime?
+  closedAt     DateTime?
+  notes        String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  @@index([shipmentId])
+  @@index([status])
+  @@index([handlerOrgId])
+}
+
+// ============================================================
+// Phase 3 — Chain of custody / handovers
+// ============================================================
+
+/// A custody transfer of cargo/equipment between organizations — who gave
+/// what to whom, in what condition, with what evidence per thesis §17/§52.
+model Handover {
+  id             String       @id @default(cuid())
+  ref            String
+  entityType     String       // cargo_unit | container | vehicle | shipment
+  entityId       String?
+  shipmentId     String?
+  shipment       Shipment?    @relation(fields: [shipmentId], references: [id])
+  fromOrgId      String?
+  fromOrg        Organization? @relation("HandoverFrom", fields: [fromOrgId], references: [id])
+  toOrgId        String?
+  toOrg          Organization? @relation("HandoverTo", fields: [toOrgId], references: [id])
+  facilityId     String?
+  facility       Facility?    @relation(fields: [facilityId], references: [id])
+  locationRef    String?
+  condition      String?
+  quantity       Float?
+  unit           String?
+  evidenceKey    String?
+  nextResponsibility String?
+  performedBy    String?
+  performedAt    DateTime     @default(now())
+  status         String       @default("completed") // scheduled | completed | disputed
+  notes          String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  @@index([entityType, entityId])
+  @@index([shipmentId])
+  @@index([fromOrgId])
+  @@index([toOrgId])
+}
+
+// ============================================================
+// Phase 4 — Customs declarations
+// ============================================================
+
+/// An export/import/transit customs declaration with classification,
+/// valuation, duty, status timeline and broker per thesis §19/§56.
+model CustomsDeclaration {
+  id             String       @id @default(cuid())
+  ref            String
+  shipmentId     String?
+  shipment       Shipment?    @relation(fields: [shipmentId], references: [id])
+  direction      String       // export | import | transit
+  regime         String       @default("general") // general | courier | fta | special
+  brokerOrgId    String?
+  brokerOrg      Organization? @relation("CustomsBroker", fields: [brokerOrgId], references: [id])
+  importerOrgId  String?
+  importerOrg    Organization? @relation("CustomsImporter", fields: [importerOrgId], references: [id])
+  exporterOrgId  String?
+  exporterOrg    Organization? @relation("CustomsExporter", fields: [exporterOrgId], references: [id])
+  hsCode         String?
+  commodity      String?
+  value          Float?
+  currency       String       @default("INR")
+  dutyAmount     Float?
+  taxAmount      Float?
+  status         String       @default("draft") // draft | filed | under_examination | held | cleared | released | rejected
+  filedAt        DateTime?
+  examinedAt     DateTime?
+  clearedAt      DateTime?
+  releasedAt     DateTime?
+  holdReason     String?
+  documentKeys   String[]
+  notes          String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  @@index([shipmentId])
+  @@index([direction, status])
+  @@index([brokerOrgId])
+}
+
+// ============================================================
+// Phase 2 — Yard / dock / appointment execution
+// ============================================================
+
+/// A loading/unloading bay at a facility. Docks are the scarce resource the
+/// gate-in/gate-out execution layer schedules around.
+model Dock {
+  id         String    @id @default(cuid())
+  facilityId String
+  facility   Facility  @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  name       String    // e.g. "Dock 1", "Bay A"
+  kind       String    @default("loading") // loading | unloading | combined | cross_dock
+  equipment  String?   // vehicles this dock can serve, e.g. "container | flatbed"
+  status     String    @default("available") // available | busy | maintenance
+  busyUntil  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  appointments ScheduledAppointment[]
+  @@index([facilityId])
+  @@index([status])
+}
+
+/// A scheduled slot for a vehicle/container to use a facility — the yard
+/// appointment layer per thesis §35 (gate-in -> dock -> gate-out).
+model ScheduledAppointment {
+  id          String      @id @default(cuid())
+  ref         String
+  facilityId  String
+  facility    Facility    @relation(fields: [facilityId], references: [id])
+  dockId      String?
+  dock        Dock?       @relation(fields: [dockId], references: [id])
+  orgId       String?
+  org         Organization? @relation("ApptOrg", fields: [orgId], references: [id])
+  shipmentId  String?
+  shipment    Shipment?   @relation(fields: [shipmentId], references: [id])
+  vehicleNo   String?
+  containerId String?
+  container   Container?  @relation(fields: [containerId], references: [id])
+  windowStart DateTime
+  windowEnd   DateTime
+  status      String      @default("requested") // requested | confirmed | in_progress | completed | cancelled | no_show
+  gateInAt    DateTime?
+  gateOutAt   DateTime?
+  cargoPieces Int?
+  cargoWeightKg Float?
+  note        String?
+  createdBy   String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  @@index([facilityId])
+  @@index([windowStart])
+  @@index([status])
+  @@index([orgId])
+}
+
+// ============================================================
+// Phase 3 — Trade documents
+// ============================================================
+
+/// Canonical trade/transport document: BoL, packing list, invoice, CMR, CIM,
+/// air waybill. Issued by a party, destined to a party, carried on a leg.
+model TradeDocument {
+  id            String        @id @default(cuid())
+  ref           String
+  docType       String        // bol | packing_list | commercial_invoice | cmr | cim | awb | sea_waybill | certificate_of_origin
+  shipmentId    String?
+  shipment      Shipment?     @relation(fields: [shipmentId], references: [id])
+  issuerOrgId   String?
+  issuerOrg     Organization? @relation("DocIssuer", fields: [issuerOrgId], references: [id])
+  recipientOrgId String?
+  recipientOrg  Organization? @relation("DocRecipient", fields: [recipientOrgId], references: [id])
+  carrierOrgId  String?
+  carrierOrg    Organization? @relation("DocCarrier", fields: [carrierOrgId], references: [id])
+  // Document content lines: [{ description, hsCode, qty, weightKg, volumeM3, value, currency }]
+  lines         Json
+  // Totals (optional, for financial docs)
+  totalValue    Float?
+  currency      String        @default("INR")
+  incoterms     String?
+  originRef     String?
+  destinationRef String?
+  // Electronic signature / release trail
+  signedBy      String?
+  signedAt      DateTime?
+  released      Boolean       @default(false)
+  releasedAt    DateTime?
+  status        String        @default("issued") // draft | issued | signed | released | void
+  fileKey       String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  @@index([shipmentId])
+  @@index([docType])
+  @@index([issuerOrgId])
+  @@index([recipientOrgId])
+}
+
+/// An organization's KYB/business document (registration, tax, address proof).
+model OrganizationDocument {
+  id            String        @id @default(cuid())
+  orgId         String
+  org           Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  kind          String        // registration | tax | address | bank | trade_license
+  storageKey    String
+  mimeType      String?
+  size          Int?
+  status        String        @default("pending") // pending | verified | rejected
+  adminNote     String?
+  verifiedAt    DateTime?
+  verifiedBy    String?
+  createdAt     DateTime      @default(now())
+  @@index([orgId, kind])
+}
+
+// ============================================================
+// Phase 5 — EDI gateway
+// ============================================================
+
+/// A captured or emitted EDI message (X12 or EDIFACT) with its parsed segments
+/// and the canonical payload it maps to. Every message is stored verbatim so a
+/// partner's exact bytes are never lost.
+model EdiMessage {
+  id             String    @id @default(cuid())
+  orgId          String?
+  org            Organization? @relation(fields: [orgId], references: [id])
+  partnerOrgId   String?
+  partnerOrg     Organization? @relation("EdiPartner", fields: [partnerOrgId], references: [id])
+  direction      String    // inbound | outbound
+  format         String    // X12 | EDIFACT
+  documentType   String    // 850 (PO) | 856 (ASN) | 855 (PO Ack) | 997 (ack) | 204 (load tender) | IFTMIN (instruc) | DESADV (ASN) | ORDERS (PO)
+  // Functional/interchange identifiers from the envelope.
+  interchangeId  String?
+  controlNumber  String?
+  // Raw message bytes, the parsed segment tree, and the canonical JSON payload.
+  raw            String
+  segments       Json
+  payload        Json
+  // The entity this message maps to (shipment/order/trip) when a mapping applied.
+  entityType     String?
+  entityId       String?
+  status         String    @default("received") // received | mapped | failed | sent | acked
+  error          String?
+  mappingVersion Int       @default(1)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  @@index([orgId])
+  @@index([direction])
+  @@index([status])
+  @@index([entityType, entityId])
 }

@@ -258,8 +258,21 @@ export class AdminService {
 
   /** Broadcast a notification to a role (or all). */
   async broadcast(role: string | undefined, title: string, body: string, actor: User) {
-    const where = role && role !== 'all' ? { role: role as never } : undefined
-    const users = await this.prisma.user.findMany({ where, take: 1000 })
+    let users: Array<{ id: string }>
+    if (role && role !== 'all') {
+      if (['supplier', 'transporter', 'driver'].includes(role)) {
+        users = await this.prisma.user.findMany({ where: { role: role as never }, take: 1000 })
+      } else {
+        // Capability targets (forwarder/warehouse/carrier) reach enablement orgs
+        // that don't map to a UserRole — match the capabilities array instead.
+        users = await this.prisma.user.findMany({
+          where: { capabilities: { has: role } as never },
+          take: 1000,
+        })
+      }
+    } else {
+      users = await this.prisma.user.findMany({ take: 1000 })
+    }
     const notifications = await Promise.all(
       users.map((u) =>
         this.prisma.notification.create({
@@ -1112,6 +1125,26 @@ export class AdminService {
     return { deleted: true }
   }
 
+  /** Admin: carrier services (vessel/flight slots) for moderation oversight. */
+  async carrierServices(query?: { status?: string }) {
+    const services = await this.prisma.carrierService.findMany({
+      where: query?.status ? { status: query.status } : {},
+      include: { carrierOrg: { select: { id: true, name: true } }, lane: { select: { originRef: true, destinationRef: true, mode: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    })
+    return { services }
+  }
+
+  /** Admin moderation: cancel a carrier service (fraud/no-show/misbooking). */
+  async cancelCarrierService(serviceId: string, actor: User) {
+    const service = await this.prisma.carrierService.findUnique({ where: { id: serviceId } })
+    if (!service) throw new NotFoundException('Carrier service not found')
+    const updated = await this.prisma.carrierService.update({ where: { id: serviceId }, data: { status: 'cancelled' } })
+    await this.audit.log({ actorId: actor.id, action: 'carrier_service_cancel', resource: serviceId, after: { lane: `${service.originRef}→${service.destinationRef}` } })
+    return { service: updated }
+  }
+
   /** Admin: recent AI recommendations (marketplace intelligence). */
   async aiRecommendations() {
     const recommendations = await this.prisma.aiRecommendation.findMany({
@@ -1159,6 +1192,225 @@ export class AdminService {
       trend7d: { requests: recentRequests, quotes: recentQuotes },
       liquidityRatio: requests > 0 ? Math.round((quotes / requests) * 100) : 0,
     }
+  }
+
+  // ---------- Operations control tower ----------
+
+  /** Live ops triage: open exceptions, at-risk trips, dwell, dead letters. */
+  async opsTriage() {
+    const [openExceptions, atRiskTrips, dwellOps, deadOutbox, deadWebhooks, staleTrips, recentHealth] = await Promise.all([
+      // Open driver/supplier-reported exceptions.
+      this.prisma.tripException.findMany({
+        where: { status: 'open' },
+        include: { trip: { include: { load: { select: { pickupAddr: true, dropAddr: true } } } } },
+        orderBy: { createdAt: 'asc' },
+        take: 50,
+      }),
+      // Trips the trip-health agent flagged at_risk/critical (latest per trip).
+      this.atRiskTrips(),
+      // Warehouse ops currently inside the gate cycle — dwell = time since gate-in.
+      this.dwellOperations(),
+      // Dead-lettered outbox messages (never delivered).
+      this.prisma.outboxMessage.findMany({
+        where: { status: 'dead' },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      }),
+      // Dead-lettered webhook deliveries.
+      this.prisma.webhookDelivery.findMany({
+        where: { status: 'dead' },
+        include: { subscription: { include: { org: { select: { id: true, name: true } } } } },
+        orderBy: { updatedAt: 'desc' },
+        take: 20,
+      }),
+      // In-transit trips with no location evidence in 30+ min.
+      this.staleTrips(),
+      // Latest trip-health recommendations.
+      this.prisma.aiRecommendation.findMany({
+        where: { agent: 'trip-health' },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      }),
+    ])
+
+    const counts = {
+      openExceptions: openExceptions.length,
+      atRiskTrips: atRiskTrips.length,
+      dwellOps: dwellOps.length,
+      deadOutbox: await this.prisma.outboxMessage.count({ where: { status: 'dead' } }),
+      deadWebhooks: await this.prisma.webhookDelivery.count({ where: { status: 'dead' } }),
+      staleTrips: staleTrips.length,
+    }
+
+    return { counts, openExceptions, atRiskTrips, dwellOps, deadOutbox, deadWebhooks, staleTrips, recentHealth }
+  }
+
+  /** Latest trip-health recommendation per at-risk trip (score below watch). */
+  private async atRiskTrips() {
+    const recs = await this.prisma.aiRecommendation.findMany({
+      where: { agent: 'trip-health', status: 'proposed' },
+      orderBy: { createdAt: 'desc' },
+      take: 300,
+    })
+    const latest = new Map<string, (typeof recs)[number]>()
+    for (const r of recs) {
+      const key = r.entityId
+      if (!latest.has(key)) latest.set(key, r)
+    }
+    return [...latest.values()]
+      .filter((r) => (r.score ?? 1) < 0.55)
+      .map((r) => {
+        const out = r.output as { band?: string; etaMinutes?: number | null; progress?: number; flags?: Array<{ kind: string; severity: string; message: string }> }
+        return {
+          recommendationId: r.id,
+          tripId: r.entityId,
+          score: r.score,
+          band: out.band ?? 'unknown',
+          etaMinutes: out.etaMinutes ?? null,
+          progress: out.progress ?? 0,
+          flags: out.flags ?? [],
+          createdAt: r.createdAt,
+        }
+      })
+      .sort((a, b) => (a.score ?? 1) - (b.score ?? 1))
+      .slice(0, 50)
+  }
+
+  /** Warehouse ops inside the gate cycle, ranked by dwell duration. */
+  private async dwellOperations() {
+    const ops = await this.prisma.warehouseOperation.findMany({
+      where: { status: { in: ['gate_in', 'receive', 'put_away', 'stored', 'pick', 'stage', 'load'] } },
+      include: { facility: { select: { id: true, name: true, city: true } }, shipment: { select: { id: true, ref: true } } },
+      orderBy: { gateInAt: 'asc' },
+      take: 100,
+    })
+    return ops
+      .map((op) => {
+        const anchor = op.gateInAt ?? op.appointmentAt ?? op.createdAt
+        const dwellH = Math.max(0, Math.round(((Date.now() - anchor.getTime()) / 3_600_000) * 10) / 10)
+        return { id: op.id, ref: op.ref, status: op.status, facility: op.facility, shipmentRef: op.shipment?.ref ?? null, dwellHours: dwellH, anchor }
+      })
+      .sort((a, b) => b.dwellHours - a.dwellHours)
+      .slice(0, 20)
+  }
+
+  /** In-transit trips whose last location is 30+ min old (likely no-ping). */
+  private async staleTrips() {
+    const cutoff = new Date(Date.now() - 30 * 60 * 1000)
+    const trips = await this.prisma.trip.findMany({
+      where: { status: 'in_transit', startedAt: { not: null } },
+      include: { load: { select: { pickupAddr: true, dropAddr: true } }, locations: { orderBy: { recordedAt: 'desc' }, take: 1 } },
+      take: 200,
+    })
+    return trips
+      .filter((t) => !t.locations.length || t.locations[0]!.recordedAt < cutoff)
+      .map((t) => ({
+        tripId: t.id,
+        pickup: t.load.pickupAddr,
+        drop: t.load.dropAddr,
+        lastPingAt: t.locations[0]?.recordedAt ?? null,
+      }))
+      .slice(0, 50)
+  }
+
+  /** Ops: resolve an open trip exception with an audit trail. */
+  async resolveException(id: string, actor: User, note?: string) {
+    const exception = await this.prisma.tripException.findUnique({ where: { id } })
+    if (!exception) throw new NotFoundException('Exception not found')
+    if (exception.status === 'resolved') throw new BadRequestException('Exception already resolved')
+    const updated = await this.prisma.tripException.update({
+      where: { id },
+      data: { status: 'resolved', resolvedAt: new Date(), notes: note?.trim() || exception.notes },
+    })
+    await this.audit.log({
+      actorId: actor.id,
+      action: 'exception.resolve',
+      resource: `exception:${id}`,
+      before: { status: exception.status },
+      after: { status: 'resolved', note: note?.trim() ?? null },
+    })
+    // Notify the reporter that ops has acted on their report.
+    const reporter = await this.prisma.user.findUnique({ where: { id: exception.reporterId } })
+    if (reporter) {
+      await this.notifications.create({
+        userId: reporter.id,
+        type: 'exception_resolved',
+        title: 'Exception resolved by Wagon Ops',
+        body: note?.trim() || `${exception.title} has been marked resolved`,
+        data: { exceptionId: id, tripId: exception.tripId },
+        category: 'trips',
+      })
+    }
+    return { exception: updated }
+  }
+
+  /** Ops: nudge the transporter (and supplier) about a trip — a human-acknowledged
+   *  action with a preference-aware notification, not an automated state change. */
+  async nudgeTrip(tripId: string, actor: User, message: string) {
+    const trip = await this.prisma.trip.findUnique({ where: { id: tripId }, include: { load: true } })
+    if (!trip) throw new NotFoundException('Trip not found')
+    const msg = message?.trim()
+    if (!msg) throw new BadRequestException('Nudge message is required')
+    const [transporter, supplier] = await Promise.all([
+      this.prisma.transporter.findUnique({ where: { id: trip.transporterId }, include: { user: true } }),
+      this.prisma.supplier.findUnique({ where: { id: trip.load.supplierId }, include: { user: true } }),
+    ])
+    await this.audit.log({
+      actorId: actor.id,
+      action: 'trip.nudge',
+      resource: `trip:${tripId}`,
+      after: { message: msg, notified: [transporter?.user.id, supplier?.user.id].filter(Boolean) },
+    })
+    const notify = async (user?: { id: string } | null) => {
+      if (!user) return
+      await this.notifications.create({
+        userId: user.id,
+        type: 'ops_nudge',
+        title: 'Wagon Ops needs your attention',
+        body: msg,
+        data: { tripId, loadId: trip.loadId },
+        category: 'trips',
+      })
+    }
+    await Promise.all([notify(transporter?.user), notify(supplier?.user)])
+    return { notified: [transporter?.user.id, supplier?.user.id].filter(Boolean).length }
+  }
+
+  /** Ops: live position + GPS history for a trip (admin bypasses participant scoping). */
+  async tripTracking(tripId: string) {
+    const trip = await this.prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { load: { select: { pickupAddr: true, dropAddr: true, pickupLat: true, pickupLng: true, dropLat: true, dropLng: true } } },
+    })
+    if (!trip) throw new NotFoundException('Trip not found')
+    const [latest, history] = await Promise.all([
+      this.prisma.tripLocation.findFirst({ where: { tripId }, orderBy: { recordedAt: 'desc' } }),
+      this.prisma.tripLocation.findMany({ where: { tripId }, orderBy: { recordedAt: 'asc' }, take: 500 }),
+    ])
+    return { trip, latest, history }
+  }
+
+  /** Admin recovery: reset a dead/failed outbox message back to pending. */
+  async retryOutbox(id: string, actor: User) {
+    const msg = await this.prisma.outboxMessage.findUnique({ where: { id } })
+    if (!msg) throw new NotFoundException('Outbox message not found')
+    if (!['dead', 'failed'].includes(msg.status)) throw new BadRequestException('Only dead/failed messages can be retried')
+    const updated = await this.prisma.outboxMessage.update({
+      where: { id },
+      data: { status: 'pending', attempts: 0, lastError: null, nextRetryAt: null },
+    })
+    await this.audit.log({ actorId: actor.id, action: 'outbox_retry', resource: id, before: { status: msg.status }, after: { status: 'pending' } })
+    return { message: updated }
+  }
+
+  /** Admin recovery: bulk-retry all dead outbox messages. */
+  async retryAllDeadOutbox(actor: User) {
+    const res = await this.prisma.outboxMessage.updateMany({
+      where: { status: 'dead' },
+      data: { status: 'pending', attempts: 0, lastError: null, nextRetryAt: null },
+    })
+    await this.audit.log({ actorId: actor.id, action: 'outbox_retry_all', resource: 'outbox', after: { count: res.count } })
+    return { retried: res.count }
   }
 
   /** Mirror an admin load-status change onto the canonical Shipment (parity with the projector). */
