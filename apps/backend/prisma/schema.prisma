@@ -301,7 +301,28 @@ model Truck {
   odometerKm    Float?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+  maintenance  TruckMaintenance[]
   @@index([transporterId])
+}
+
+/// A fleet maintenance record: scheduled service, repair, inspection or part
+/// replacement with odometer, cost and next-due tracking per truck.
+model TruckMaintenance {
+  id           String   @id @default(cuid())
+  truckId      String
+  truck        Truck    @relation(fields: [truckId], references: [id], onDelete: Cascade)
+  kind         String   // service | repair | inspection | tyre | battery
+  title        String
+  odometerKm   Float?
+  cost         Float?
+  performedAt  DateTime @default(now())
+  nextServiceKm Float?
+  notes        String?
+  documents    String[]
+  createdBy    String?
+  createdAt    DateTime @default(now())
+  @@index([truckId])
+  @@index([performedAt])
 }
 
 model TruckModel {

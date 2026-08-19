@@ -37,6 +37,12 @@ export function TruckDetailScreen({ truckId, onBack }: Props) {
   const [fitness, setFitness] = useState('')
   const [pollution, setPollution] = useState('')
   const [odometer, setOdometer] = useState('')
+  const [maintenance, setMaintenance] = useState<Array<{ id: string; kind: string; title: string; cost?: number | null; odometerKm?: number | null; performedAt: string }>>([])
+  const [showMaint, setShowMaint] = useState(false)
+  const [mTitle, setMTitle] = useState('')
+  const [mKind, setMKind] = useState('service')
+  const [mCost, setMCost] = useState('')
+  const [mNextKm, setMNextKm] = useState('')
 
   const fetch = () => {
     api.get<{ trucks: TruckDetail[] }>('/trucks').then((res) => {
@@ -51,6 +57,8 @@ export function TruckDetailScreen({ truckId, onBack }: Props) {
         setOdometer(t.odometerKm ? String(t.odometerKm) : '')
       }
     }).catch(() => {}).finally(() => setLoading(false))
+    api.get<{ maintenance: Array<{ id: string; kind: string; title: string; cost?: number | null; odometerKm?: number | null; performedAt: string }> }>(`/trucks/${truckId}/maintenance`)
+      .then((r) => setMaintenance(r.maintenance)).catch(() => {})
   }
 
   useEffect(() => { fetch() }, [truckId])
@@ -73,6 +81,22 @@ export function TruckDetailScreen({ truckId, onBack }: Props) {
       Alert.alert(t('ui.saved'), `${truck?.truckNo} updated`)
       fetch()
     } catch (e) { Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed') }
+  }
+
+  const logMaintenance = async () => {
+    if (!mTitle.trim()) { Alert.alert(t('ui.required'), 'Enter a maintenance title'); return }
+    try {
+      await api.post(`/trucks/${truckId}/maintenance`, {
+        kind: mKind,
+        title: mTitle,
+        cost: mCost ? Number(mCost) : undefined,
+        odometerKm: odometer ? Number(odometer) : undefined,
+        nextServiceKm: mNextKm ? Number(mNextKm) : undefined,
+      })
+      Alert.alert(t('ui.saved'), 'Maintenance logged')
+      setMTitle(''); setMCost(''); setMNextKm(''); setShowMaint(false)
+      fetch()
+    } catch (e) { Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to log maintenance') }
   }
 
   if (loading) {
@@ -114,7 +138,42 @@ export function TruckDetailScreen({ truckId, onBack }: Props) {
           {truck.nextServiceKm != null && (
             <Text style={{ color: theme.mutedForeground, fontSize: 13 }}>Next service at {truck.nextServiceKm} km</Text>
           )}
+          <Pressable onPress={() => setShowMaint((s) => !s)} style={{ marginTop: spacing.sm }}>
+            <Text style={{ color: theme.primary, fontSize: 13, fontWeight: '700' }}>{showMaint ? 'Cancel' : '+ Log maintenance'}</Text>
+          </Pressable>
+          {showMaint && (
+            <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
+              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                {(['service', 'repair', 'inspection', 'tyre'] as string[]).map((k) => (
+                  <Pressable key={k} onPress={() => setMKind(k)} style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.sm, borderWidth: 1, borderColor: mKind === k ? theme.primary : theme.border, backgroundColor: mKind === k ? theme.primary + '22' : 'transparent' }}>
+                    <Text style={{ color: mKind === k ? theme.primary : theme.mutedForeground, fontSize: 12, fontWeight: '700', textTransform: 'capitalize' }}>{k}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <TextInput style={inputStyle} value={mTitle} onChangeText={setMTitle} placeholder="Title (e.g. Oil change)" placeholderTextColor={theme.mutedForeground + '88'} />
+              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                <View style={{ flex: 1 }}><TextInput style={inputStyle} value={mCost} onChangeText={setMCost} placeholder="Cost (₹)" keyboardType="number-pad" placeholderTextColor={theme.mutedForeground + '88'} /></View>
+                <View style={{ flex: 1 }}><TextInput style={inputStyle} value={mNextKm} onChangeText={setMNextKm} placeholder="Next service km" keyboardType="number-pad" placeholderTextColor={theme.mutedForeground + '88'} /></View>
+              </View>
+              <Button label="Log maintenance" onPress={logMaintenance} size="md" />
+            </View>
+          )}
         </View>
+
+        {maintenance.length > 0 && (
+          <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Text style={{ color: theme.mutedForeground, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: spacing.sm }}>Maintenance history</Text>
+            {maintenance.map((m) => (
+              <View key={m.id} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: theme.foreground, fontSize: 14, fontWeight: '700', textTransform: 'capitalize' }}>{m.kind} · {m.title}</Text>
+                  <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>{new Date(m.performedAt).toLocaleDateString()}{m.odometerKm ? ` · ${m.odometerKm} km` : ''}</Text>
+                </View>
+                <Text style={{ color: theme.foreground, fontSize: 13, fontWeight: '700' }}>{m.cost != null ? `₹${m.cost}` : ''}</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         <Button label={t('truckDetail.save')} onPress={save} />
       </ScrollView>

@@ -101,6 +101,7 @@ describe('Enablement platform (e2e)', () => {
       prisma.tradeDocument.deleteMany(),
       prisma.organizationDocument.deleteMany(),
       prisma.ediMessage.deleteMany(),
+      prisma.truckMaintenance.deleteMany(),
     ])
     // Keep the supplier's forwarder org for order ownership assertions.
     supToken = await verify(SUP, await requestOtp(SUP))
@@ -1405,6 +1406,37 @@ describe('Enablement platform (e2e)', () => {
       const recheck = await api(supToken).get('/notifications/preferences').expect(200)
       expect(recheck.body.preferences.promo).toBe(true)
       expect(recheck.body.preferences.market).toBe(false)
+    })
+  })
+
+  describe('fleet maintenance (e2e)', () => {
+    let truckId: string
+
+    it('logs maintenance and reports service-due across the fleet', async () => {
+      const model = (await api(trToken).get('/reference').expect(200)).body.models.find((m: { type: string }) => m.type === 'container')
+      const truck = await api(trToken).post('/trucks', { truckNo: `AP55MNT${Date.now().toString().slice(-4)}`, type: 'container', modelId: model.id, origin: 'Hyderabad', odometerKm: 120000, nextServiceKm: 150000 }).expect(201)
+      truckId = truck.body.truck.id
+
+      // Log a service with a new next-service odometer.
+      const logged = await api(trToken).post(`/trucks/${truckId}/maintenance`, {
+        kind: 'service', title: 'Full service', cost: 18000, odometerKm: 150000, nextServiceKm: 180000,
+      }).expect(201)
+      expect(logged.body.maintenance.kind).toBe('service')
+      expect(logged.body.maintenance.cost).toBe(18000)
+
+      // History reflects the record.
+      const history = await api(trToken).get(`/trucks/${truckId}/maintenance`).expect(200)
+      expect(history.body.maintenance.length).toBeGreaterThanOrEqual(1)
+      expect(history.body.maintenance[0].title).toBe('Full service')
+
+      // An invalid kind is rejected.
+      await api(trToken).post(`/trucks/${truckId}/maintenance`, { kind: 'paintjob', title: 'X' }).expect(400)
+
+      // Maintenance-due overview returns the fleet shape.
+      const due = await api(trToken).get('/trucks/maintenance/due').expect(200)
+      expect(Array.isArray(due.body.due)).toBe(true)
+      expect(typeof due.body.totalMaintenanceCost).toBe('number')
+      expect(due.body.totalMaintenanceCost).toBeGreaterThanOrEqual(18000)
     })
   })
 })

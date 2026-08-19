@@ -57,6 +57,10 @@ export class TrucksService {
           }
         }
       }
+      // Service-due alert: next service odometer reached or within 1000 km.
+      const svc = await this.serviceDue(t)
+      if (svc?.due) alerts.push({ truckId: t.id, truckNo: t.truckNo, kind: 'service-due', daysLeft: -1, critical: true })
+      else if (svc?.dueSoon) alerts.push({ truckId: t.id, truckNo: t.truckNo, kind: 'service-due', daysLeft: Math.ceil((svc.kmLeft ?? 0) / 100), critical: false })
     }
 
     return {
@@ -185,6 +189,98 @@ export class TrucksService {
     // Pause/expire the truck_capacity market listing so no one books removed capacity.
     await this.market.publishTruck({ ...truck, activeStatus: false } as never, user).catch(() => {})
     return { success: true }
+  }
+
+  private async requireTruck(user: User, truckId: string) {
+    const transporterId = await this.transporterId(user)
+    if (!transporterId) throw new BadRequestException('Transporter profile not found')
+    const truck = await this.prisma.truck.findFirst({ where: { id: truckId, transporterId } })
+    if (!truck) throw new NotFoundException('Truck not found')
+    return truck
+  }
+
+  private async serviceDue(truck: { id: string; odometerKm: number | null; nextServiceKm: number | null }) {
+    if (!truck.nextServiceKm) return null
+    const current = truck.odometerKm ?? 0
+    const diff = truck.nextServiceKm - current
+    if (diff <= 0) return { due: true, kmOver: Math.abs(diff), nextServiceKm: truck.nextServiceKm }
+    if (diff <= 1000) return { dueSoon: true, kmLeft: diff, nextServiceKm: truck.nextServiceKm }
+    return null
+  }
+
+  /** Log a maintenance/repair event for a truck and update its service odometer. */
+  async logMaintenance(input: {
+    truckId: string
+    kind: string
+    title: string
+    odometerKm?: number
+    cost?: number
+    performedAt?: string
+    nextServiceKm?: number
+    notes?: string
+    documents?: string[]
+  }, user: User) {
+    await this.requireTruck(user, input.truckId)
+    if (!input.title?.trim()) throw new BadRequestException('Maintenance title is required')
+    if (!['service', 'repair', 'inspection', 'tyre', 'battery'].includes(input.kind)) {
+      throw new BadRequestException('Invalid maintenance kind')
+    }
+    if (input.cost != null && input.cost < 0) throw new BadRequestException('Cost cannot be negative')
+
+    const record = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.truckMaintenance.create({
+        data: {
+          truckId: input.truckId,
+          kind: input.kind,
+          title: input.title.trim(),
+          odometerKm: input.odometerKm,
+          cost: input.cost,
+          performedAt: input.performedAt ? new Date(input.performedAt) : undefined,
+          nextServiceKm: input.nextServiceKm,
+          notes: input.notes,
+          documents: input.documents ?? [],
+          createdBy: user.id,
+        },
+      })
+      // Reflect the latest odometer and next-service odometer on the truck.
+      const data: Record<string, unknown> = {}
+      if (input.odometerKm != null) data.odometerKm = input.odometerKm
+      if (input.kind === 'service' && input.nextServiceKm != null) data.nextServiceKm = input.nextServiceKm
+      if (input.kind === 'service') data.lastServiceAt = new Date()
+      if (Object.keys(data).length) await tx.truck.update({ where: { id: input.truckId }, data })
+      return created
+    })
+    return { maintenance: record }
+  }
+
+  /** Maintenance history for a truck (most recent first). */
+  async maintenanceHistory(truckId: string, user: User) {
+    await this.requireTruck(user, truckId)
+    const records = await this.prisma.truckMaintenance.findMany({
+      where: { truckId },
+      orderBy: { performedAt: 'desc' },
+      take: 100,
+    })
+    return { maintenance: records }
+  }
+
+  /** Maintenance-due overview across the transporter's fleet. */
+  async maintenanceDue(user: User) {
+    const transporterId = await this.transporterId(user)
+    if (!transporterId) return { due: [], dueSoon: [], totalMaintenanceCost: 0 }
+    const trucks = await this.prisma.truck.findMany({
+      where: { transporterId },
+      select: { id: true, truckNo: true, odometerKm: true, nextServiceKm: true },
+    })
+    const due: Array<Record<string, unknown>> = []
+    const dueSoon: Array<Record<string, unknown>> = []
+    for (const t of trucks) {
+      const status = await this.serviceDue(t)
+      if (status?.due) due.push({ truckId: t.id, truckNo: t.truckNo, ...status })
+      else if (status?.dueSoon) dueSoon.push({ truckId: t.id, truckNo: t.truckNo, ...status })
+    }
+    const costAgg = await this.prisma.truckMaintenance.aggregate({ where: { truck: { transporterId } }, _sum: { cost: true } })
+    return { due, dueSoon, totalMaintenanceCost: costAgg._sum.cost ?? 0 }
   }
 }
 

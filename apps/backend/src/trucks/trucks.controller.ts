@@ -27,6 +27,21 @@ export class TrucksController {
     return this.trucks.fleetOverview(user)
   }
 
+  @Get('maintenance/due')
+  maintenanceDue(@CurrentUser() user: User) {
+    return this.trucks.maintenanceDue(user)
+  }
+
+  @Get(':id/maintenance')
+  maintenanceHistory(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.trucks.maintenanceHistory(id, user)
+  }
+
+  @Post(':id/maintenance')
+  logMaintenance(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentUser() user: User) {
+    return this.trucks.logMaintenance({ ...(body as object), truckId: id } as never, user)
+  }
+
   @Post()
   create(@Body() body: CreateTruckDto, @CurrentUser() user: User) {
     return this.trucks.create(body, user)
