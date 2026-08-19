@@ -24,8 +24,8 @@ export class AnalyticsService {
   /** Network-wide operational snapshot (admin). */
   async networkOps() {
     const since7 = this.sinceDays(7)
-    const [trips, loads, containers, appointments, invoices, settlements, exceptions, edi, legs] = await Promise.all([
-      this.prisma.trip.findMany({ select: { status: true, createdAt: true, startedAt: true, deliveredAt: true } }),
+    const [trips, loads, containers, appointments, invoices, settlements, exceptions, edi, legs, warehouseOps, forwardOrders, carrierBookings, returnOrders, handovers, marketRequests, quotes] = await Promise.all([
+      this.prisma.trip.findMany({ select: { status: true, createdAt: true, startedAt: true, deliveredAt: true, loadId: true } }),
       this.prisma.load.findMany({ select: { status: true, createdAt: true } }),
       this.prisma.container.findMany({ select: { status: true } }),
       this.prisma.scheduledAppointment.findMany({ select: { status: true, gateInAt: true, gateOutAt: true } }),
@@ -34,6 +34,13 @@ export class AnalyticsService {
       this.prisma.aiRecommendation.findMany({ where: { agent: 'exception', status: 'proposed' }, select: { id: true } }),
       this.prisma.ediMessage.findMany({ where: { createdAt: { gte: since7 } }, select: { id: true, direction: true } }),
       this.prisma.shipmentLeg.findMany({ select: { mode: true } }),
+      this.prisma.warehouseOperation.findMany({ select: { status: true, createdAt: true } }),
+      this.prisma.forwardOrder.findMany({ select: { status: true, createdAt: true } }),
+      this.prisma.carrierBooking.findMany({ select: { status: true, createdAt: true } }),
+      this.prisma.returnOrder.findMany({ select: { status: true, createdAt: true } }),
+      this.prisma.handover.findMany({ select: { status: true, createdAt: true } }),
+      this.prisma.marketRequest.findMany({ select: { status: true, createdAt: true } }),
+      this.prisma.marketQuote.findMany({ select: { status: true, createdAt: true } }),
     ])
 
     // Trips: total, in-flight, delivered; on-time = delivered within load window (approx: deliveredAt <= createdAt + 72h fallback).
@@ -76,6 +83,42 @@ export class AnalyticsService {
     const modeMix: Record<string, number> = {}
     for (const l of legs) modeMix[l.mode] = (modeMix[l.mode] ?? 0) + 1
 
+    // Cross-role task throughput: completed/closed units per capability axis.
+    const countBy = (rows: Array<{ status: string; createdAt?: Date }>, done: string[]) => ({
+      total: rows.length,
+      done: rows.filter((r) => done.includes(r.status)).length,
+      open: rows.length - rows.filter((r) => done.includes(r.status)).length,
+      last7Days: rows.filter((r) => (r.createdAt ? r.createdAt >= since7 : false)).length,
+    })
+    const throughput = {
+      supplier: countBy(loads, ['completed']),
+      transporter: countBy(trips, ['delivered', 'completed']),
+      driver: countBy(trips, ['delivered', 'completed']),
+      warehouse: countBy(warehouseOps, ['done']),
+      forwarder: countBy(forwardOrders, ['closed', 'delivered']),
+      carrier: countBy(carrierBookings, ['confirmed']),
+      returns: countBy(returnOrders, ['closed']),
+      handovers: countBy(handovers, ['completed']),
+    }
+
+    // Load funnel: posted → quoted → booked → delivered (conversion per step).
+    const loadsPosted = loads.length
+    const loadsQuoted = quotes.filter((q) => ['submitted', 'accepted'].includes(q.status)).length
+    const loadsBooked = trips.length
+    const loadsDelivered = deliveredTrips
+    const pct = (part: number, whole: number) => (whole ? Math.round((part / whole) * 1000) / 10 : 0)
+    const funnel = {
+      posted: loadsPosted,
+      quoted: Math.min(loadsQuoted, loadsPosted),
+      booked: Math.min(loadsBooked, loadsPosted),
+      delivered: Math.min(loadsDelivered, loadsPosted),
+      quoteRate: pct(loadsQuoted, loadsPosted),
+      bookingRate: pct(loadsBooked, loadsPosted),
+      deliveryRate: pct(loadsDelivered, loadsPosted),
+      quoteToBook: pct(loadsBooked, loadsQuoted),
+      bookToDeliver: pct(loadsDelivered, loadsBooked),
+    }
+
     return {
       period: { days: 7 },
       trips: { total: totalTrips, inTransit: inTransitTrips, delivered: deliveredTrips, cancelled: cancelledTrips, onTimeRate },
@@ -86,6 +129,9 @@ export class AnalyticsService {
       exceptions: { open: exceptions.length },
       edi: { last7Days: edi.length, inbound: edi.filter((e) => e.direction === 'inbound').length, outbound: edi.filter((e) => e.direction === 'outbound').length },
       modeMix,
+      throughput,
+      funnel,
+      market: { requests: marketRequests.length, quotes: quotes.length },
       loadsLast7Days: loads.filter((l) => l.createdAt >= since7).length,
       tripsLast7Days: trips.filter((t) => t.createdAt >= since7).length,
     }
