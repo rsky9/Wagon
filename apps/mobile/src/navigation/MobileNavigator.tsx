@@ -202,6 +202,8 @@ function navigateToUrl(nav: any, url: string, item?: { data?: { loadId?: string;
     nav.navigate('Kyc')
   } else if (url.endsWith('search')) {
     nav.navigate('Search', {})
+  } else if (url.endsWith('tickets')) {
+    nav.navigate('Tickets')
   } else if (url.endsWith('notifications')) {
     nav.navigate('Notifications')
   }
@@ -218,6 +220,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       Kyc: 'kyc',
       Notifications: 'notifications',
       Search: 'search',
+      Tickets: 'tickets',
       UnifiedTabs: {
         screens: {
           Marketplace: 'loads',

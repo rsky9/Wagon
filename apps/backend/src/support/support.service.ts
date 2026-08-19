@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { AuditService } from '../audit/audit.service'
+import { NotificationsService } from '../notifications/notifications.service'
 import type { User } from '@prisma/client'
 
 const CATEGORIES = ['general', 'payment', 'kyc', 'load', 'trip', 'technical']
@@ -11,6 +12,7 @@ export class SupportService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private isAdmin(user: User) {
@@ -87,6 +89,27 @@ export class SupportService {
       await this.prisma.supportTicket.update({ where: { id }, data: { status: 'open' } })
     }
     await this.audit.log({ actorId: user.id, action: 'ticket.message', resource: id, after: { authorType } })
+
+    // Notify the other side of the conversation about the new message.
+    if (authorType === 'admin' && ticket.userId !== user.id) {
+      await this.notifications.create({
+        userId: ticket.userId,
+        type: 'ticket_reply',
+        title: `Update on "${ticket.subject}"`,
+        body: `Support team: ${body.trim()}`,
+        data: { ticketId: id },
+        category: 'system',
+      })
+    } else if (authorType === 'user' && ticket.assignedToId && ticket.assignedToId !== user.id) {
+      await this.notifications.create({
+        userId: ticket.assignedToId,
+        type: 'ticket_reply',
+        title: `New reply on "${ticket.subject}"`,
+        body: `User replied: ${body.trim()}`,
+        data: { ticketId: id },
+        category: 'system',
+      })
+    }
     return { message }
   }
 
@@ -116,6 +139,16 @@ export class SupportService {
       include: { assignedTo: { select: { id: true, mobile: true, name: true } } },
     })
     await this.audit.log({ actorId: user.id, action: 'ticket.assign', resource: id, after: { assignedToId } })
+    if (assignedToId && assignedToId !== user.id) {
+      await this.notifications.create({
+        userId: assignedToId,
+        type: 'ticket_assigned',
+        title: `Ticket assigned to you: "${updated.subject}"`,
+        body: 'You are now the owner of this support ticket',
+        data: { ticketId: id },
+        category: 'system',
+      })
+    }
     return { ticket: updated }
   }
 
@@ -132,12 +165,22 @@ export class SupportService {
   async resolve(id: string, resolution: string, user: User) {
     if (!this.isAdmin(user)) throw new ForbiddenException('Admin only')
     if (!resolution?.trim()) throw new BadRequestException('Resolution note is required')
-    await this.requireAccess(user, id)
+    const ticket = await this.requireAccess(user, id)
     const updated = await this.prisma.supportTicket.update({
       where: { id },
       data: { status: 'closed', resolution: resolution.trim() },
     })
     await this.audit.log({ actorId: user.id, action: 'ticket.resolve', resource: id, after: { resolution } })
+    if (ticket.userId !== user.id) {
+      await this.notifications.create({
+        userId: ticket.userId,
+        type: 'ticket_resolved',
+        title: `Ticket resolved: "${ticket.subject}"`,
+        body: resolution.trim(),
+        data: { ticketId: id },
+        category: 'system',
+      })
+    }
     return { ticket: updated }
   }
 

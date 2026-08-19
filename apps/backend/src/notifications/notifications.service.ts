@@ -69,6 +69,7 @@ export class NotificationsService {
     if (data?.tripId) return `wagon://trip/${data.tripId}`
     if (data?.loadId) return `wagon://load/${data.loadId}`
     if (data?.shipmentId) return `wagon://shipment/${data.shipmentId}`
+    if (data?.ticketId) return `wagon://tickets`
     switch (type) {
       case 'lane_match':
       case 'order_accepted':

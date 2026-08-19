@@ -924,6 +924,17 @@ describe('Wagon API (e2e)', () => {
       expect(resolved.body.ticket.status).toBe('closed')
       expect(resolved.body.ticket.resolution).toBe('Settled via refund')
 
+      // Owner was notified of the admin reply and the resolution.
+      const ownerNotifs = await request(app.getHttpServer())
+        .get('/api/v1/notifications?limit=50')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      const ownerTicketTypes = ownerNotifs.body.items
+        .filter((n: { data?: { ticketId?: string } }) => n.data?.ticketId === ticketId)
+        .map((n: { type: string }) => n.type)
+      expect(ownerTicketTypes).toContain('ticket_reply')
+      expect(ownerTicketTypes).toContain('ticket_resolved')
+
       // Full thread preserved (2 user + 1 admin).
       const finalThread = await request(app.getHttpServer())
         .get(`/api/v1/support/tickets/${ticketId}`)
