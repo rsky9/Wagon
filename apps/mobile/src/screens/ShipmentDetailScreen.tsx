@@ -264,6 +264,37 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
     actions.push({ label: '🚢 Book carrier', fn: bookCarrier })
   }
 
+  // AI intelligence agents (informational, human-decides; results surfaced as alerts).
+  const aiRisk = () => {
+    action('risk', () => api.post(`/ai/risk/${shipmentId}`), 'Risk assessment complete')
+  }
+  const aiEta = () => {
+    api.post<{ etaHours?: number; predictedAt?: string; output?: { etaHours?: number; predictedAt?: string; mode?: string; distanceKm?: number | null } }>(`/ai/eta/${shipmentId}`)
+      .then((r) => {
+        const out = r.output ?? {}
+        const hours = out.etaHours ?? r.etaHours
+        const at = out.predictedAt ?? r.predictedAt
+        Alert.alert('AI ETA', hours != null ? `Predicted ~${hours} hrs${at ? ` · arrives ${new Date(at).toLocaleString()}` : ''}` : 'No ETA predicted')
+      })
+      .catch((e) => Alert.alert('AI ETA', e instanceof Error ? e.message : 'Failed'))
+  }
+  const aiDraftDoc = () => {
+    const docTypes = ['packing_list', 'commercial_invoice', 'bol'] as const
+    showActionSheet({
+      title: 'Draft a document',
+      message: 'AI drafts from shipment data (review before issue)',
+      options: docTypes.map((dt) => ({ text: dt.replace(/_/g, ' '), onPress: () => draftDoc(dt) })),
+    })
+  }
+  const draftDoc = (docType: string) => {
+    action('draft', () => api.post('/ai/draft-document', { shipmentId, docType }), `Draft ${docType.replace(/_/g, ' ')} ready`)
+  }
+  if (caps.some((c) => ['supplier', 'forwarder', 'warehouse', 'transporter'].includes(c))) {
+    actions.push({ label: '🛡️ Risk', fn: aiRisk })
+    actions.push({ label: '⏱️ AI ETA', fn: aiEta })
+    actions.push({ label: '📄 Draft doc', fn: aiDraftDoc })
+  }
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>

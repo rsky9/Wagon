@@ -41,6 +41,7 @@ export function LoadDetailScreen({ load, onBack, onAccepted, onOpenBid }: Props)
   const caps = session?.profile.capabilities?.length ? session.profile.capabilities : [session?.profile.role ?? '']
   const { stepUp } = useStepUp()
   const canHaul = caps.includes('transporter')
+  const canSupply = caps.includes('supplier') || caps.includes('admin')
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
   const accepted = load.status !== 'posted'
@@ -89,6 +90,19 @@ export function LoadDetailScreen({ load, onBack, onAccepted, onOpenBid }: Props)
     hour: 'numeric',
     minute: '2-digit',
   })
+
+  const matchTransporters = () => {
+    setLoading(true)
+    api.post<{ matches: Array<{ userId: string; name?: string | null; rating?: number | null; score?: number }> }>(`/ai/match/${load.id}`)
+      .then((r) => {
+        const matches = r.matches ?? []
+        if (matches.length === 0) { Alert.alert('AI Match', 'No verified transporters found for this load'); return }
+        const lines = matches.map((m) => `${m.name ?? 'Transporter'} · ★${m.rating?.toFixed(1) ?? '—'} · ${m.score != null ? `${Math.round(m.score * 100)}% match` : ''}`).join('\n')
+        Alert.alert('AI Matched transporters', lines)
+      })
+      .catch((e) => Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Match failed'))
+      .finally(() => setLoading(false))
+  }
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
@@ -144,6 +158,15 @@ export function LoadDetailScreen({ load, onBack, onAccepted, onOpenBid }: Props)
         >
           <Text style={{ color: saved ? theme.primary : theme.mutedForeground, fontWeight: '700', fontSize: 14 }}>{saved ? '♥ Saved' : '♡ Save'}</Text>
         </Pressable>
+        {canSupply && !accepted && (
+          <Pressable
+            style={[styles.saveBtn, { borderColor: theme.primary + '66' }]}
+            onPress={matchTransporters}
+            disabled={loading}
+          >
+            <Text style={{ color: theme.primary, fontWeight: '700', fontSize: 14 }}>🤖 Match</Text>
+          </Pressable>
+        )}
         <Button
           label={accepted ? 'Accepted' : load.commercialModel === 'open_bidding' ? 'Submit bid' : 'Accept Load'}
           onPress={load.commercialModel === 'open_bidding' ? openBid : accept}
