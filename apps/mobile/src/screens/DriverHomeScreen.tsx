@@ -7,6 +7,7 @@ import { api } from '../config'
 import { useI18n } from '@wagon/i18n'
 import { subscribeDataChanged } from '../lib/dataBus'
 import { LocationShare } from '../components/LocationShare'
+import { prompt } from '../components/Prompt'
 
 interface DriverTrip {
   id: string
@@ -55,6 +56,7 @@ export function DriverHomeScreen({ onOpenTrip }: Props) {
   const [transporterMobile, setTransporterMobile] = useState('')
   const [joining, setJoining] = useState(false)
   const [showLedger, setShowLedger] = useState(false)
+  const [payouts, setPayouts] = useState<{ bankAdded: boolean; due: number; paid: number; trips: Array<{ tripId: string; pickup: string; drop: string; earned: number; paid: number; deliveredAt: string | null }> } | null>(null)
 
   const fetch = useCallback(() => {
     setMissingProfile(false)
@@ -71,8 +73,27 @@ export function DriverHomeScreen({ onOpenTrip }: Props) {
         .finally(() => setLoading(false)),
       api.get<DriverEarnings>('/driver/earnings').then(setEarnings).catch(() => {}),
       api.get<DriverLedger>('/driver/ledger').then(setLedger).catch(() => {}),
+      api.get<typeof payouts>('/driver/payouts').then(setPayouts).catch(() => {}),
     ])
   }, [])
+
+  const setBank = async () => {
+    const acct = await prompt({ title: 'Bank account number', placeholder: 'Enter account number', keyboardType: 'numeric' })
+    if (!acct?.trim()) return
+    const ifsc = await prompt({ title: 'IFSC code', placeholder: 'e.g. HDFC0001234' })
+    if (!ifsc?.trim()) return
+    api.patch('/driver/bank', { bankAccount: acct.trim(), ifsc: ifsc.trim() })
+      .then(() => Alert.alert('Bank added', 'Your payout bank is set'))
+      .catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save bank'))
+      .finally(fetch)
+  }
+
+  const releaseDriverPayout = (tripId: string) => {
+    api.post<{ alreadyPaid?: boolean }>(`/driver/trips/${tripId}/payout`)
+      .then((r) => Alert.alert(r.alreadyPaid ? 'Already paid' : 'Payout sent', r.alreadyPaid ? 'This trip was already paid out' : 'Your payout has been released to your bank'))
+      .catch((e) => Alert.alert('Payout', e instanceof Error ? e.message : 'Payout failed'))
+      .finally(fetch)
+  }
 
   useEffect(() => { fetch() }, [fetch])
   useEffect(() => subscribeDataChanged('trips', () => fetch()), [fetch])
@@ -196,6 +217,46 @@ export function DriverHomeScreen({ onOpenTrip }: Props) {
         </View>
       )}
 
+      {payouts && (
+        <View style={[styles.ledgerBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={[styles.ledgerTitle, { color: theme.foreground }]}>Payouts</Text>
+            <Pressable onPress={setBank} hitSlop={8}>
+              <Text style={{ color: theme.primary, fontWeight: '800', fontSize: 13 }}>
+                {payouts.bankAdded ? 'Change bank' : 'Add bank'}
+              </Text>
+            </Pressable>
+          </View>
+          <View style={styles.ledgerRow}>
+            <Text style={[styles.ledgerMeta, { color: theme.mutedForeground }]}>Pending</Text>
+            <Text style={[styles.ledgerEarned, { color: payouts.due > 0 ? theme.warning : theme.success }]}>{formatINR(payouts.due)}</Text>
+          </View>
+          <View style={styles.ledgerRow}>
+            <Text style={[styles.ledgerMeta, { color: theme.mutedForeground }]}>Paid out</Text>
+            <Text style={[styles.ledgerEarned, { color: theme.success }]}>{formatINR(payouts.paid)}</Text>
+          </View>
+          {payouts.trips.length > 0 && (
+            <View style={{ marginTop: spacing.sm, gap: spacing.sm }}>
+              {payouts.trips.map((tp) => (
+                <View key={tp.tripId} style={[styles.ledgerRow, { borderTopWidth: 1, borderTopColor: theme.border, paddingTop: spacing.sm }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.ledgerRoute, { color: theme.foreground }]} numberOfLines={1}>{tp.pickup} → {tp.drop}</Text>
+                    <Text style={[styles.ledgerMeta, { color: theme.mutedForeground }]}>{formatINR(tp.earned)} earned</Text>
+                  </View>
+                  {tp.paid > 0 ? (
+                    <Text style={{ color: theme.success, fontSize: 13, fontWeight: '800' }}>✓ Paid</Text>
+                  ) : (
+                    <Pressable style={[styles.payoutBtn, { backgroundColor: payouts.bankAdded ? theme.primary : theme.muted }]} onPress={() => payouts.bankAdded && releaseDriverPayout(tp.tripId)}>
+                      <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>{payouts.bankAdded ? 'Pay out' : 'Add bank'}</Text>
+                    </Pressable>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
+
       <FlatList
         data={data?.todayTrips ?? []}
         keyExtractor={(t) => t.id}
@@ -262,5 +323,6 @@ const styles = StyleSheet.create({
   ledgerRoute: { fontSize: 13, fontWeight: '700' },
   ledgerMeta: { fontSize: 11, marginTop: 1 },
   ledgerEarned: { fontSize: 14, fontWeight: '800' },
+  payoutBtn: { borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, alignItems: 'center' },
   ledgerFare: { fontSize: 11 },
 })

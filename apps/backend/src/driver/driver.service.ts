@@ -1,10 +1,15 @@
-import { Injectable, BadRequestException } from '@nestjs/common'
+import { Injectable, BadRequestException, Inject } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { PAYMENT_PROVIDER } from '../payments/payment-provider.service'
+import type { PaymentProvider } from '../payments/payment-provider.service'
 import type { User } from '@prisma/client'
 
 @Injectable()
 export class DriverService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
+  ) {}
 
   /**
    * Driver self-onboarding: claim a seat under a transporter by entering their
@@ -156,5 +161,103 @@ export class DriverService {
       data: { podUrl: `s3://${podUrl}` },
     })
     return { trip: updated, pod, podUploaded: true }
+  }
+
+  /** Driver captures their own bank destination so real payouts can be released. */
+  async setBank(input: { bankAccount: string; ifsc: string }, user: User) {
+    const account = input.bankAccount?.trim()
+    const ifsc = input.ifsc?.trim().toUpperCase()
+    if (!/^\d{9,18}$/.test(account ?? '')) {
+      throw new BadRequestException('Enter a valid bank account number')
+    }
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc ?? '')) {
+      throw new BadRequestException('Enter a valid IFSC code')
+    }
+    const driver = await this.driverByMobile(user)
+    if (!driver) throw new BadRequestException('Driver profile not found')
+    const updated = await this.prisma.driver.update({
+      where: { id: driver.id },
+      data: { bankAccount: account, ifsc },
+    })
+    return { bankAdded: Boolean(updated.bankAccount && updated.ifsc) }
+  }
+
+  /** Driver payout status: bank captured, balance, per-trip payouts and outstanding due. */
+  async payoutStatus(user: User) {
+    const driver = await this.driverByMobile(user)
+    if (!driver) return { bankAdded: false, due: 0, paid: 0, trips: [] }
+    const delivered = await this.prisma.trip.findMany({
+      where: { driverId: driver.id, status: 'delivered' },
+      include: { load: { select: { pickupAddr: true, dropAddr: true, fareEstimate: true } }, booking: true },
+    })
+    const payouts = await this.prisma.payment.findMany({
+      where: { tripId: { in: delivered.map((t) => t.id) }, type: 'driver_payout', status: 'succeeded' },
+      select: { tripId: true, amount: true },
+    })
+    const paidByTrip = new Map(payouts.map((p) => [p.tripId, p.amount]))
+    let due = 0
+    let paid = 0
+    const trips = delivered.map((t) => {
+      const fare = t.booking?.rate ?? t.load.fareEstimate ?? 0
+      const earned = this.driverPay(driver, fare)
+      const alreadyPaid = paidByTrip.get(t.id)
+      if (alreadyPaid != null) paid += alreadyPaid
+      else due += earned
+      return {
+        tripId: t.id,
+        pickup: t.load.pickupAddr,
+        drop: t.load.dropAddr,
+        earned,
+        paid: alreadyPaid ?? 0,
+        deliveredAt: t.deliveredAt,
+      }
+    })
+    return { bankAdded: Boolean(driver.bankAccount && driver.ifsc), due, paid, trips }
+  }
+
+  /** Release the driver's payout for a delivered trip (idempotent, guarded). */
+  async releasePayout(tripId: string, user: User) {
+    const driver = await this.driverByMobile(user)
+    if (!driver) throw new BadRequestException('Driver profile not found')
+    if (!(driver.bankAccount && driver.ifsc)) {
+      throw new BadRequestException('Add your bank account (Bank → Driver) before payouts can be released')
+    }
+    const trip = await this.prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { load: true, booking: true },
+    })
+    if (!trip) throw new BadRequestException('Trip not found')
+    if (trip.driverId !== driver.id) throw new BadRequestException('Not your trip')
+    if (trip.status !== 'delivered') throw new BadRequestException('Payout requires the trip to be delivered')
+    const pod = await this.prisma.proofOfDelivery.findUnique({ where: { tripId } })
+    if (!pod || pod.status !== 'confirmed' && pod.status !== 'verified') {
+      throw new BadRequestException('Delivery proof must be confirmed before payout')
+    }
+    const amount = this.driverPay(driver, trip.booking?.rate ?? trip.load.fareEstimate ?? 0)
+    if (amount <= 0) throw new BadRequestException('No earnings to pay out on this trip')
+
+    const idempotencyKey = `driver_payout_${tripId}`
+    const existing = await this.prisma.payment.findUnique({ where: { idempotencyKey } })
+    if (existing && existing.status === 'succeeded') return { payment: existing, alreadyPaid: true }
+    if (existing && existing.status === 'failed') await this.prisma.payment.delete({ where: { id: existing.id } })
+
+    const result = await this.provider.payout({
+      amount,
+      currency: 'INR',
+      reference: idempotencyKey,
+      destination: { account: driver.bankAccount ?? undefined, ifsc: driver.ifsc ?? undefined },
+    })
+    const payment = await this.prisma.payment.create({
+      data: {
+        tripId,
+        type: 'driver_payout',
+        amount,
+        method: 'mock',
+        providerRef: result.providerRef,
+        idempotencyKey,
+        status: result.status === 'succeeded' ? 'succeeded' : 'failed',
+      },
+    })
+    return { payment, alreadyPaid: false }
   }
 }

@@ -41,6 +41,21 @@ export class DriverController {
     return this.driver.earnings(user)
   }
 
+  @Patch('bank')
+  setBank(@Body() body: { bankAccount: string; ifsc: string }, @CurrentUser() user: User) {
+    return this.driver.setBank(body, user)
+  }
+
+  @Get('payouts')
+  payoutStatus(@CurrentUser() user: User) {
+    return this.driver.payoutStatus(user)
+  }
+
+  @Post('trips/:tripId/payout')
+  releasePayout(@Param('tripId') tripId: string, @CurrentUser() user: User) {
+    return this.driver.releasePayout(tripId, user)
+  }
+
   @Post('trips/:tripId/pod')
   uploadPod(@Param('tripId') tripId: string, @Body() body: { podUrl: string }, @CurrentUser() user: User) {
     return this.driver.uploadPod(tripId, body.podUrl, user)

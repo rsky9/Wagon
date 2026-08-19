@@ -67,6 +67,7 @@ enum PaymentType {
   advance
   balance
   payout
+  driver_payout
   refund
   settlement
 }
@@ -270,6 +271,9 @@ model Driver {
   // Driver's per-trip pay rate (₹); when null, driver pay defaults to a share
   // of the trip fare (see driver earnings). The transporter sets this.
   payRate         Float?
+  // Driver's own bank destination for real payouts (mirrors transporter bank).
+  bankAccount     String?
+  ifsc            String?
   trucks          Truck[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

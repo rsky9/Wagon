@@ -1272,6 +1272,49 @@ describe('Wagon API (e2e)', () => {
       expect(typeof earnings.body.earned).toBe('number')
     })
 
+    it('captures driver bank and returns payout status', async () => {
+      const bank = await request(app.getHttpServer())
+        .patch('/api/v1/driver/bank')
+        .set('Authorization', `Bearer ${drvToken}`)
+        .send({ bankAccount: '123456789012', ifsc: 'HDFC0001234' })
+        .expect(200)
+      expect(bank.body.bankAdded).toBe(true)
+
+      const status = await request(app.getHttpServer())
+        .get('/api/v1/driver/payouts')
+        .set('Authorization', `Bearer ${drvToken}`)
+        .expect(200)
+      expect(status.body.bankAdded).toBe(true)
+      expect(typeof status.body.due).toBe('number')
+      expect(typeof status.body.paid).toBe('number')
+      expect(Array.isArray(status.body.trips)).toBe(true)
+    })
+
+    it('rejects an invalid driver bank account', async () => {
+      await request(app.getHttpServer())
+        .patch('/api/v1/driver/bank')
+        .set('Authorization', `Bearer ${drvToken}`)
+        .send({ bankAccount: 'abc', ifsc: 'bad' })
+        .expect(400)
+    })
+
+    it('guards driver payout before delivery', async () => {
+      // Driver has no delivered trips, so releasing a payout on a non-delivered
+      // (or unknown) trip is rejected rather than silently paying.
+      const trips = await request(app.getHttpServer())
+        .get('/api/v1/driver/trips')
+        .set('Authorization', `Bearer ${drvToken}`)
+        .expect(200)
+      const anyTrip = trips.body.trips[0]
+      if (anyTrip) {
+        const res = await request(app.getHttpServer())
+          .post(`/api/v1/driver/trips/${anyTrip.id}/payout`)
+          .set('Authorization', `Bearer ${drvToken}`)
+          .expect(400)
+        expect(res.body.message).toMatch(/delivered/i)
+      }
+    })
+
     it('returns a masked number for the driver', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/trust/masked-number')
