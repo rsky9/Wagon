@@ -141,6 +141,7 @@ model User {
   notifications Notification[]
   fcmTokens    FcmToken[]
   tickets      SupportTicket[]
+  assignedTickets SupportTicket[] @relation("SupportTicketAssignee")
   notifPrefs   NotificationPreference?
   favorites    Favorite[]
   savedSearches SavedSearch[]
@@ -764,6 +765,7 @@ model SupportTicket {
   status     String   @default("open") // open | assigned | closed
   priority   String   @default("normal") // low | normal | high | urgent
   assignedToId String?
+  assignedTo   User?    @relation("SupportTicketAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
   resolution String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

@@ -1,92 +1,92 @@
 -- DropIndex
-DROP INDEX "CarrierService_createdAt_idx";
+DROP INDEX IF EXISTS "CarrierService_createdAt_idx";
 
 -- DropIndex
-DROP INDEX "CarrierService_destinationRef_trgm";
+DROP INDEX IF EXISTS "CarrierService_destinationRef_trgm";
 
 -- DropIndex
-DROP INDEX "CarrierService_flight_trgm";
+DROP INDEX IF EXISTS "CarrierService_flight_trgm";
 
 -- DropIndex
-DROP INDEX "CarrierService_originRef_trgm";
+DROP INDEX IF EXISTS "CarrierService_originRef_trgm";
 
 -- DropIndex
-DROP INDEX "CarrierService_vessel_trgm";
+DROP INDEX IF EXISTS "CarrierService_vessel_trgm";
 
 -- DropIndex
-DROP INDEX "Facility_city_trgm";
+DROP INDEX IF EXISTS "Facility_city_trgm";
 
 -- DropIndex
-DROP INDEX "Facility_name_trgm";
+DROP INDEX IF EXISTS "Facility_name_trgm";
 
 -- DropIndex
-DROP INDEX "Load_createdAt_idx";
+DROP INDEX IF EXISTS "Load_createdAt_idx";
 
 -- DropIndex
-DROP INDEX "Load_description_trgm";
+DROP INDEX IF EXISTS "Load_description_trgm";
 
 -- DropIndex
-DROP INDEX "Load_dropAddr_trgm";
+DROP INDEX IF EXISTS "Load_dropAddr_trgm";
 
 -- DropIndex
-DROP INDEX "Load_haltAddr_trgm";
+DROP INDEX IF EXISTS "Load_haltAddr_trgm";
 
 -- DropIndex
-DROP INDEX "Load_pickupAddr_trgm";
+DROP INDEX IF EXISTS "Load_pickupAddr_trgm";
 
 -- DropIndex
-DROP INDEX "MarketListing_city_trgm";
+DROP INDEX IF EXISTS "MarketListing_city_trgm";
 
 -- DropIndex
-DROP INDEX "MarketListing_createdAt_idx";
+DROP INDEX IF EXISTS "MarketListing_createdAt_idx";
 
 -- DropIndex
-DROP INDEX "MarketListing_description_trgm";
+DROP INDEX IF EXISTS "MarketListing_description_trgm";
 
 -- DropIndex
-DROP INDEX "MarketListing_destinationRef_trgm";
+DROP INDEX IF EXISTS "MarketListing_destinationRef_trgm";
 
 -- DropIndex
-DROP INDEX "MarketListing_originRef_trgm";
+DROP INDEX IF EXISTS "MarketListing_originRef_trgm";
 
 -- DropIndex
-DROP INDEX "MarketRequest_city_trgm";
+DROP INDEX IF EXISTS "MarketRequest_city_trgm";
 
 -- DropIndex
-DROP INDEX "MarketRequest_createdAt_idx";
+DROP INDEX IF EXISTS "MarketRequest_createdAt_idx";
 
 -- DropIndex
-DROP INDEX "MarketRequest_description_trgm";
+DROP INDEX IF EXISTS "MarketRequest_description_trgm";
 
 -- DropIndex
-DROP INDEX "MarketRequest_destinationRef_trgm";
+DROP INDEX IF EXISTS "MarketRequest_destinationRef_trgm";
 
 -- DropIndex
-DROP INDEX "MarketRequest_originRef_trgm";
+DROP INDEX IF EXISTS "MarketRequest_originRef_trgm";
 
 -- DropIndex
-DROP INDEX "Organization_name_trgm";
+DROP INDEX IF EXISTS "Organization_name_trgm";
 
 -- DropIndex
-DROP INDEX "Shipment_commodity_trgm";
+DROP INDEX IF EXISTS "Shipment_commodity_trgm";
 
 -- DropIndex
-DROP INDEX "Shipment_createdAt_idx";
+DROP INDEX IF EXISTS "Shipment_createdAt_idx";
 
 -- DropIndex
-DROP INDEX "Shipment_description_trgm";
+DROP INDEX IF EXISTS "Shipment_description_trgm";
 
 -- DropIndex
-DROP INDEX "Shipment_ref_trgm";
+DROP INDEX IF EXISTS "Shipment_ref_trgm";
 
 -- DropIndex
-DROP INDEX "ShipmentLeg_dropAddr_trgm";
+DROP INDEX IF EXISTS "ShipmentLeg_dropAddr_trgm";
 
 -- DropIndex
-DROP INDEX "ShipmentLeg_pickupAddr_trgm";
+DROP INDEX IF EXISTS "ShipmentLeg_pickupAddr_trgm";
 
 -- DropIndex
-DROP INDEX "Trip_createdAt_idx";
+DROP INDEX IF EXISTS "Trip_createdAt_idx";
 
 -- CreateIndex
 CREATE INDEX "Facility_city_idx" ON "Facility"("city");
@@ -94,11 +94,26 @@ CREATE INDEX "Facility_city_idx" ON "Facility"("city");
 -- CreateIndex
 CREATE INDEX "Shipment_createdAt_idx" ON "Shipment"("createdAt");
 
--- RenameIndex
-ALTER INDEX "Load_fare_idx" RENAME TO "Load_fareEstimate_idx";
+-- RenameIndex: legacy DBs renamed the column's index; fresh DBs create it here
+-- (the old index was never part of the migration history, so guard on existence).
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'Load_fare_idx') THEN
+    ALTER INDEX "Load_fare_idx" RENAME TO "Load_fareEstimate_idx";
+  ELSE
+    CREATE INDEX "Load_fareEstimate_idx" ON "Load" ("fareEstimate");
+  END IF;
+END $$;
 
 -- RenameIndex
-ALTER INDEX "MarketListing_capacity_idx" RENAME TO "MarketListing_capacityAvailable_idx";
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'MarketListing_capacity_idx') THEN
+    ALTER INDEX "MarketListing_capacity_idx" RENAME TO "MarketListing_capacityAvailable_idx";
+  ELSE
+    CREATE INDEX "MarketListing_capacityAvailable_idx" ON "MarketListing" ("capacityAvailable");
+  END IF;
+END $$;
 
 -- pg_trgm GIN indexes for substring/ILIKE search acceleration
 -- (Prisma does not model these; kept in the migration so fresh DBs get them.)

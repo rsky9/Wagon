@@ -19,6 +19,7 @@ interface Ticket {
   status: string;
   priority: string;
   assignedToId?: string | null;
+  assignedTo?: TicketUser | null;
   resolution?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -231,7 +232,9 @@ function TicketDetail({
         <p className="mt-1 text-xs text-slate-400">
           {ticket.user?.name ?? "User"} · {ticket.user?.mobile} · {ticket.category} ·{" "}
           {new Date(ticket.createdAt).toLocaleString()}
-          {ticket.assignedToId ? ` · assigned to ${ticket.assignedToId.slice(0, 8)}` : " · unassigned"}
+          {ticket.assignedTo
+            ? ` · assigned to ${ticket.assignedTo.name ?? ticket.assignedTo.mobile}`
+            : " · unassigned"}
         </p>
         {ticket.resolution && (
           <p className="mt-2 rounded-lg bg-emerald-50 p-2 text-xs text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">

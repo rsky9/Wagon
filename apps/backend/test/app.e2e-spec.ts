@@ -888,6 +888,12 @@ describe('Wagon API (e2e)', () => {
       expect(adminTicket._count.messages).toBeGreaterThanOrEqual(2)
 
       // Admin replies, assigns, sets priority and resolves.
+      const me = await request(app.getHttpServer())
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${admToken}`)
+        .expect(200)
+      const adminId = me.body.profile.id as string
+
       await request(app.getHttpServer())
         .post(`/api/v1/support/tickets/${ticketId}/messages`)
         .set('Authorization', `Bearer ${admToken}`)
@@ -897,10 +903,11 @@ describe('Wagon API (e2e)', () => {
       const assigned = await request(app.getHttpServer())
         .patch(`/api/v1/support/tickets/${ticketId}/assign`)
         .set('Authorization', `Bearer ${admToken}`)
-        .send({ assignedToId: 'admin-1' })
+        .send({ assignedToId: adminId })
         .expect(200)
       expect(assigned.body.ticket.status).toBe('assigned')
-      expect(assigned.body.ticket.assignedToId).toBe('admin-1')
+      expect(assigned.body.ticket.assignedToId).toBe(adminId)
+      expect(assigned.body.ticket.assignedTo.id).toBe(adminId)
 
       const prioritised = await request(app.getHttpServer())
         .patch(`/api/v1/support/tickets/${ticketId}/priority`)

@@ -59,12 +59,19 @@ export class SupportService {
 
   /** Full ticket with its message thread. */
   async thread(id: string, user: User) {
-    const ticket = await this.requireAccess(user, id)
-    const messages = await this.prisma.supportMessage.findMany({
-      where: { ticketId: id },
-      orderBy: { createdAt: 'asc' },
+    const ticket = await this.prisma.supportTicket.findUnique({
+      where: { id },
+      include: { assignedTo: { select: { id: true, mobile: true, name: true } } },
     })
-    return { ticket, messages }
+    if (!ticket) throw new NotFoundException('Ticket not found')
+    if (this.isAdmin(user) || ticket.userId === user.id) {
+      const messages = await this.prisma.supportMessage.findMany({
+        where: { ticketId: id },
+        orderBy: { createdAt: 'asc' },
+      })
+      return { ticket, messages }
+    }
+    throw new ForbiddenException('Not your ticket')
   }
 
   /** Append a message to a ticket thread (user or admin). */
@@ -106,6 +113,7 @@ export class SupportService {
     const updated = await this.prisma.supportTicket.update({
       where: { id },
       data: { assignedToId: assignedToId ?? null, status: assignedToId ? 'assigned' : 'open' },
+      include: { assignedTo: { select: { id: true, mobile: true, name: true } } },
     })
     await this.audit.log({ actorId: user.id, action: 'ticket.assign', resource: id, after: { assignedToId } })
     return { ticket: updated }
@@ -144,6 +152,7 @@ export class SupportService {
       take: 200,
       include: {
         user: { select: { id: true, mobile: true, name: true } },
+        assignedTo: { select: { id: true, mobile: true, name: true } },
         _count: { select: { messages: true } },
       },
     })

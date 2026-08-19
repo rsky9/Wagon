@@ -1,0 +1,2 @@
+-- AlterTable: link SupportTicket.assignedToId to User (assignee resolution)
+ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_assignedToId_fkey" FOREIGN KEY ("assignedToId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
