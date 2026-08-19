@@ -761,11 +761,28 @@ model SupportTicket {
   subject    String
   category   String   @default("general")
   message    String
-  status     String   @default("open")
+  status     String   @default("open") // open | assigned | closed
+  priority   String   @default("normal") // low | normal | high | urgent
+  assignedToId String?
   resolution String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  messages   SupportMessage[]
   @@index([userId])
+  @@index([status])
+  @@index([assignedToId])
+}
+
+/// A message in a support ticket thread (user, admin or system authored).
+model SupportMessage {
+  id         String   @id @default(cuid())
+  ticketId   String
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId   String?
+  authorType String   @default("user") // user | admin | system
+  body       String
+  createdAt  DateTime @default(now())
+  @@index([ticketId])
 }
 
 model NotificationPreference {

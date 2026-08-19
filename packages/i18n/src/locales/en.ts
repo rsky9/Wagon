@@ -492,6 +492,12 @@ export const en = {
       none: 'No tickets',
       hint: 'Raise a ticket and our team will help',
       newTicket: 'New ticket',
+      reply: 'Reply',
+      replyPlaceholder: 'Write a reply…',
+      reopen: 'Reopen',
+      you: 'You',
+      supportTeam: 'Support team',
+      system: 'System',
     },
     disputes: {
       title: 'Disputes',

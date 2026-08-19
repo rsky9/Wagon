@@ -23,7 +23,9 @@ const BADGE_TONES: Record<string, string> = {
   violet: "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-400",
 };
 
-export function Badge({ children, tone = "slate" }: { children: React.ReactNode; tone?: keyof typeof BADGE_TONES }) {
+export type BadgeTone = keyof typeof BADGE_TONES;
+
+export function Badge({ children, tone = "slate" }: { children: React.ReactNode; tone?: BadgeTone }) {
   return <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${BADGE_TONES[tone] ?? BADGE_TONES.slate}`}>{children}</span>;
 }
 

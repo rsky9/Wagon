@@ -848,6 +848,86 @@ describe('Wagon API (e2e)', () => {
       expect(list.body.tickets.length).toBeGreaterThan(0)
     })
 
+    it('threads a support ticket: user reply, admin assign/priority/resolve', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/api/v1/support/tickets')
+        .set('Authorization', `Bearer ${trToken}`)
+        .send({ subject: 'Threaded help', category: 'trip', message: 'Trip got stuck' })
+        .expect(201)
+      const ticketId = created.body.ticket.id as string
+
+      // Opening message seeds the thread.
+      const thread1 = await request(app.getHttpServer())
+        .get(`/api/v1/support/tickets/${ticketId}`)
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      expect(thread1.body.messages.length).toBe(1)
+      expect(thread1.body.messages[0].authorType).toBe('user')
+
+      // User replies.
+      await request(app.getHttpServer())
+        .post(`/api/v1/support/tickets/${ticketId}/messages`)
+        .set('Authorization', `Bearer ${trToken}`)
+        .send({ body: 'Here is the trip id' })
+        .expect(201)
+
+      // A different (non-owner, non-admin) user cannot read the thread.
+      await request(app.getHttpServer())
+        .get(`/api/v1/support/tickets/${ticketId}`)
+        .set('Authorization', `Bearer ${supToken}`)
+        .expect(403)
+
+      // Admin sees the ticket in the ops list (with user + message count).
+      const adminList = await request(app.getHttpServer())
+        .get('/api/v1/support/admin/tickets')
+        .set('Authorization', `Bearer ${admToken}`)
+        .expect(200)
+      const adminTicket = adminList.body.tickets.find((t: { id: string }) => t.id === ticketId)
+      expect(adminTicket).toBeTruthy()
+      expect(adminTicket.user.mobile).toBeTruthy()
+      expect(adminTicket._count.messages).toBeGreaterThanOrEqual(2)
+
+      // Admin replies, assigns, sets priority and resolves.
+      await request(app.getHttpServer())
+        .post(`/api/v1/support/tickets/${ticketId}/messages`)
+        .set('Authorization', `Bearer ${admToken}`)
+        .send({ body: 'Looking into it' })
+        .expect(201)
+
+      const assigned = await request(app.getHttpServer())
+        .patch(`/api/v1/support/tickets/${ticketId}/assign`)
+        .set('Authorization', `Bearer ${admToken}`)
+        .send({ assignedToId: 'admin-1' })
+        .expect(200)
+      expect(assigned.body.ticket.status).toBe('assigned')
+      expect(assigned.body.ticket.assignedToId).toBe('admin-1')
+
+      const prioritised = await request(app.getHttpServer())
+        .patch(`/api/v1/support/tickets/${ticketId}/priority`)
+        .set('Authorization', `Bearer ${admToken}`)
+        .send({ priority: 'urgent' })
+        .expect(200)
+      expect(prioritised.body.ticket.priority).toBe('urgent')
+
+      const resolved = await request(app.getHttpServer())
+        .post(`/api/v1/support/tickets/${ticketId}/resolve`)
+        .set('Authorization', `Bearer ${admToken}`)
+        .send({ resolution: 'Settled via refund' })
+        .expect(201)
+      expect(resolved.body.ticket.status).toBe('closed')
+      expect(resolved.body.ticket.resolution).toBe('Settled via refund')
+
+      // Full thread preserved (2 user + 1 admin).
+      const finalThread = await request(app.getHttpServer())
+        .get(`/api/v1/support/tickets/${ticketId}`)
+        .set('Authorization', `Bearer ${admToken}`)
+        .expect(200)
+      expect(finalThread.body.messages).toHaveLength(3)
+      expect(finalThread.body.messages.map((m: { authorType: string }) => m.authorType)).toEqual(
+        expect.arrayContaining(['user', 'user', 'admin']),
+      )
+    })
+
     it('rejects re-rating an already-rated trip (idempotent)', async () => {
       await request(app.getHttpServer())
         .post(`/api/v1/ratings/trip/${tripId}`)
