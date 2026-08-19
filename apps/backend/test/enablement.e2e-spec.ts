@@ -1348,4 +1348,63 @@ describe('Enablement platform (e2e)', () => {
       expect(Array.isArray(row.missing)).toBe(true)
     })
   })
+
+  describe('notification center (e2e)', () => {
+    let userId: string
+
+    beforeAll(async () => {
+      const prisma = app.get(PrismaService)
+      const user = await prisma.user.findUniqueOrThrow({ where: { mobile: SUP } })
+      userId = user.id
+      await prisma.notification.deleteMany({ where: { userId } })
+      await prisma.notification.createMany({
+        data: [
+          { userId, type: 'trip_started', title: 'Trip started', body: 'Trip A', isRead: false },
+          { userId, type: 'trip_delivered', title: 'Trip delivered', body: 'Trip B', isRead: false },
+          { userId, type: 'bid_received', title: 'Bid received', body: 'Bid C', isRead: true },
+        ],
+      })
+    })
+
+    it('lists notifications with an unread count and drives the read lifecycle', async () => {
+      const list = await api(supToken).get('/notifications').expect(200)
+      expect(list.body.items.length).toBeGreaterThanOrEqual(3)
+      expect(list.body.unread).toBe(2)
+      expect(list.body.total).toBeGreaterThanOrEqual(3)
+
+      // Unread count endpoint.
+      const count = await api(supToken).get('/notifications/count').expect(200)
+      expect(count.body.unread).toBe(2)
+
+      // Mark one read.
+      const first = list.body.items[0]
+      await api(supToken).patch(`/notifications/${first.id}/read`).expect(200)
+      const after = await api(supToken).get('/notifications/count').expect(200)
+      expect(after.body.unread).toBe(1)
+
+      // Mark unread again.
+      await api(supToken).patch(`/notifications/${first.id}/unread`).expect(200)
+      const unreadAgain = await api(supToken).get('/notifications/count').expect(200)
+      expect(unreadAgain.body.unread).toBe(2)
+
+      // Mark all read.
+      const all = await api(supToken).post('/notifications/read-all').expect(201)
+      expect(all.body.updated).toBeGreaterThanOrEqual(2)
+      const final = await api(supToken).get('/notifications/count').expect(200)
+      expect(final.body.unread).toBe(0)
+    })
+
+    it('reads and updates notification preferences', async () => {
+      const prefs = await api(supToken).get('/notifications/preferences').expect(200)
+      expect(prefs.body.preferences.loadAlerts).toBe(true)
+
+      const updated = await api(supToken).patch('/notifications/preferences', { promo: true, market: false }).expect(200)
+      expect(updated.body.preferences.promo).toBe(true)
+      expect(updated.body.preferences.market).toBe(false)
+
+      const recheck = await api(supToken).get('/notifications/preferences').expect(200)
+      expect(recheck.body.preferences.promo).toBe(true)
+      expect(recheck.body.preferences.market).toBe(false)
+    })
+  })
 })

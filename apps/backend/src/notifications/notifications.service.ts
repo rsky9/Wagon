@@ -99,4 +99,73 @@ export class NotificationsService {
       data: { isRead: true },
     })
   }
+
+  /** Unread count for the notifications badge. */
+  async unreadCount(userId: string) {
+    const unread = await this.prisma.notification.count({ where: { userId, isRead: false } })
+    return { unread }
+  }
+
+  /** Mark every notification for the user as read. */
+  async markAllRead(userId: string) {
+    const result = await this.prisma.notification.updateMany({
+      where: { userId, isRead: false },
+      data: { isRead: true },
+    })
+    return { updated: result.count }
+  }
+
+  /** Paginated notification list with an unread count. */
+  async list(userId: string, limit = 50, offset = 0) {
+    const [items, unread, total] = await Promise.all([
+      this.prisma.notification.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: Math.min(Math.max(limit, 1), 200),
+        skip: Math.max(offset, 0),
+      }),
+      this.prisma.notification.count({ where: { userId, isRead: false } }),
+      this.prisma.notification.count({ where: { userId } }),
+    ])
+    return { items, unread, total, limit, offset }
+  }
+
+  /** Set a single notification read/unread. */
+  async setRead(id: string, userId: string, read: boolean) {
+    const result = await this.prisma.notification.updateMany({
+      where: { id, userId },
+      data: { isRead: read },
+    })
+    return { updated: result.count }
+  }
+
+  /** Read the user's notification preferences (create default row on first read). */
+  async getPreferences(userId: string) {
+    const prefs = await this.prisma.notificationPreference.upsert({
+      where: { userId },
+      update: {},
+      create: { userId },
+    })
+    return { preferences: prefs }
+  }
+
+  /** Update notification preferences (only the toggles passed are changed). */
+  async updatePreferences(userId: string, patch: Record<string, boolean>) {
+    const allowed: Array<keyof Omit<NotificationPreference, 'id' | 'userId' | 'updatedAt'>> = [
+      'loadAlerts', 'booking', 'trip', 'payment', 'kyc', 'docExpiry', 'promo', 'market',
+    ]
+    const data: Record<string, boolean> = {}
+    for (const key of allowed) {
+      if (typeof patch[key] === 'boolean') data[key] = patch[key]
+    }
+    if (Object.keys(data).length === 0) {
+      return this.getPreferences(userId)
+    }
+    const prefs = await this.prisma.notificationPreference.upsert({
+      where: { userId },
+      update: data,
+      create: { userId, ...data },
+    })
+    return { preferences: prefs }
+  }
 }
