@@ -55,12 +55,23 @@ export class CustomsService {
     if (!DIRECTIONS.includes(input.direction)) throw new BadRequestException('Invalid direction (export|import|transit)')
     const myOrgs = await this.orgAccess.userOrgs(user)
     const brokerOrgId = input.brokerOrgId ?? (input.direction === 'export' || input.direction === 'import' ? myOrgs[0]?.id ?? null : null)
+    // Default the regime from the destination country's pack when not supplied.
+    let regime = input.regime
+    if (!regime && input.shipmentId) {
+      const shipment = await this.prisma.shipment.findUnique({
+        where: { id: input.shipmentId },
+        include: { destination: true, origin: true },
+      })
+      const code = (shipment?.destination?.countryCode ?? shipment?.origin?.countryCode ?? 'IN').toUpperCase()
+      const pack = await this.prisma.countryPack.findUnique({ where: { code } })
+      regime = pack?.customsRegime
+    }
     const declaration = await this.prisma.customsDeclaration.create({
       data: {
         ref: `CD-${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 9 + 1)}`,
         shipmentId: input.shipmentId,
         direction: input.direction,
-        regime: input.regime ?? 'general',
+        regime: regime ?? 'general',
         brokerOrgId,
         importerOrgId: input.importerOrgId,
         exporterOrgId: input.exporterOrgId,

@@ -45,6 +45,16 @@ export class GlobalController {
     return this.global.checklist(shipmentId, user)
   }
 
+  @Post('shipments/:shipmentId/documents/issue')
+  issueDocuments(@Param('shipmentId') shipmentId: string, @CurrentUser() user: User) {
+    return this.global.issueRequiredDocuments(shipmentId, user)
+  }
+
+  @Get('compliance/overview')
+  complianceOverview(@CurrentUser() user: User) {
+    return this.global.complianceOverview(user)
+  }
+
   // Admin
   @Roles('admin')
   @Get('admin/list')

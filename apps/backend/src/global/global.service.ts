@@ -1,15 +1,30 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common'
+import { Injectable, BadRequestException, NotFoundException, Inject } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { OrgAccessService } from '../org-access/org-access.service'
+import { TradeDocumentsService } from '../trade-documents/trade-documents.service'
 import type { User } from '@prisma/client'
 
 const ISO_CODE = /^[A-Za-z]{2}$/
+
+/** Map a country-pack document requirement name to a TradeDocument docType. */
+const REQ_TO_DOC: Record<string, string> = {
+  commercial_invoice: 'commercial_invoice',
+  packing_list: 'packing_list',
+  bill_of_lading: 'bol',
+  sea_waybill: 'sea_waybill',
+  air_waybill: 'awb',
+  certificate: 'certificate_of_origin',
+  certificate_of_origin: 'certificate_of_origin',
+  cmr: 'cmr',
+  cim: 'cim',
+}
 
 @Injectable()
 export class GlobalService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orgAccess: OrgAccessService,
+    @Inject(TradeDocumentsService) private readonly tradeDocs: TradeDocumentsService,
   ) {}
 
   private requireCode(code: string) {
@@ -77,14 +92,94 @@ export class GlobalService {
     const destCode = (shipment.destination?.countryCode ?? shipment.origin?.countryCode ?? 'IN').toUpperCase()
     const pack = await this.prisma.countryPack.findUnique({ where: { code: destCode } })
     const required = (pack?.documentRequirements as string[] | null) ?? ['commercial_invoice', 'packing_list']
-    const existing = await this.prisma.forwardDocument.findMany({ where: { shipmentId }, select: { kind: true } })
-    const have = new Set(existing.map((d) => d.kind))
+    // Present docs come from both the forwarding docs AND the canonical trade documents.
+    const fwdDocs = await this.prisma.forwardDocument.findMany({ where: { shipmentId }, select: { kind: true } })
+    const tradeDocs = await this.prisma.tradeDocument.findMany({ where: { shipmentId }, select: { docType: true } })
+    const have = new Set<string>()
+    for (const d of fwdDocs) have.add(d.kind)
+    for (const d of tradeDocs) have.add(REQ_TO_DOC[d.docType] ?? d.docType)
+    const missing: string[] = []
+    for (const req of required) {
+      if (!have.has(req)) missing.push(req)
+    }
     return {
-      country: pack ? { code: pack.code, name: pack.name, currency: pack.currency } : null,
+      country: pack ? { code: pack.code, name: pack.name, currency: pack.currency, customsRegime: pack.customsRegime } : null,
       required,
       present: required.filter((k) => have.has(k)),
-      missing: required.filter((k) => !have.has(k)),
+      missing,
+      issuable: missing.filter((m) => REQ_TO_DOC[m]),
     }
+  }
+
+  /**
+   * Auto-issue the missing required trade documents for a shipment based on the
+   * destination country's document requirements. Only requirements that map to
+   * a TradeDocument docType are issued; the rest (e.g. customs_declaration,
+   * eway_bill) are separate workflows. Returns the issued documents.
+   */
+  async issueRequiredDocuments(shipmentId: string, user: User) {
+    await this.orgAccess.assertShipmentAccess(user, shipmentId)
+    const checklist = await this.checklist(shipmentId, user)
+    const shipment = await this.prisma.shipment.findUnique({
+      where: { id: shipmentId },
+      include: { ownerOrg: true, destination: true, origin: true },
+    })
+    if (!shipment) throw new NotFoundException('Shipment not found')
+
+    const issuerOrgId = shipment.ownerOrgId ?? (await this.orgAccess.primaryOrg(user)).id
+    const issued: Array<Record<string, unknown>> = []
+    for (const req of checklist.missing) {
+      const docType = REQ_TO_DOC[req]
+      if (!docType) continue
+      const doc = await this.tradeDocs.create(
+        {
+          docType: docType as never,
+          shipmentId,
+          issuerOrgId,
+          lines: [{ description: shipment.commodity ?? 'General cargo', qty: shipment.pieces ?? 1, weightKg: shipment.weightKg ?? undefined, volumeM3: shipment.volumeM3 ?? undefined, value: shipment.value ?? undefined }],
+          totalValue: shipment.value ?? undefined,
+          currency: checklist.country?.currency ?? 'INR',
+          originRef: shipment.origin?.name,
+          destinationRef: shipment.destination?.name,
+        },
+        user,
+      )
+      issued.push({ requirement: req, docType, id: doc.document.id, ref: doc.document.ref })
+    }
+    return { country: checklist.country, issued, stillMissing: checklist.missing.filter((m) => !REQ_TO_DOC[m]) }
+  }
+
+  /** Cross-border compliance overview across the caller's orgs' shipments. */
+  async complianceOverview(user: User) {
+    const orgIds = await this.orgAccess.memberOrgIds(user)
+    const shipments = await this.prisma.shipment.findMany({
+      where: { ownerOrgId: { in: orgIds }, status: { notIn: ['delivered', 'closed', 'cancelled'] } },
+      include: { destination: true, origin: true },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    })
+    const rows: Array<Record<string, unknown>> = []
+    for (const s of shipments) {
+      const destCode = (s.destination?.countryCode ?? s.origin?.countryCode ?? 'IN').toUpperCase()
+      const pack = await this.prisma.countryPack.findUnique({ where: { code: destCode } })
+      const required = (pack?.documentRequirements as string[] | null) ?? []
+      const fwdDocs = await this.prisma.forwardDocument.findMany({ where: { shipmentId: s.id }, select: { kind: true } })
+      const tradeDocs = await this.prisma.tradeDocument.findMany({ where: { shipmentId: s.id }, select: { docType: true } })
+      const have = new Set<string>()
+      for (const d of fwdDocs) have.add(d.kind)
+      for (const d of tradeDocs) have.add(REQ_TO_DOC[d.docType] ?? d.docType)
+      const missing = required.filter((r) => !have.has(r))
+      rows.push({
+        shipmentId: s.id,
+        ref: s.ref,
+        commodity: s.commodity,
+        country: pack ? { code: pack.code, name: pack.name } : null,
+        requiredCount: required.length,
+        missing,
+        complete: missing.length === 0,
+      })
+    }
+    return { shipments: rows }
   }
 
   // ---------- Admin ----------

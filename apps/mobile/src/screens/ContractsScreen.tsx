@@ -19,8 +19,9 @@ interface TradeDocRow { id: string; ref: string; docType: string; status: string
 interface EdiRow { id: string; direction: string; format: string; documentType: string; status: string; org?: { name: string } | null; partnerOrg?: { name: string } | null; createdAt: string }
 interface ExceptionRow { id: string; entityId: string; summary: string; status: string; output?: { findings?: Array<{ severity: string; issue: string; suggestion: string }> }; shipment?: { ref?: string } | null }
 interface OrgAnalytics { orgs: number; shipments: { total: number; status: Record<string, number>; last30Days: number }; containers: { total: number; inUse: number; utilization: number }; finance: { invoicesTotal: number; invoicesPaid: number; invoicesOutstanding: number; outstandingValue: number }; yard: { appointmentsTotal: number; appointmentsOpen: number }; contracts: { total: number; active: number } }
+interface ComplianceRow { shipmentId: string; ref: string; commodity?: string | null; country?: { code: string; name: string } | null; requiredCount: number; missing: string[]; complete: boolean }
 
-type Tab = 'contracts' | 'invoices' | 'containers' | 'returns' | 'handovers' | 'appointments' | 'documents' | 'edi' | 'exceptions' | 'analytics'
+type Tab = 'contracts' | 'invoices' | 'containers' | 'returns' | 'handovers' | 'appointments' | 'documents' | 'edi' | 'exceptions' | 'analytics' | 'compliance'
 
 const STATUS_TONE: Record<string, string> = {
   active: '🟢', paid: '🟢', completed: '🟢', closed: '🟢', available: '🟢', cleared: '🟢',
@@ -41,6 +42,7 @@ export function ContractsScreen({ onBack }: Props) {
   const [ediMessages, setEdiMessages] = useState<EdiRow[]>([])
   const [exceptions, setExceptions] = useState<ExceptionRow[]>([])
   const [analytics, setAnalytics] = useState<OrgAnalytics | null>(null)
+  const [compliance, setCompliance] = useState<ComplianceRow[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -53,6 +55,7 @@ export function ContractsScreen({ onBack }: Props) {
       api.get<{ messages: EdiRow[] }>('/integrations/edi').then((r) => setEdiMessages(r.messages)).catch(() => {}),
       api.get<{ exceptions: ExceptionRow[] }>('/ai/exceptions/feed').then((r) => setExceptions(r.exceptions)).catch(() => {}),
       api.get<OrgAnalytics>('/analytics/org').then(setAnalytics).catch(() => {}),
+      api.get<{ shipments: ComplianceRow[] }>('/countries/compliance/overview').then((r) => setCompliance(r.shipments)).catch(() => {}),
       api.get<{ returns: ReturnRow[] }>('/returns').then((r) => setReturns(r.returns)).catch(() => {}),
       api.get<{ handovers: HandoverRow[] }>('/handovers').then((r) => setHandovers(r.handovers)).catch(() => {}),
     ]).finally(() => setLoading(false))
@@ -69,6 +72,7 @@ export function ContractsScreen({ onBack }: Props) {
     { key: 'edi', label: 'EDI', count: ediMessages.length },
     { key: 'exceptions', label: 'Exceptions', count: exceptions.length },
     { key: 'analytics', label: 'Analytics', count: analytics?.orgs ?? 0 },
+    { key: 'compliance', label: 'Compliance', count: compliance.length },
   ]
 
   const data: Array<{ key: string; dot: string; title: string; sub: string; meta: string }> =
@@ -88,6 +92,8 @@ export function ContractsScreen({ onBack }: Props) {
       ? ediMessages.map((m) => ({ key: m.id, dot: STATUS_TONE[m.status] ?? '⚪', title: `${m.direction} · ${m.documentType}`, sub: `${m.format}${m.partnerOrg?.name ? ` ↔ ${m.partnerOrg.name}` : ''}`, meta: m.status }))
       : tab === 'exceptions'
       ? exceptions.map((x) => ({ key: x.id, dot: STATUS_TONE[x.status] ?? '🟡', title: `${x.shipment?.ref ?? x.entityId.slice(-8)}`, sub: x.summary, meta: x.status }))
+      : tab === 'compliance'
+      ? compliance.map((c) => ({ key: c.shipmentId, dot: c.complete ? '🟢' : '🔴', title: c.ref, sub: `${c.country?.name ?? '—'}${c.missing.length ? ` · missing: ${c.missing.join(', ')}` : ''}`, meta: c.complete ? 'complete' : `${c.missing.length} missing` }))
       : handovers.map((h) => ({ key: h.id, dot: STATUS_TONE[h.status] ?? '⚪', title: h.ref, sub: `${h.fromOrg?.name ?? '—'} → ${h.toOrg?.name ?? '—'}`, meta: h.status }))
 
   return (

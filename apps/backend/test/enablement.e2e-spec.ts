@@ -1315,4 +1315,37 @@ describe('Enablement platform (e2e)', () => {
       void truck
     })
   })
+
+  describe('cross-border trade compliance (e2e)', () => {
+    let shipmentId: string
+
+    it('reports a country checklist and auto-issues required trade documents', async () => {
+      const shipment = await api(supToken).post('/foundation/shipments', { ref: 'SHIP-E2E-XB', commodity: 'Machinery', weightKg: 2000, value: 500000 }).expect(201)
+      shipmentId = shipment.body.shipment.id
+
+      // Default destination is IN → requires commercial_invoice + packing_list (mappable).
+      const checklist = await api(supToken).get(`/countries/shipments/${shipmentId}/checklist`).expect(200)
+      expect(checklist.body.country.code).toBe('IN')
+      expect(checklist.body.required).toContain('commercial_invoice')
+      expect(checklist.body.required).toContain('packing_list')
+      expect(checklist.body.missing).toContain('commercial_invoice')
+
+      // Auto-issue the mappable required documents.
+      const issued = await api(supToken).post(`/countries/shipments/${shipmentId}/documents/issue`).expect(201)
+      expect(issued.body.issued.length).toBeGreaterThanOrEqual(2)
+      expect(issued.body.issued.some((d: { docType: string }) => d.docType === 'commercial_invoice')).toBe(true)
+      expect(issued.body.issued.some((d: { docType: string }) => d.docType === 'packing_list')).toBe(true)
+
+      // Re-check the checklist — the issued docs are now present.
+      const recheck = await api(supToken).get(`/countries/shipments/${shipmentId}/checklist`).expect(200)
+      expect(recheck.body.missing).not.toContain('commercial_invoice')
+      expect(recheck.body.missing).not.toContain('packing_list')
+
+      // Compliance overview surfaces the shipment as complete-ish.
+      const overview = await api(supToken).get('/countries/compliance/overview').expect(200)
+      const row = overview.body.shipments.find((s: { shipmentId: string }) => s.shipmentId === shipmentId)
+      expect(row).toBeTruthy()
+      expect(Array.isArray(row.missing)).toBe(true)
+    })
+  })
 })
