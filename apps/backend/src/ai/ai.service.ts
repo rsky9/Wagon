@@ -5,6 +5,7 @@ import { OrgAccessService } from '../org-access/org-access.service'
 import { MarketService } from '../market/market.service'
 import { OutboxRelay } from '../outbox/outbox-relay.service'
 import { NotificationsService } from '../notifications/notifications.service'
+import { AuditService } from '../audit/audit.service'
 import type { User } from '@prisma/client'
 
 const MAX_OPTIONS = 50
@@ -40,6 +41,7 @@ export class AiService {
     private readonly notifications: NotificationsService,
     @Inject(PlanningService) private readonly planning: PlanningService,
     @Inject(OutboxRelay) private readonly outbox: OutboxRelay,
+    private readonly audit: AuditService,
   ) {}
 
   /** Persist a recommendation + emit an AI_RECOMMENDED outbox event atomically. */
@@ -125,6 +127,7 @@ export class AiService {
         },
         user.id,
       )
+      await this.audit.log({ actorId: user.id, action: 'ai.recommendation.create', resource: recommendation.id, after: { agent: 'plan', entityType: 'shipment', entityId: input.shipmentId, summary: 'No route satisfies constraints' } })
       return { recommendation, plan: null, guardrails: recommendation.guardrails }
     }
 
@@ -172,6 +175,7 @@ export class AiService {
       },
       user.id,
     )
+    await this.audit.log({ actorId: user.id, action: 'ai.recommendation.create', resource: recommendation.id, after: { agent: 'plan', entityType: 'shipment', entityId: input.shipmentId, summary } })
     return { recommendation, plan: plan.plan, ranked: ranked.map((r) => ({ mode: r.option.mode, cost: r.cost, eta: r.eta, score: r.score })) }
   }
 
@@ -212,6 +216,7 @@ export class AiService {
         createdBy: user.id,
       },
     })
+    await this.audit.log({ actorId: user.id, action: 'ai.recommendation.create', resource: recommendation.id, after: { agent: 'match', entityType: 'load', entityId: loadId } })
     return { recommendation, matches: ranked.map((r) => ({ userId: r.transporter.id, name: r.transporter.name, rating: r.transporter.rating, score: r.score })) }
   }
 
@@ -255,6 +260,7 @@ export class AiService {
       })
       return changed
     })
+    await this.audit.log({ actorId: user.id, action: 'ai.recommendation.status', resource: id, after: { status, disposed: disposed ? true : false } })
     return { recommendation: updated, disposed }
   }
 
@@ -280,6 +286,7 @@ export class AiService {
         createdBy: user.id,
       },
     })
+    await this.audit.log({ actorId: user.id, action: 'ai.recommendation.create', resource: recommendation.id, after: { agent: 'market', entityType: 'request', entityId: requestId } })
     return { recommendation, matches: matches.matches }
   }
 
@@ -327,6 +334,7 @@ export class AiService {
         createdBy: user.id,
       },
     })
+    await this.audit.log({ actorId: user.id, action: 'ai.recommendation.create', resource: recommendation.id, after: { agent: 'carrier', entityType: 'service', originRef: input.originRef, destinationRef: input.destinationRef } })
     return { recommendation, services: scored }
   }
 
@@ -368,6 +376,7 @@ export class AiService {
       },
       user.id,
     )
+    await this.audit.log({ actorId: user.id, action: 'ai.recommendation.create', resource: recommendation.id, after: { agent: 'risk', entityType: 'shipment', entityId: shipmentId, band } })
     return { recommendation, score, band, factors: { maxModeRisk, valueFactor, weightFactor, claimFactor } }
   }
 
@@ -394,6 +403,7 @@ export class AiService {
       where: { id: loadId },
       data: { shortlistedTransporters: { push: transporterId } },
     })
+    await this.audit.log({ actorId: user.id, action: 'ai.transporter.invite', resource: loadId, after: { transporterId } })
     return { load: updated, invited: transporterId, note: 'Transporter can now be shortlisted on this load' }
   }
 
@@ -526,6 +536,7 @@ export class AiService {
       },
       user.id,
     )
+    await this.audit.log({ actorId: user.id, action: 'ai.recommendation.create', resource: rec.id, after: { agent: 'document', entityType: 'shipment', entityId: input.shipmentId, docType: input.docType } })
     return { recommendation: rec, draft: output }
   }
 
@@ -577,6 +588,7 @@ export class AiService {
       },
       user.id,
     )
+    await this.audit.log({ actorId: user.id, action: 'ai.recommendation.create', resource: rec.id, after: { agent: 'eta', entityType: 'shipment', entityId: shipmentId, etaHours } })
     return { recommendation: rec, etaHours, predictedAt, sampleSize, mode }
   }
 
@@ -627,6 +639,7 @@ export class AiService {
       },
       user.id,
     )
+    await this.audit.log({ actorId: user.id, action: 'ai.recommendation.create', resource: rec.id, after: { agent: 'exception', entityType: 'shipment', entityId: shipmentId, findings: findings.length } })
     return { recommendation: rec, findings }
   }
 

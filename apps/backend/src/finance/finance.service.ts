@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { OutboxRelay } from '../outbox/outbox-relay.service'
 import { OrgAccessService } from '../org-access/org-access.service'
 import { NotificationsService } from '../notifications/notifications.service'
+import { AuditService } from '../audit/audit.service'
 import { PAYMENT_PROVIDER, PaymentProvider } from '../payments/payment-provider.service'
 import type { User } from '@prisma/client'
 
@@ -27,6 +28,7 @@ export class FinanceService {
     @Inject(OutboxRelay) private readonly outbox: OutboxRelay,
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
     private readonly notifications: NotificationsService,
+    private readonly audit: AuditService,
   ) {}
 
   /** Notify every member of an organization (fire-and-forget). */
@@ -114,6 +116,7 @@ export class FinanceService {
       })
       return created
     })
+    await this.audit.log({ actorId: user.id, action: 'claim.file', resource: claim.id, after: { shipmentId: input.shipmentId, reason: input.reason, amount: claim.amount, status: claim.status } })
     return { claim }
   }
 
@@ -149,6 +152,7 @@ export class FinanceService {
       })
       return changed
     })
+    await this.audit.log({ actorId: user.id, action: 'claim.assess', resource: claimId, after: { status: 'assessed', recommendedAmount: updated.amount } })
     return { claim: updated }
   }
 
@@ -240,6 +244,7 @@ export class FinanceService {
       data: { shipmentId: claim.shipmentId, claimId, status: decision },
       category: 'finance',
     })
+    await this.audit.log({ actorId: user.id, action: 'claim.decide', resource: claimId, after: { decision, shipmentId: claim.shipmentId } })
     return { claim: updated }
   }
 
@@ -337,6 +342,7 @@ export class FinanceService {
       data: { shipmentId: input.shipmentId, policyRef: input.policyRef },
       category: 'finance',
     })
+    await this.audit.log({ actorId: user.id, action: 'policy.issue', resource: policy.id, after: { shipmentId: input.shipmentId, policyRef: policy.policyRef, status: policy.status, coverage: policy.coverage } })
     return { policy }
   }
 
@@ -376,6 +382,7 @@ export class FinanceService {
       })
       return changed
     })
+    await this.audit.log({ actorId: user.id, action: 'policy.expire', resource: policyId, after: { policyRef: policy.policyRef, status: 'expired' } })
     return { policy: updated }
   }
 
@@ -401,6 +408,7 @@ export class FinanceService {
       })
       return changed
     })
+    await this.audit.log({ actorId: user.id, action: 'policy.claim', resource: policyId, after: { policyRef: policy.policyRef, status: 'claimed' } })
     return { policy: updated }
   }
 
@@ -522,6 +530,7 @@ export class FinanceService {
       data: { shipmentId: input.shipmentId, settlementId: settlement.id, type: input.type },
       category: 'finance',
     })
+    await this.audit.log({ actorId: user.id, action: 'settlement.create', resource: settlement.id, after: { shipmentId: input.shipmentId, type: settlement.type, amount: settlement.amount, status: settlement.status } })
     return { settlement }
   }
 
@@ -596,6 +605,7 @@ export class FinanceService {
         category: 'finance',
       })
     }
+    await this.audit.log({ actorId: user.id, action: 'settlement.clear', resource: settlementId, after: { status: result.status === 'succeeded' ? 'cleared' : 'failed', amount } })
     return { settlement: updated.changed, payment: updated.payment }
   }
 
@@ -659,6 +669,7 @@ export class FinanceService {
       })
       return created
     })
+    await this.audit.log({ actorId: user.id, action: 'risk.assess', resource: assessment.id, after: { shipmentId, score, band } })
     return { assessment: { ...assessment, band } }
   }
 

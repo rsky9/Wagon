@@ -24,6 +24,7 @@ interface Props {
   onOpenKyc: () => void
   onOpenDecisionRoom: (loadId: string) => void
   onOpenResponses?: () => void
+  onOpenBookings?: () => void
   /** Render without the app header (used when embedded in a parent with its own header). */
   embedded?: boolean
 }
@@ -39,7 +40,7 @@ const TONE: Record<string, StatusTone> = {
   cancelled: 'danger',
 }
 
-export function MyLoads({ onPostLoad, onLogout, onSelectLoad, onOpenKyc, onOpenDecisionRoom, onOpenResponses, embedded = false }: Props) {
+export function MyLoads({ onPostLoad, onLogout, onSelectLoad, onOpenKyc, onOpenDecisionRoom, onOpenResponses, onOpenBookings, embedded = false }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
   const [loads, setLoads] = useState<Load[]>([])
@@ -96,6 +97,9 @@ export function MyLoads({ onPostLoad, onLogout, onSelectLoad, onOpenKyc, onOpenD
       actions.push({ text: 'Decision Room', onPress: () => onOpenDecisionRoom(load.id) })
       if (onOpenResponses) {
         actions.push({ text: 'Responses', onPress: onOpenResponses })
+      }
+      if (onOpenBookings) {
+        actions.push({ text: 'Bookings', onPress: onOpenBookings })
       }
     }
     if (load.status === 'delivered') {

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { OrgAccessService } from '../org-access/org-access.service'
+import { AuditService } from '../audit/audit.service'
 import type { User } from '@prisma/client'
 
 /**
@@ -15,6 +16,7 @@ export class AnalyticsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orgAccess: OrgAccessService,
+    private readonly audit: AuditService,
   ) {}
 
   private sinceDays(days: number) {

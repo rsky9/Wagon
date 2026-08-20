@@ -14,14 +14,12 @@ import { LoadDetailScreen } from '../screens/LoadDetailScreen'
 import { TripsScreen } from '../screens/TripsScreen'
 import { PassbookScreen } from '../screens/PassbookScreen'
 import { BankScreen } from '../screens/BankScreen'
-import { DriverHomeScreen } from '../screens/DriverHomeScreen'
 import { MyBidsScreen } from '../screens/MyBidsScreen'
 import { FavoritesScreen } from '../screens/FavoritesScreen'
 import { DisputesScreen } from '../screens/DisputesScreen'
 import { RaiseDisputeScreen } from '../screens/RaiseDisputeScreen'
 import { KycScreen } from '../screens/KycScreen'
 import { ProfileScreen } from '../screens/ProfileScreen'
-import { PostLoadScreen } from '../screens/PostLoadScreen'
 import { PostLoadWizard } from '../screens/PostLoadWizard'
 import { TripDetailScreen } from '../screens/TripDetailScreen'
 import { TrackingScreen } from '../screens/TrackingScreen'
@@ -81,7 +79,6 @@ import type { Load, LanguageCode } from '@wagon/contracts'
 
 export type RootStackParamList = {
   UnifiedTabs: undefined
-  DriverHome: undefined
   LoadDetail: { load: Load; id?: string }
   TripDetail: { loadId?: string; tripId?: string }
   Track: { tripId: string }
@@ -603,10 +600,6 @@ function ReturnLoadsRoute({ navigation, route }: any) {
   )
 }
 
-function DriverHomeRoute({ navigation }: any) {
-  return <DriverHomeScreen onOpenTrip={(tripId) => navigation.navigate('TripExecute', { tripId })} />
-}
-
 export function MobileNavigator() {
   const auth = useAuth()
   const { isDark } = useThemeMode()
@@ -737,7 +730,6 @@ export function MobileNavigator() {
                 initialRouteName="UnifiedTabs"
               >
                 <Stack.Screen name="UnifiedTabs" component={UnifiedTabs} />
-                <Stack.Screen name="DriverHome" component={DriverHomeRoute} />
                 <Stack.Screen name="LoadDetail" component={LoadDetailRoute} />
                 <Stack.Screen name="TripDetail" component={TripDetailRoute} />
                 <Stack.Screen name="Track" component={TrackRoute} />

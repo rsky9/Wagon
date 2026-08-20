@@ -29,6 +29,7 @@ import { PushModule } from './push/push.module'
 import { EwbModule } from './ewb/ewb.module'
 import { RedisModule } from './redis/redis.module'
 import { TrucksModule } from './trucks/trucks.module'
+import { VehiclesModule } from './vehicles/vehicles.module'
 import { DriversModule } from './drivers/drivers.module'
 import { SupportModule } from './support/support.module'
 import { OnboardingModule } from './onboarding/onboarding.module'
@@ -98,6 +99,7 @@ import { AnalyticsModule } from './analytics/analytics.module'
     EwbModule,
     RedisModule,
     TrucksModule,
+    VehiclesModule,
     DriversModule,
     SupportModule,
     OnboardingModule,

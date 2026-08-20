@@ -139,6 +139,7 @@ export class TrucksService {
 
   async update(id: string, input: Partial<CreateTruckInput>, user: User) {
     const transporterId = await this.transporterId(user)
+    if (!transporterId) throw new BadRequestException('Transporter profile not found')
     const truck = await this.prisma.truck.findFirst({ where: { id, transporterId } })
     if (!truck) throw new NotFoundException('Truck not found')
     const updated = await this.prisma.truck.update({
@@ -171,6 +172,7 @@ export class TrucksService {
 
   async remove(id: string, user: User) {
     const transporterId = await this.transporterId(user)
+    if (!transporterId) throw new BadRequestException('Transporter profile not found')
     const truck = await this.prisma.truck.findFirst({ where: { id, transporterId } })
     if (!truck) throw new NotFoundException('Truck not found')
     // Block removal while the truck is committed to an active trip or booking.

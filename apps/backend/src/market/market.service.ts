@@ -5,6 +5,7 @@ import { OrgAccessService } from '../org-access/org-access.service'
 import { NotificationsService } from '../notifications/notifications.service'
 import { PlanningService } from '../planning/planning.service'
 import { LoadMatchingService } from '../matching/matching.service'
+import { AuditService } from '../audit/audit.service'
 import type { User } from '@prisma/client'
 import type { Prisma } from '@prisma/client'
 
@@ -20,6 +21,7 @@ export class MarketService {
     @Inject(OutboxRelay) private readonly outbox: OutboxRelay,
     @Inject(PlanningService) private readonly planning: PlanningService,
     private readonly matching: LoadMatchingService,
+    private readonly audit: AuditService,
   ) {}
 
   // ---------- Lanes (shared primitive) ----------
@@ -62,6 +64,7 @@ export class MarketService {
         createdByOrgId: org.id,
       },
     })
+    await this.audit.log({ actorId: user.id, action: 'lane.upsert', resource: lane.id, after: { originRef, destinationRef, mode: lane.mode } })
     return { lane }
   }
 
@@ -126,6 +129,7 @@ export class MarketService {
       actorId: user.id,
       payload: { kind: input.kind, providerOrgId: org.id },
     })
+    await this.audit.log({ actorId: user.id, action: 'listing.create', resource: listing.id, after: { kind: listing.kind, status: listing.status, providerOrgId: org.id } })
     return { listing }
   }
   /** Browse supply — PUBLIC read (any authenticated user; cross-type discovery). */
@@ -255,6 +259,7 @@ export class MarketService {
     if (!listing) throw new NotFoundException('Listing not found')
     if (!(await this.orgAccess.isMember(user, listing.providerOrgId))) throw new ForbiddenException('Not your listing')
     const updated = await this.prisma.marketListing.update({ where: { id }, data: { status } })
+    await this.audit.log({ actorId: user.id, action: 'listing.status', resource: id, after: { status } })
     return { listing: updated }
   }
 
@@ -479,6 +484,7 @@ export class MarketService {
         console.error('[market] bridgeToLoad failed:', e)
       }
     }
+    await this.audit.log({ actorId: user.id, action: 'request.create', resource: request.id, after: { kind: request.kind, status: request.status, requesterOrgId: org.id } })
     return { request }
   }
 
@@ -570,6 +576,7 @@ export class MarketService {
         category: 'market',
       }).catch(() => {})
     }
+    await this.audit.log({ actorId: user.id, action: 'request.create', resource: request.id, after: { kind: request.kind, status: request.status, listingId: listing.id } })
     return { request, listing }
   }
 
@@ -652,6 +659,7 @@ export class MarketService {
     if (!orgIds.includes(request.requesterOrgId)) throw new ForbiddenException('Not your request')
     if (request.status === 'booked' || request.status === 'closed') throw new BadRequestException(`Request is ${request.status}`)
     const updated = await this.prisma.marketRequest.update({ where: { id: requestId }, data: { status: 'closed' } })
+    await this.audit.log({ actorId: user.id, action: 'request.close', resource: requestId, after: { status: 'closed' } })
     return { request: updated }
   }
 
@@ -766,6 +774,7 @@ export class MarketService {
         category: 'market',
       }).catch(() => {})
     }
+    await this.audit.log({ actorId: user.id, action: 'quote.create', resource: quote.id, after: { requestId, providerOrgId: org.id, amount: quote.amount, status: quote.status } })
     return { quote }
   }
 
@@ -846,6 +855,7 @@ export class MarketService {
         category: 'market',
       }).catch(() => {})
     }
+    await this.audit.log({ actorId: user.id, action: 'quote.accept', resource: quoteId, after: { requestId: quote.requestId, status: 'accepted', settlementId: updated.settlementId ?? undefined } })
     return { quote: updated.accepted, settlementId: updated.settlementId }
   }
 
@@ -861,6 +871,7 @@ export class MarketService {
     if (otherSubmitted === 0 && quote.request.status === 'quoted') {
       await this.prisma.marketRequest.update({ where: { id: quote.requestId }, data: { status: 'open' } })
     }
+    await this.audit.log({ actorId: user.id, action: 'quote.withdraw', resource: quoteId, after: { status: 'withdrawn' } })
     return { quote: updated }
   }
 
@@ -872,6 +883,7 @@ export class MarketService {
     if (!orgIds.includes(quote.request.requesterOrgId)) throw new ForbiddenException('Only the requester can reject')
     if (quote.status !== 'submitted') throw new BadRequestException(`Quote is ${quote.status}`)
     const updated = await this.prisma.marketQuote.update({ where: { id: quoteId }, data: { status: 'rejected' } })
+    await this.audit.log({ actorId: user.id, action: 'quote.reject', resource: quoteId, after: { status: 'rejected' } })
     return { quote: updated }
   }
 
@@ -1403,6 +1415,7 @@ export class MarketService {
         referenceId: input.referenceId,
       },
     })
+    await this.audit.log({ actorId: user.id, action: 'rating.create', resource: rating.id, after: { subjectOrgId: input.subjectOrgId, axis: input.axis, score: input.score } })
     return { rating }
   }
 
@@ -1465,6 +1478,7 @@ export class MarketService {
         status: 'live',
       },
     })
+    await this.audit.log({ actorId: user.id, action: 'carrier_service.create', resource: service.id, after: { mode: service.mode, status: service.status, carrierOrgId: org.id } })
     return { service }
   }
 
@@ -1539,6 +1553,7 @@ export class MarketService {
       actorId: user.id,
       payload: { serviceId, remaining: updated.availableSlots },
     })
+    await this.audit.log({ actorId: user.id, action: 'carrier_service.book', resource: serviceId, after: { remaining: updated.availableSlots, status: updated.status } })
     return { service: updated }
   }
 

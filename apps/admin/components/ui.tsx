@@ -30,7 +30,7 @@ export function Badge({ children, tone = "slate" }: { children: React.ReactNode;
 }
 
 /** Map a status string to a badge tone. */
-export function statusTone(status: string): keyof typeof BADGE_TONES {
+function statusTone(status: string): keyof typeof BADGE_TONES {
   const s = status.toLowerCase().replace(/_/g, " ");
   if (/approv|success|delivered|active|closed|resolved|paid|succeeded|done/.test(s)) return "emerald";
   if (/pend|open|process|in.transit|await/.test(s)) return "amber";
@@ -80,7 +80,7 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
   );
 }
 
-export function Skeleton({ className = "" }: { className?: string }) {
+function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse rounded-lg bg-slate-200 dark:bg-slate-800 ${className}`} />;
 }
 

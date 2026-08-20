@@ -57,7 +57,7 @@ export default function Analytics() {
       ) : (
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <StatCard label="Active trips" value={String(data.trips.inTransit)} icon="🚛" tone="blue" sub={`${data.trips.total} total`} />
+            <StatCard label="Active trips" value={String(data.trips.inTransit)} icon="🚛" tone="sky" sub={`${data.trips.total} total`} />
             <StatCard label="On-time rate" value={`${(data.trips.onTimeRate * 100).toFixed(0)}%`} icon="⏱️" tone="emerald" sub={`${data.trips.delivered} delivered`} />
             <StatCard label="Open exceptions" value={String(data.exceptions.open)} icon="⚠️" tone="red" />
             <StatCard label="GMV (invoiced)" value={`₹${fmt(data.finance.gmv)}`} icon="💰" tone="orange" sub={`${data.finance.invoicesOutstanding} outstanding`} />

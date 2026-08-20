@@ -48,11 +48,44 @@ export default function RateCards() {
     }
   };
 
+  const create = async () => {
+    const type = window.prompt("Truck type (open | container | trailer):", "open");
+    if (type === null) return;
+    const model = window.prompt("Model name:", "");
+    if (model === null || !model.trim()) return;
+    const priceInput = window.prompt("Price per km (₹, optional):", "");
+    const price = priceInput ? Number(priceInput) : undefined;
+    if (priceInput && (!price || price <= 0)) {
+      setError("Enter a valid price");
+      return;
+    }
+    setBusy("new");
+    try {
+      await api.post("/admin/truck-models", { type: type.trim(), model: model.trim(), pricePerKm: price });
+      setError(null);
+      fetchCards();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create model");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <ShellLayout>
       <PageHeader title="Rate cards" subtitle="Reference pricing per truck model · transparent for load creation & bidding" />
 
       {error && <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+
+      <div className="mb-4 flex justify-end">
+        <button
+          onClick={create}
+          disabled={busy === "new"}
+          className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-orange-600 disabled:opacity-50"
+        >
+          {busy === "new" ? "…" : "+ Add model"}
+        </button>
+      </div>
 
       {loading ? (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">

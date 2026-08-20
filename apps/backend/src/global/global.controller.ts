@@ -64,7 +64,7 @@ export class GlobalController {
 
   @Roles('admin')
   @Post('admin/upsert')
-  upsertCountry(@Body() body: Record<string, unknown>) {
-    return this.global.upsertCountry(body as never)
+  upsertCountry(@Body() body: Record<string, unknown>, @CurrentUser() user: User) {
+    return this.global.upsertCountry(body as never, user)
   }
 }

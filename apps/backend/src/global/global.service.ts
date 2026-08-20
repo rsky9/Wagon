@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException, Inject } from '@nes
 import { PrismaService } from '../prisma/prisma.service'
 import { OrgAccessService } from '../org-access/org-access.service'
 import { TradeDocumentsService } from '../trade-documents/trade-documents.service'
+import { AuditService } from '../audit/audit.service'
 import type { User } from '@prisma/client'
 
 const ISO_CODE = /^[A-Za-z]{2}$/
@@ -25,6 +26,7 @@ export class GlobalService {
     private readonly prisma: PrismaService,
     private readonly orgAccess: OrgAccessService,
     @Inject(TradeDocumentsService) private readonly tradeDocs: TradeDocumentsService,
+    private readonly audit: AuditService,
   ) {}
 
   private requireCode(code: string) {
@@ -61,6 +63,7 @@ export class GlobalService {
     if (!pack) throw new NotFoundException('Country pack not found')
     const org = await this.orgAccess.primaryOrg(user)
     const updated = await this.prisma.organization.update({ where: { id: org.id }, data: { countryCode: pack.code } })
+    await this.audit.log({ actorId: user.id, action: 'org.country', resource: org.id, after: { countryCode: pack.code } })
     return { organization: updated, country: pack }
   }
 
@@ -146,6 +149,7 @@ export class GlobalService {
       )
       issued.push({ requirement: req, docType, id: doc.document.id, ref: doc.document.ref })
     }
+    await this.audit.log({ actorId: user.id, action: 'document.issue', resource: shipmentId, after: { issuedCount: issued.length } })
     return { country: checklist.country, issued, stillMissing: checklist.missing.filter((m) => !REQ_TO_DOC[m]) }
   }
 
@@ -203,7 +207,7 @@ export class GlobalService {
     documentRequirements?: string[]
     incotermsSupported?: string[]
     enabled?: boolean
-  }) {
+  }, user: User) {
     const code = this.requireCode(input.code)
     const pack = await this.prisma.countryPack.upsert({
       where: { code },
@@ -233,6 +237,7 @@ export class GlobalService {
         enabled: input.enabled ?? true,
       },
     })
+    await this.audit.log({ actorId: user.id, action: 'country.upsert', resource: code, after: { name: pack.name, currency: pack.currency, enabled: pack.enabled } })
     return { country: pack }
   }
 }

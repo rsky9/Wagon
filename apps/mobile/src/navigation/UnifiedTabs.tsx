@@ -180,6 +180,7 @@ function MarketplaceTab({ navigation }: any) {
             onOpenKyc={() => root?.navigate('Kyc')}
             onOpenDecisionRoom={(loadId) => root?.navigate('DecisionRoom', { loadId })}
             onOpenResponses={() => root?.navigate('Responses')}
+            onOpenBookings={() => root?.navigate('Bookings')}
             embedded
           />
         )}
@@ -212,6 +213,7 @@ function MarketplaceTab({ navigation }: any) {
         onOpenKyc={() => root?.navigate('Kyc')}
         onOpenDecisionRoom={(loadId) => root?.navigate('DecisionRoom', { loadId })}
         onOpenResponses={() => root?.navigate('Responses')}
+        onOpenBookings={() => root?.navigate('Bookings')}
       />
     )
   }

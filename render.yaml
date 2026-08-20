@@ -15,16 +15,16 @@
         { "key": "REDIS_URL", "fromService": { "name": "wagon-redis", "type": "redis" } },
         { "key": "JWT_ACCESS_SECRET", "generateValue": true },
         { "key": "JWT_REFRESH_SECRET", "generateValue": true },
-        { "key": "CORS_ORIGIN", "value": "https://wagon-admin.onrender.com" }
+        { "key": "CORS_ORIGIN", "fromService": { "name": "wagon-admin", "type": "web", "envVarKey": "RENDER_EXTERNAL_URL" } }
       ]
     },
     {
       "type": "web",
       "name": "wagon-admin",
       "runtime": "node",
-      "rootDir": "apps/admin",
-      "buildCommand": "npm install && npm run build",
-      "startCommand": "npm run start",
+      "rootDir": ".",
+      "buildCommand": "corepack enable && pnpm install --frozen-lockfile && pnpm --filter @wagon/admin build",
+      "startCommand": "pnpm --filter @wagon/admin start",
       "healthCheckPath": "/",
       "envVars": [
         { "key": "NEXT_PUBLIC_API_URL", "fromService": { "name": "wagon-api", "type": "web", "envVarKey": "RENDER_EXTERNAL_URL" } }

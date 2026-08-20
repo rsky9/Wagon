@@ -10,6 +10,7 @@ import { OutboxRelay } from '../outbox/outbox-relay.service'
 import { OrgAccessService } from '../org-access/org-access.service'
 import { MarketService } from '../market/market.service'
 import { PlanningService } from '../planning/planning.service'
+import { AuditService } from '../audit/audit.service'
 import type { User } from '@prisma/client'
 
 const VALID_KINDS = ['shipper', 'transporter', 'forwarder', 'warehouse', 'carrier', 'broker', 'other']
@@ -36,6 +37,7 @@ export class FoundationService {
     private readonly market: MarketService,
     @Inject(OutboxRelay) private readonly outbox: OutboxRelay,
     @Inject(PlanningService) private readonly planning: PlanningService,
+    private readonly audit: AuditService,
   ) {}
 
   // ---------- Organizations ----------
@@ -59,6 +61,7 @@ export class FoundationService {
       })
       return created
     })
+    await this.audit.log({ actorId: user.id, action: 'org.create', resource: org.id, after: { name: org.name, kind: org.kind } })
     return { organization: org }
   }
 
@@ -93,6 +96,7 @@ export class FoundationService {
         countryCode: input.countryCode ?? undefined,
       },
     })
+    await this.audit.log({ actorId: user.id, action: 'org.update', resource: id, after: { name: updated.name, gst: updated.gst } })
     return { organization: updated }
   }
 
@@ -125,6 +129,7 @@ export class FoundationService {
       update: { role: newRole },
       create: { organizationId, userId: target.id, role: newRole },
     })
+    await this.audit.log({ actorId: user.id, action: 'org.member.add', resource: organizationId, after: { userId: target.id, role: newRole } })
     return { member: created }
   }
 
@@ -143,6 +148,7 @@ export class FoundationService {
     if (target.role === 'owner' && member.role !== 'owner') throw new ForbiddenException('Only the owner can remove the owner')
     if (member.role === 'owner' && member.userId === userId) throw new BadRequestException('Owner cannot remove self')
     await this.prisma.organizationMember.delete({ where: { organizationId_userId: { organizationId, userId } } })
+    await this.audit.log({ actorId: user.id, action: 'org.member.remove', resource: organizationId, after: { userId } })
     return { removed: true }
   }
 
@@ -157,6 +163,7 @@ export class FoundationService {
       where: { organizationId_userId: { organizationId, userId } },
       data: { role },
     })
+    await this.audit.log({ actorId: user.id, action: 'org.member.role', resource: organizationId, after: { userId, role } })
     return { member: updated }
   }
 
@@ -211,6 +218,7 @@ export class FoundationService {
     })
     // Marketplace bridge: planned shipments publish transport demand.
     await this.market.publishShipmentRequest(shipment, user).catch(() => {})
+    await this.audit.log({ actorId: user.id, action: 'shipment.create', resource: shipment.id, after: { ref: shipment.ref, status: shipment.status } })
     return { shipment }
   }
 
@@ -238,6 +246,7 @@ export class FoundationService {
     }
     if ('mode' in data) this.validateMode(data.mode as string)
     const updated = await this.prisma.shipment.update({ where: { id }, data: data as never })
+    await this.audit.log({ actorId: user.id, action: 'shipment.update', resource: id, after: { ref: updated.ref, ...data } as never })
     return { shipment: updated }
   }
 
@@ -260,6 +269,7 @@ export class FoundationService {
       })
       return changed
     })
+    await this.audit.log({ actorId: user.id, action: 'shipment.transition', resource: id, after: { from: shipment.status, to: status } })
     return { shipment: updated }
   }
 
@@ -313,6 +323,7 @@ export class FoundationService {
       })
       return created
     })
+    await this.audit.log({ actorId: user.id, action: 'leg.create', resource: leg.id, after: { shipmentId, sequence: leg.sequence, mode: leg.mode } })
     return { leg }
   }
 
@@ -378,6 +389,7 @@ export class FoundationService {
         }
       })()
     }
+    await this.audit.log({ actorId: user.id, action: 'leg.transition', resource: legId, after: { event, status: updated.status } })
     return { leg: updated, rePlan }
   }
 
@@ -406,6 +418,7 @@ export class FoundationService {
         status: 'created',
       },
     })
+    await this.audit.log({ actorId: user.id, action: 'cargo.create', resource: unit.id, after: { shipmentId: input.shipmentId, kind: unit.kind, ref: unit.ref } })
     return { unit }
   }
 
@@ -454,6 +467,7 @@ export class FoundationService {
       await tx.cargoUnit.update({ where: { id: unit.id }, data: { status: 'split' } })
       return created
     })
+    await this.audit.log({ actorId: user.id, action: 'cargo.split', resource: unitId, after: { childCount: children.length } })
     return { children }
   }
 
@@ -472,6 +486,7 @@ export class FoundationService {
       data: { parentId, status: 'consolidated' },
     })
     await this.prisma.cargoUnit.update({ where: { id: parentId }, data: { status: 'consolidated' } })
+    await this.audit.log({ actorId: user.id, action: 'cargo.merge', resource: unitId, after: { parentId } })
     return { unit: updated }
   }
 
@@ -483,6 +498,7 @@ export class FoundationService {
       throw new ForbiddenException('No access to this cargo unit')
     }
     const updated = await this.prisma.cargoUnit.update({ where: { id: unitId }, data: { ...data, status: data.status ?? unit.status } })
+    await this.audit.log({ actorId: user.id, action: 'cargo.update', resource: unitId, after: data })
     return { unit: updated }
   }
 
@@ -534,6 +550,7 @@ export class FoundationService {
       })
       return changed
     })
+    await this.audit.log({ actorId: user.id, action: 'container.transition', resource: unitId, after: { event, status: updated.status } })
     return { unit: updated }
   }
 

@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { OutboxRelay } from '../outbox/outbox-relay.service'
 import { OrgAccessService } from '../org-access/org-access.service'
 import { MarketService } from '../market/market.service'
+import { AuditService } from '../audit/audit.service'
 import type { User } from '@prisma/client'
 
 const DOC_KINDS = ['commercial_invoice', 'packing_list', 'waybill', 'bill_of_lading', 'air_waybill', 'customs_declaration', 'certificate']
@@ -44,6 +45,7 @@ export class ForwardingService {
     private readonly orgAccess: OrgAccessService,
     private readonly market: MarketService,
     @Inject(OutboxRelay) private readonly outbox: OutboxRelay,
+    private readonly audit: AuditService,
   ) {}
 
   /** The forwarder's own organizations (kind = forwarder) the user belongs to. */
@@ -108,6 +110,7 @@ export class ForwardingService {
       })
       return created
     })
+    await this.audit.log({ actorId: user.id, action: 'order.create', resource: order.id, after: { ref: order.ref, status: order.status } })
     return { order }
   }
 
@@ -149,6 +152,7 @@ export class ForwardingService {
       })
       return changed
     })
+    await this.audit.log({ actorId: user.id, action: 'order.transition', resource: orderId, after: { from: order.status, to: status } })
     return { order: updated }
   }
 
@@ -163,6 +167,7 @@ export class ForwardingService {
       where: { id: order.id },
       data: { buyAmount, sellAmount },
     })
+    await this.audit.log({ actorId: user.id, action: 'order.margin', resource: order.id, after: { buyAmount, sellAmount, margin } })
     return { order: updated, margin, pct: sellAmount > 0 ? (margin / sellAmount) * 100 : 0 }
   }
 
@@ -219,6 +224,7 @@ export class ForwardingService {
       })
       return created
     })
+    await this.audit.log({ actorId: user.id, action: 'booking.create', resource: booking.id, after: { shipmentId: input.shipmentId, status: booking.status } })
     return { booking }
   }
 
@@ -258,6 +264,7 @@ export class ForwardingService {
       })
       return confirmed
     })
+    await this.audit.log({ actorId: user.id, action: 'booking.confirm', resource: bookingId, after: { status: 'confirmed', shipmentId: booking.shipmentId } })
     return { booking: updated }
   }
 
@@ -281,6 +288,7 @@ export class ForwardingService {
       })
       return cancelled
     })
+    await this.audit.log({ actorId: user.id, action: 'booking.cancel', resource: bookingId, after: { status: 'cancelled' } })
     return { booking: updated }
   }
 
@@ -316,6 +324,7 @@ export class ForwardingService {
       })
       return created
     })
+    await this.audit.log({ actorId: user.id, action: 'document.create', resource: doc.id, after: { kind, status: doc.status } })
     return { document: doc }
   }
 
@@ -345,6 +354,7 @@ export class ForwardingService {
       })
       return changed
     })
+    await this.audit.log({ actorId: user.id, action: 'document.transition', resource: documentId, after: { from: doc.status, to: status } })
     return { document: updated }
   }
 
@@ -409,6 +419,7 @@ export class ForwardingService {
       })
       return created
     })
+    await this.audit.log({ actorId: user.id, action: 'consolidation.create', resource: consolidation.id, after: { ref: consolidation.ref, status: consolidation.status } })
     return { consolidation }
   }
 
@@ -429,6 +440,7 @@ export class ForwardingService {
       await this.recomputeConsolidationTotals(tx as unknown as Parameters<typeof this.recomputeConsolidationTotals>[0], consolidationId)
       return changed
     })
+    await this.audit.log({ actorId: user.id, action: 'consolidation.order.add', resource: consolidationId, after: { orderId } })
     return { order: updated }
   }
 
@@ -484,6 +496,7 @@ export class ForwardingService {
     })
     // Auto-publish the ready LCL consolidation as forwarder_service supply.
     await this.market.publishFromConsolidation(consolidationId, user).catch(() => {})
+    await this.audit.log({ actorId: user.id, action: 'consolidation.ready', resource: consolidationId, after: { status: 'ready' } })
     return { consolidation: updated }
   }
 
@@ -541,6 +554,7 @@ export class ForwardingService {
       })
       return changed
     })
+    await this.audit.log({ actorId: user.id, action: 'consolidation.book', resource: input.consolidationId, after: { status: 'booked', carrierId: input.carrierId } })
     return { consolidation: updated }
   }
 

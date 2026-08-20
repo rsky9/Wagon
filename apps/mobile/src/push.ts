@@ -22,6 +22,17 @@ export function setUpNotificationHandlers(navigate: NavigateFn): void {
   navigateToUrl = navigate
   if (handlersReady) return
   handlersReady = true
+  // Show a banner/alert while the app is in the foreground (iOS suppresses
+  // notifications by default; Android shows them unless this handler returns
+  // false). Surfaces live trip/payment/notification events without a tap.
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  })
   Notifications.addNotificationResponseReceivedListener((response) => {
     const data = (response.notification.request.content.data ?? {}) as Record<string, unknown>
     // The backend deep-links via `data.route` (a stack route or wagon:// URL).

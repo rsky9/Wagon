@@ -81,6 +81,11 @@ export class AdminController {
     return this.admin.updateRateCard(modelId, body.pricePerKm, actor)
   }
 
+  @Post('truck-models')
+  createTruckModel(@Body() body: { type: string; model: string; capacities?: number[]; pricePerKm?: number }, @CurrentUser() actor: User) {
+    return this.admin.createTruckModel(body, actor)
+  }
+
   @Post('verify/:id')
   verify(@Param('id') id: string, @Body() body: { capability?: 'supplier' | 'transporter' }, @CurrentUser() actor: User) {
     return this.admin.verify(id, actor, body?.capability)

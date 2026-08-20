@@ -63,19 +63,6 @@ export function levelProgress(xp: number) {
   return ((xp % XP_PER_LEVEL) / XP_PER_LEVEL) * 100
 }
 
-/** Map a done quest back to the badge it should unlock. */
-export function badgeForQuest(questId: string): string | null {
-  switch (questId) {
-    case 'truck': return 'fleet'
-    case 'driver': return 'crew'
-    case 'kyc': return 'verified'
-    case 'load': return 'firstLoad'
-    case 'bank': return 'paid'
-    case 'pay': return 'paid'
-    default: return null
-  }
-}
-
 const EMPTY: GamificationState = {
   xp: 0,
   level: 1,
@@ -97,14 +84,6 @@ export async function loadGamification(): Promise<GamificationState> {
 export async function awardXp(amount: number, extraBadge?: string): Promise<GamificationState> {
   try {
     return await api.post<GamificationState>('/gamification/xp', { amount, badge: extraBadge })
-  } catch {
-    return EMPTY
-  }
-}
-
-export async function completeQuest(questId: string): Promise<GamificationState> {
-  try {
-    return await api.post<GamificationState>(`/gamification/quests/${questId}/complete`)
   } catch {
     return EMPTY
   }

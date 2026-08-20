@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { OutboxRelay } from '../outbox/outbox-relay.service'
 import { OrgAccessService } from '../org-access/org-access.service'
 import { MarketService } from '../market/market.service'
+import { AuditService } from '../audit/audit.service'
 import type { User } from '@prisma/client'
 
 const VALID_KINDS = ['warehouse', 'cold', 'bonded', 'cfs', 'icd', 'yard', 'cross_dock', 'transload']
@@ -45,6 +46,7 @@ export class StorageService {
     private readonly orgAccess: OrgAccessService,
     private readonly market: MarketService,
     @Inject(OutboxRelay) private readonly outbox: OutboxRelay,
+    private readonly audit: AuditService,
   ) {}
 
   /** The operator org = the warehouse org the caller belongs to. */
@@ -92,6 +94,7 @@ export class StorageService {
     })
     // Auto-publish this facility's capacity to the marketplace (warehouse_space).
     await this.market.publishFromFacility(facility.id, user).catch(() => {})
+    await this.audit.log({ actorId: user.id, action: 'facility.create', resource: facility.id, after: { name: facility.name, kind: facility.kind, city: facility.city } })
     return { facility }
   }
 
@@ -157,6 +160,7 @@ export class StorageService {
       })
       return created
     })
+    await this.audit.log({ actorId: user.id, action: 'operation.create', resource: op.id, after: { ref: op.ref, status: op.status, facilityId } })
     return { operation: op }
   }
 
@@ -205,6 +209,7 @@ export class StorageService {
     if (next === 'done') {
       await this.market.autoRateFromWarehouseOp(updated, user).catch(() => {})
     }
+    await this.audit.log({ actorId: user.id, action: 'operation.advance', resource: opId, after: { from: op.status, to: next } })
     return { operation: updated }
   }
 
@@ -227,6 +232,7 @@ export class StorageService {
       photoKey: input.photoKey,
     }]
     const updated = await this.prisma.warehouseOperation.update({ where: { id: opId }, data: { evidence: evidence as never } })
+    await this.audit.log({ actorId: user.id, action: 'operation.evidence', resource: opId, after: { stage: op.status, note: input.note } })
     return { operation: updated }
   }
 
@@ -243,6 +249,7 @@ export class StorageService {
       where: { id: opId },
       data: { status: 'cancelled' },
     })
+    await this.audit.log({ actorId: user.id, action: 'operation.cancel', resource: opId, after: { reason } })
     return { operation: updated, reason }
   }
 

@@ -571,7 +571,7 @@ export default function Enablement() {
             <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 dark:bg-slate-800/60">
-                  <tr><Th>Agent</Th><Th>Summary</Th><Th>Score</Th><Th>Status</Th></tr>
+                  <tr><Th>Agent</Th><Th>Summary</Th><Th>Score</Th><Th>Status</Th><Th>Actions</Th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {aiRecs.map((a) => (
@@ -580,6 +580,12 @@ export default function Enablement() {
                       <Td>{a.summary}</Td>
                       <Td>{a.score != null ? a.score.toFixed(2) : "—"}</Td>
                       <Td><StatusBadge status={a.status} /></Td>
+                      <Td>
+                        <div className="flex gap-1">
+                          <ActionBtn label="Accept" tone="green" disabled={busy === `ai:${a.id}` || a.status === "accepted"} onClick={() => run(`ai:${a.id}`, () => api.patch(`/ai/recommendations/${a.id}/status`, { status: "accepted" }))} />
+                          <ActionBtn label="Dismiss" tone="slate" disabled={busy === `ai:${a.id}` || a.status === "dismissed"} onClick={() => run(`ai:${a.id}`, () => api.patch(`/ai/recommendations/${a.id}/status`, { status: "dismissed" }))} />
+                        </div>
+                      </Td>
                     </tr>
                   ))}
                 </tbody>

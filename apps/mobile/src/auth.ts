@@ -67,6 +67,9 @@ function restoreSession() {
         const saved = JSON.parse(raw) as Session
         setTokens(saved.accessToken, saved.refreshToken)
         setState({ session: saved })
+        // Re-register the device for push on cold launch — the FCM token can
+        // rotate across installs without the login path running again.
+        void registerForPushNotifications()
       }
     })
     .catch(() => {})

@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException, Inject } from '@nes
 import { PrismaService } from '../prisma/prisma.service'
 import { OutboxRelay } from '../outbox/outbox-relay.service'
 import { OrgAccessService } from '../org-access/org-access.service'
+import { AuditService } from '../audit/audit.service'
 import type { User } from '@prisma/client'
 
 const VALID_MODES = ['road', 'rail', 'ocean', 'air', 'inland_water', 'multimodal']
@@ -35,6 +36,7 @@ export class PlanningService {
     private readonly prisma: PrismaService,
     private readonly orgAccess: OrgAccessService,
     @Inject(OutboxRelay) private readonly outbox: OutboxRelay,
+    private readonly audit: AuditService,
   ) {}
 
   /** Validate leg shape + contiguity (leg[i].destination === leg[i+1].origin). */
@@ -115,6 +117,7 @@ export class PlanningService {
       })
       return created
     })
+    await this.audit.log({ actorId: user.id, action: 'plan.propose', resource: plan.id, after: { shipmentId: input.shipmentId, ref: plan.ref, status: plan.status, cost: plan.cost } })
     return { plan }
   }
 
@@ -179,6 +182,7 @@ export class PlanningService {
       })
       return updated
     })
+    await this.audit.log({ actorId: user.id, action: 'plan.select', resource: planId, after: { shipmentId: plan.shipmentId, status: 'selected' } })
     return { plan: tx }
   }
 
@@ -214,6 +218,7 @@ export class PlanningService {
       })
       return changed
     })
+    await this.audit.log({ actorId: user.id, action: 'plan.decline', resource: planId, after: { shipmentId: plan.shipmentId, status: 'declined' } })
     return { plan: updated }
   }
 
@@ -259,6 +264,7 @@ export class PlanningService {
       })
       return created
     })
+    await this.audit.log({ actorId: user.id, action: 'plan.replan', resource: newPlan.id, after: { fromPlan: planId, shipmentId: plan.shipmentId, failedLegIndex } })
     return { plan: newPlan, reroutedLeg: rerouted[failedLegIndex] }
   }
 

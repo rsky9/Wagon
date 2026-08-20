@@ -5,7 +5,7 @@ import { UploadsService } from '../uploads/uploads.service'
 import { NotificationsService } from '../notifications/notifications.service'
 import { PaymentsService } from '../payments/payments.service'
 import { PAYMENT_PROVIDER, PaymentProvider } from '../payments/payment-provider.service'
-import type { User } from '@prisma/client'
+import type { User, TruckType } from '@prisma/client'
 
 @Injectable()
 export class AdminService {
@@ -315,6 +315,30 @@ export class AdminService {
       after: { pricePerKm: updated.pricePerKm },
     })
     return updated
+  }
+
+  async createTruckModel(input: { type: string; model: string; capacities?: number[]; pricePerKm?: number }, actor: User) {
+    const validTypes = ['open', 'container', 'trailer']
+    if (!validTypes.includes(input.type)) throw new BadRequestException('Invalid truck type')
+    if (!input.model?.trim()) throw new BadRequestException('Model name is required')
+    const model = await this.prisma.truckModel.upsert({
+      where: { type_model: { type: input.type as TruckType, model: input.model.trim() } },
+      update: {},
+      create: { type: input.type as TruckType, model: input.model.trim(), capacities: input.capacities ?? [] },
+    })
+    let rateCard = await this.prisma.rateCard.findFirst({ where: { modelId: model.id, status: true } })
+    if (input.pricePerKm != null && input.pricePerKm > 0) {
+      rateCard = rateCard
+        ? await this.prisma.rateCard.update({ where: { id: rateCard.id }, data: { pricePerKm: input.pricePerKm } })
+        : await this.prisma.rateCard.create({ data: { modelId: model.id, pricePerKm: input.pricePerKm } })
+    }
+    await this.audit.log({
+      actorId: actor.id,
+      action: 'truck_model.create',
+      resource: model.id,
+      after: { type: model.type, model: model.model, pricePerKm: rateCard?.pricePerKm },
+    })
+    return { model, rateCard: rateCard ?? null }
   }
 
   async verify(userId: string, actor: User, capability?: 'supplier' | 'transporter') {

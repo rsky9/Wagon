@@ -50,6 +50,7 @@ describe('Enablement platform (e2e)', () => {
     get: (path: string) => request(app.getHttpServer()).get(`/api/v1${path}`).set('Authorization', `Bearer ${token}`),
     post: (path: string, body?: unknown) => request(app.getHttpServer()).post(`/api/v1${path}`).set('Authorization', `Bearer ${token}`).send(body),
     patch: (path: string, body?: unknown) => request(app.getHttpServer()).patch(`/api/v1${path}`).set('Authorization', `Bearer ${token}`).send(body),
+    delete: (path: string) => request(app.getHttpServer()).delete(`/api/v1${path}`).set('Authorization', `Bearer ${token}`),
   })
 
   beforeAll(async () => {
@@ -102,6 +103,9 @@ describe('Enablement platform (e2e)', () => {
       prisma.organizationDocument.deleteMany(),
       prisma.ediMessage.deleteMany(),
       prisma.truckMaintenance.deleteMany(),
+      prisma.vehicle.deleteMany(),
+      prisma.laneAlert.deleteMany(),
+      prisma.fcmToken.deleteMany(),
     ])
     // Keep the supplier's forwarder org for order ownership assertions.
     supToken = await verify(SUP, await requestOtp(SUP))
@@ -531,6 +535,68 @@ describe('Enablement platform (e2e)', () => {
 
       // Cross-tenant access denied.
       await api(trToken).patch(`/containers/${id}/status`, { status: 'available' }).expect(403)
+    })
+  })
+
+  describe('Alerts', () => {
+    it('creates, lists and toggles lane alerts with role isolation', async () => {
+      const created = await api(trToken).post('/alerts', { fromLane: 'Mundra', truckType: 'container' }).expect(201)
+      expect(created.body.alert.fromLane).toBe('Mundra')
+      expect(created.body.alert.isActive).toBe(true)
+
+      const mine = await api(trToken).get('/alerts/mine').expect(200)
+      expect(mine.body.alerts.length).toBeGreaterThan(0)
+
+      const toggled = await api(trToken).patch(`/alerts/${created.body.alert.id}/toggle`).expect(200)
+      expect(toggled.body.isActive).toBe(false)
+
+      await api(trToken).post('/alerts', { fromLane: '' }).expect(400)
+      // Supplier cannot create a transporter lane alert.
+      await api(supToken).post('/alerts', { fromLane: 'Mundra' }).expect(403)
+    })
+  })
+
+  describe('FCM', () => {
+    it('registers and unregisters a device token', async () => {
+      const reg = await api(supToken).post('/fcm/register', { token: 'e2e-token-abc', platform: 'android', deviceId: 'e2e-device' }).expect(201)
+      expect(reg.body.token).toBe('e2e-token-abc')
+      // Idempotent re-register (upsert on same user+token).
+      await api(supToken).post('/fcm/register', { token: 'e2e-token-abc', platform: 'ios' }).expect(201)
+      await api(supToken).post('/fcm/register', { token: '' }).expect(400)
+      const unreg = await api(supToken).post('/fcm/unregister', { token: 'e2e-token-abc' }).expect(201)
+      expect(unreg.body.ok).toBe(true)
+    })
+  })
+
+  describe('Vehicles', () => {
+    it('registers, lists, updates and deletes a transporter vehicle with admin verification', async () => {
+      const created = await api(trToken).post('/vehicles', { rcNumber: 'ka01ab1234' }).expect(201)
+      expect(created.body.vehicle.rcNumber).toBe('KA01AB1234')
+      expect(created.body.vehicle.status).toBe('pending')
+
+      // Duplicate rcNumber for the same transporter rejected.
+      await api(trToken).post('/vehicles', { rcNumber: 'ka01ab1234' }).expect(400)
+
+      const list = await api(trToken).get('/vehicles').expect(200)
+      expect(list.body.vehicles.length).toBeGreaterThan(0)
+
+      const updated = await api(trToken).patch(`/vehicles/${created.body.vehicle.id}`, { permit: 'MH-2026-001' }).expect(200)
+      expect(updated.body.vehicle.permit).toBe('MH-2026-001')
+
+      // Admin verifies; a transporter cannot.
+      const verified = await api(admToken).post(`/vehicles/${created.body.vehicle.id}/verify`).expect(201)
+      expect(verified.body.vehicle.rcVerified).toBe(true)
+      expect(verified.body.vehicle.status).toBe('approved')
+      await api(trToken).post(`/vehicles/${created.body.vehicle.id}/verify`).expect(403)
+
+      const removed = await api(trToken).delete(`/vehicles/${created.body.vehicle.id}`).expect(200)
+      expect(removed.body.ok).toBe(true)
+    })
+
+    it('isolates vehicles by transporter', async () => {
+      const created = await api(trToken).post('/vehicles', { rcNumber: 'KA99ZZ9999' }).expect(201)
+      await api(supToken).patch(`/vehicles/${created.body.vehicle.id}`, { permit: 'x' }).expect(403)
+      await api(supToken).delete(`/vehicles/${created.body.vehicle.id}`).expect(403)
     })
   })
 

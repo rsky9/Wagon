@@ -72,7 +72,7 @@ export default function MarketAnalyticsPage() {
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
             <StatCard label="Listings" value={String(data.totals.listings)} icon="📦" tone="orange" />
             <StatCard label="Requests" value={String(data.totals.requests)} icon="🙋" tone="sky" />
-            <StatCard label="Quotes" value={String(data.totals.quotes)} icon="💬" tone="green" />
+            <StatCard label="Quotes" value={String(data.totals.quotes)} icon="💬" tone="emerald" />
             <StatCard label="Carrier bookings" value={String(data.totals.bookings)} icon="🚢" tone="slate" />
             <StatCard label="Ratings" value={String(data.totals.ratings)} icon="⭐" tone="amber" />
             <StatCard label="Liquidity ratio" value={`${data.liquidityRatio}%`} icon="💧" tone={data.liquidityRatio >= 60 ? "green" : "red"} sub="quotes per request" />

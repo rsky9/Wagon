@@ -70,6 +70,7 @@ export class DriversService {
 
   async update(id: string, input: Partial<CreateDriverInput>, user: User) {
     const transporterId = await this.transporterId(user)
+    if (!transporterId) throw new BadRequestException('Transporter profile not found')
     const driver = await this.prisma.driver.findFirst({ where: { id, transporterId } })
     if (!driver) throw new NotFoundException('Driver not found')
     const updated = await this.prisma.driver.update({
@@ -87,6 +88,7 @@ export class DriversService {
 
   async remove(id: string, user: User) {
     const transporterId = await this.transporterId(user)
+    if (!transporterId) throw new BadRequestException('Transporter profile not found')
     const driver = await this.prisma.driver.findFirst({ where: { id, transporterId } })
     if (!driver) throw new NotFoundException('Driver not found')
     await this.prisma.driver.delete({ where: { id } })
