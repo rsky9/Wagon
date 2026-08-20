@@ -99,7 +99,7 @@ export function StatTile({ label, value, icon, onPress }: { label: string; value
 /* ------------------------------------------------------------------ */
 /* Quick action card — the home screen's primary action tiles          */
 /* ------------------------------------------------------------------ */
-export function QuickAction({ icon, label, onPress, tone = 'primary', sub }: { icon: string; label: string; onPress: () => void; tone?: ToneKey; sub?: string }) {
+export function QuickAction({ icon, label, onPress, tone = 'primary' }: { icon: string; label: string; onPress: () => void; tone?: ToneKey }) {
   const theme = useTheme()
   const { isDark } = useThemeMode()
   // Colour codes come from the shared tone system: brighter glyphs and stronger
@@ -117,7 +117,6 @@ export function QuickAction({ icon, label, onPress, tone = 'primary', sub }: { i
     >
       <IconTile icon={icon} tone={tone} size={36} radius={18} />
       <Text style={[styles.quickLabel, { color: t.fg }]} numberOfLines={1}>{label}</Text>
-      {sub ? <Text style={[styles.quickSub, { color: theme.mutedForeground }]} numberOfLines={1}>{sub}</Text> : null}
     </Pressable>
   )
 }
@@ -272,7 +271,6 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 11, fontWeight: '600' },
   quickAction: { flex: 1, borderRadius: radius.lg, borderWidth: 1, paddingVertical: spacing.md, paddingHorizontal: spacing.sm, alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 86 },
   quickLabel: { fontSize: 12, fontWeight: '800', textAlign: 'center' },
-  quickSub: { fontSize: 10, fontWeight: '600', textAlign: 'center' },
   capChip: { borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, flexDirection: 'row', alignItems: 'center' },
   trustBadge: { borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, flexDirection: 'row', alignItems: 'center' },
   liveBadge: { borderRadius: radius.full, paddingHorizontal: spacing.sm, paddingVertical: 3, flexDirection: 'row', alignItems: 'center' },
