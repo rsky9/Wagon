@@ -204,7 +204,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
         <AppLogo height={38} />
         {onOpenNotifications && (
           <Pressable onPress={onOpenNotifications} hitSlop={8} style={styles.bellWrap}>
-            <Text style={{ fontSize: 20 }}>🔔</Text>
+            <Glyph icon="bell" size={20} color={theme.foreground} />
             {(data?.alerts?.unreadNotifications ?? 0) > 0 && (
               <View style={[styles.bellDot, { backgroundColor: theme.danger }]}>
                 <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>{Math.min(data!.alerts!.unreadNotifications, 9)}</Text>

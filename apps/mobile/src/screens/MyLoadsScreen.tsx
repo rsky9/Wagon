@@ -19,13 +19,10 @@ import { useI18n } from '@wagon/i18n'
 
 interface Props {
   onPostLoad: () => void
-  onLogout: () => void
-  onSelectLoad: (loadId: string) => void
-  onOpenKyc: () => void
+  onSelectLoad: (id: string) => void
   onOpenDecisionRoom: (loadId: string) => void
   onOpenResponses?: () => void
   onOpenBookings?: () => void
-  /** Render without the app header (used when embedded in a parent with its own header). */
   embedded?: boolean
 }
 
@@ -40,7 +37,7 @@ const TONE: Record<string, StatusTone> = {
   cancelled: 'danger',
 }
 
-export function MyLoads({ onPostLoad, onLogout, onSelectLoad, onOpenKyc, onOpenDecisionRoom, onOpenResponses, onOpenBookings, embedded = false }: Props) {
+export function MyLoads({ onPostLoad, onSelectLoad, onOpenDecisionRoom, onOpenResponses, onOpenBookings, embedded = false }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
   const [loads, setLoads] = useState<Load[]>([])
@@ -119,14 +116,6 @@ export function MyLoads({ onPostLoad, onLogout, onSelectLoad, onOpenKyc, onOpenD
           <View>
             <AppLogo height={28} />
             <Text style={[styles.sub, { color: theme.mutedForeground }]}>Supplier</Text>
-          </View>
-          <View style={styles.headerActions}>
-            <Pressable style={[styles.iconBtn, { backgroundColor: theme.muted }]} onPress={onOpenKyc}>
-              <Text style={{ fontSize: 17 }}>🛡️</Text>
-            </Pressable>
-            <Pressable style={[styles.iconBtn, { backgroundColor: theme.muted }]} onPress={onLogout}>
-              <Text style={{ fontSize: 15 }}>⎋</Text>
-            </Pressable>
           </View>
         </View>
       )}
@@ -227,8 +216,6 @@ const styles = StyleSheet.create({
   },
   logo: { fontSize: 24, fontWeight: '800', letterSpacing: -0.02 },
   sub: { fontSize: 13 },
-  headerActions: { flexDirection: 'row', gap: spacing.sm },
-  iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   toolbar: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   title: { fontSize: 20, fontWeight: '800' },
   searchBar: {

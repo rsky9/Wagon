@@ -32,7 +32,6 @@ interface TripInfo {
 
 interface Props {
   onBack: () => void
-  onOpenPassbook: () => void
   onOpenExecution: (tripId: string) => void
   onReturnLoads?: (tripId: string) => void
   capabilities?: string[]
@@ -45,7 +44,7 @@ const TONE: Record<string, StatusTone> = {
   cancelled: 'danger',
 }
 
-export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnLoads, capabilities = [] }: Props) {
+export function TripsScreen({ onBack, onOpenExecution, onReturnLoads, capabilities = [] }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
   // Transporter-side execution (start/mark-delivered/POD/payout/rate/return loads)
@@ -191,9 +190,7 @@ export function TripsScreen({ onBack, onOpenPassbook, onOpenExecution, onReturnL
           <Text style={[styles.back, { color: theme.mutedForeground }]}>←</Text>
         </Pressable>
         <Text style={[styles.headerTitle, { color: theme.foreground }]}>{t('trip.title')}</Text>
-        <Pressable onPress={onOpenPassbook}>
-          <Text style={{ color: theme.primary, fontSize: 15, fontWeight: '700' }}>{t('wallet.title')}</Text>
-        </Pressable>
+        <View style={{ width: 30 }} />
       </View>
 
       {error && <Text style={[styles.error, { color: theme.danger }]}>{error}</Text>}

@@ -138,7 +138,7 @@ function HomeTab({ navigation }: any) {
 /** Marketplace adapts: transporters browse the feed, suppliers manage their loads. */
 function MarketplaceTab({ navigation }: any) {
   const { t } = useI18n()
-  const { session, logout } = useAuth()
+  const { session } = useAuth()
   const activeMode = useActiveMode()
   const filters = useLoadFilters()
   const caps = session?.profile.capabilities?.length ? session.profile.capabilities : [session?.profile.role ?? '']
@@ -174,8 +174,6 @@ function MarketplaceTab({ navigation }: any) {
         {mode === 'browse' ? (
           <LoadFeedScreen
             onSelect={(load) => root?.navigate('LoadDetail', { load })}
-            onOpenTrips={() => navigation.navigate('Trips')}
-            onOpenKyc={() => root?.navigate('Kyc')}
             filters={filters}
             onOpenFilters={() => root?.navigate('Filters')}
             onOpenSearch={() => root?.navigate('Search')}
@@ -184,9 +182,7 @@ function MarketplaceTab({ navigation }: any) {
         ) : (
           <MyLoads
             onPostLoad={() => root?.navigate('PostLoadWizard')}
-            onLogout={logout}
             onSelectLoad={(loadId) => root?.navigate('TripDetail', { loadId })}
-            onOpenKyc={() => root?.navigate('Kyc')}
             onOpenDecisionRoom={(loadId) => root?.navigate('DecisionRoom', { loadId })}
             onOpenResponses={() => root?.navigate('Responses')}
             onOpenBookings={() => root?.navigate('Bookings')}
@@ -201,8 +197,6 @@ function MarketplaceTab({ navigation }: any) {
     return (
       <LoadFeedScreen
         onSelect={(load) => root?.navigate('LoadDetail', { load })}
-        onOpenTrips={() => navigation.navigate('Trips')}
-        onOpenKyc={() => root?.navigate('Kyc')}
         filters={filters}
         onOpenFilters={() => root?.navigate('Filters')}
         onOpenSearch={() => root?.navigate('Search')}
@@ -217,9 +211,7 @@ function MarketplaceTab({ navigation }: any) {
     return (
       <MyLoads
         onPostLoad={() => root?.navigate('PostLoadWizard')}
-        onLogout={logout}
         onSelectLoad={(loadId) => root?.navigate('TripDetail', { loadId })}
-        onOpenKyc={() => root?.navigate('Kyc')}
         onOpenDecisionRoom={(loadId) => root?.navigate('DecisionRoom', { loadId })}
         onOpenResponses={() => root?.navigate('Responses')}
         onOpenBookings={() => root?.navigate('Bookings')}
@@ -238,7 +230,6 @@ function TripsTab({ navigation }: any) {
   return (
     <TripsScreen
       onBack={() => navigation.navigate('Home')}
-      onOpenPassbook={() => root?.navigate('Passbook')}
       onOpenExecution={(tripId) => root?.navigate('TripExecute', { tripId })}
       onReturnLoads={(tripId) => root?.navigate('ReturnLoads', { tripId })}
       capabilities={session?.profile?.capabilities ?? []}

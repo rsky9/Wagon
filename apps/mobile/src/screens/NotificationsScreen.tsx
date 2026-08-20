@@ -5,6 +5,7 @@ import { useTheme, spacing, radius, timeAgo } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
 import { api } from '../config'
 import { useI18n } from '@wagon/i18n'
+import { Glyph } from '../components/Icon'
 
 interface NotificationItem {
   id: string
@@ -19,6 +20,7 @@ interface NotificationItem {
 interface Props {
   onBack: () => void
   onNavigate?: (route: string, item: NotificationItem) => void
+  onOpenPrefs?: () => void
 }
 
 const TYPE_ICON: Record<string, string> = {
@@ -41,7 +43,7 @@ const TYPE_ICON: Record<string, string> = {
   default: '🔔',
 }
 
-export function NotificationsScreen({ onBack, onNavigate }: Props) {
+export function NotificationsScreen({ onBack, onNavigate, onOpenPrefs }: Props) {
   const theme = useTheme()
   const [filter, setFilter] = useState<'all' | 'market'>('all')
   const { t } = useI18n()
@@ -60,11 +62,6 @@ export function NotificationsScreen({ onBack, onNavigate }: Props) {
 
   const markRead = async (id: string) => {
     await api.patch(`/notifications/${id}/read`).catch(() => {})
-    fetch()
-  }
-
-  const markAllRead = async () => {
-    await api.post(`/notifications/read-all`).catch(() => {})
     fetch()
   }
 
@@ -96,10 +93,12 @@ export function NotificationsScreen({ onBack, onNavigate }: Props) {
             </View>
           )}
         </View>
-        {unread > 0 && (
-          <Pressable onPress={markAllRead} hitSlop={8}>
-            <Text style={{ color: theme.primary, fontSize: 12, fontWeight: '800' }}>Mark all read</Text>
+        {onOpenPrefs ? (
+          <Pressable onPress={onOpenPrefs} hitSlop={8}>
+            <Glyph icon="prefs" size={20} color={theme.primary} />
           </Pressable>
+        ) : (
+          <View style={{ width: 20 }} />
         )}
       </View>
 

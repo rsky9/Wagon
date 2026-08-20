@@ -322,6 +322,7 @@ function NotificationsRoute({ navigation }: any) {
   return (
     <NotificationsScreen
       onBack={() => navigation.goBack()}
+      onOpenPrefs={() => navigation.navigate('NotifPrefs')}
       onNavigate={(route, item) => {
         navigateToUrl(navigation, route, item)
       }}

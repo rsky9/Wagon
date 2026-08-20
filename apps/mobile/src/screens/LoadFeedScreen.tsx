@@ -14,6 +14,7 @@ import { LoadCard, StatusChip, FeedSkeleton, EmptyState, type StatusTone } from 
 import { api } from '../config'
 import { useI18n } from '@wagon/i18n'
 import { AppLogo } from '../components/AppLogo'
+import { Glyph } from '../components/Icon'
 import type { LoadFilters } from './FiltersScreen'
 import type { Load } from '@wagon/contracts'
 
@@ -21,12 +22,9 @@ const CACHE_KEY = 'wagon_load_feed'
 
 interface Props {
   onSelect: (load: Load) => void
-  onOpenTrips: () => void
-  onOpenKyc: () => void
   filters?: LoadFilters
   onOpenFilters: () => void
   onOpenSearch?: () => void
-  /** Render without the app header (used when embedded in a parent with its own header). */
   embedded?: boolean
 }
 
@@ -41,7 +39,7 @@ const TONE: Record<string, StatusTone> = {
   cancelled: 'danger',
 }
 
-export function LoadFeedScreen({ onSelect, onOpenTrips, onOpenKyc, filters, onOpenFilters, onOpenSearch, embedded = false }: Props) {
+export function LoadFeedScreen({ onSelect, filters, onOpenFilters, onOpenSearch, embedded = false }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
   const [filter, setFilter] = useState<Filter>('all')
@@ -113,13 +111,7 @@ export function LoadFeedScreen({ onSelect, onOpenTrips, onOpenKyc, filters, onOp
           </View>
           <View style={styles.headerActions}>
             <Pressable style={[styles.iconBtn, { backgroundColor: theme.muted }]} onPress={onOpenFilters}>
-              <Text style={{ fontSize: 15 }}>⚙️</Text>
-            </Pressable>
-            <Pressable style={[styles.iconBtn, { backgroundColor: theme.muted }]} onPress={onOpenKyc}>
-              <Text style={{ fontSize: 17 }}>🛡️</Text>
-            </Pressable>
-            <Pressable style={[styles.iconBtn, { backgroundColor: theme.muted }]} onPress={onOpenTrips}>
-              <Text style={{ fontSize: 17 }}>🚚</Text>
+              <Glyph icon="prefs" size={16} color={theme.foreground} />
             </Pressable>
           </View>
         </View>
