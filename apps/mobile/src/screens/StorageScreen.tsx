@@ -5,9 +5,58 @@ import { useTheme, spacing, radius } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
 import { api } from '../config'
 import type { Facility, WarehouseOperation } from '@wagon/contracts'
-import { alertPrompt } from '../components/Prompt'
+import { alertPrompt, prompt } from '../components/Prompt'
+import { showActionSheet } from '../components/ActionSheet'
 interface Props {
   onBack: () => void
+}
+
+interface Appointment {
+  id: string
+  ref: string
+  status: string
+  windowStart: string
+  windowEnd: string
+  vehicleNo?: string | null
+  facility: { name: string }
+  dock?: { name: string } | null
+  container?: { number: string } | null
+}
+
+interface ContainerRow {
+  id: string
+  number: string
+  type: string
+  status: string
+  emptyReturnRequired: boolean
+  vessel?: string | null
+  voyage?: string | null
+}
+
+interface DockRow {
+  id: string
+  name: string
+  kind: string
+  status: string
+}
+
+const APPT_NEXT: Record<string, string[]> = {
+  requested: ['confirmed', 'cancelled'],
+  confirmed: ['in_progress', 'cancelled', 'no_show'],
+  in_progress: ['completed'],
+}
+
+const CONTAINER_NEXT: Record<string, string[]> = {
+  available: ['reserved', 'on_hold', 'repair', 'scrap'],
+  reserved: ['stuffed', 'available'],
+  stuffed: ['gate_in', 'loaded'],
+  gate_in: ['loaded', 'stuffed'],
+  loaded: ['discharged'],
+  discharged: ['released', 'empty_return'],
+  released: ['available', 'empty_return', 'on_hold'],
+  empty_return: ['available', 'repair'],
+  repair: ['available', 'scrap'],
+  on_hold: ['available', 'scrap'],
 }
 
 export function StorageScreen({ onBack }: Props) {
@@ -19,12 +68,18 @@ export function StorageScreen({ onBack }: Props) {
   const [kind, setKind] = useState('cfs')
   const [city, setCity] = useState('')
   const [creating, setCreating] = useState(false)
+  const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [docks, setDocks] = useState<DockRow[]>([])
+  const [containers, setContainers] = useState<ContainerRow[]>([])
 
   const fetch = useCallback(() => {
     Promise.all([
       api.get<{ facilities: Facility[] }>('/storage/facilities'),
       api.get<{ operations: WarehouseOperation[] }>('/storage/operations'),
-    ]).then(([f, o]) => { setFacilities(f.facilities); setOperations(o.operations) }).catch(() => {}).finally(() => setLoading(false))
+      api.get<{ appointments: Appointment[] }>('/yard/appointments'),
+      api.get<{ docks: DockRow[] }>('/yard/docks'),
+      api.get<{ containers: ContainerRow[] }>('/containers'),
+    ]).then(([f, o, a, d, c]) => { setFacilities(f.facilities); setOperations(o.operations); setAppointments(a.appointments); setDocks(d.docks); setContainers(c.containers) }).catch(() => {}).finally(() => setLoading(false))
   }, [])
   useEffect(() => { fetch() }, [fetch])
 
@@ -72,6 +127,81 @@ export function StorageScreen({ onBack }: Props) {
     ])
   }
 
+  // ---- Yard appointments ----
+  const createAppointment = () => {
+    if (!facilities.length) { Alert.alert('No facility', 'Create a facility first'); return }
+    const facility = facilities[0]
+    const facilityDocks = docks.filter((d) => d.status === 'available')
+    const pickDock = (dockId?: string) => {
+      prompt({ title: 'Vehicle number', placeholder: 'e.g. KA01AB1234 (optional)', keyboardType: 'default' }).then((vehicle) => {
+        const start = new Date()
+        const end = new Date(start.getTime() + 2 * 3600000)
+        api.post('/yard/appointments', {
+          facilityId: facility.id,
+          dockId: dockId,
+          vehicleNo: vehicle?.trim() || undefined,
+          windowStart: start.toISOString(),
+          windowEnd: end.toISOString(),
+        }).then(() => { Alert.alert('Appointment created', 'Dock scheduled'); fetch() }).catch((e) => Alert.alert('Error', e.message))
+      })
+    }
+    if (facilityDocks.length) {
+      showActionSheet({
+        title: 'Book a dock',
+        message: `${facility.name} · free docks`,
+        options: [
+          ...facilityDocks.map((d) => ({ text: `${d.name} · ${d.kind}`, onPress: () => pickDock(d.id) })),
+          { text: 'No dock (just schedule)', onPress: () => pickDock(undefined) },
+        ],
+      })
+    } else {
+      pickDock(undefined)
+    }
+  }
+
+  const transitionAppointment = (a: Appointment) => {
+    const next = APPT_NEXT[a.status] ?? []
+    if (!next.length) { Alert.alert('Complete', 'This appointment has no further transitions'); return }
+    showActionSheet({
+      title: `Appointment · ${a.status}`,
+      message: a.ref,
+      options: next.map((s) => ({ text: s.replace(/_/g, ' '), onPress: () => {
+        api.patch(`/yard/appointments/${a.id}/status`, { status: s }).then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
+      } })),
+    })
+  }
+
+  // ---- Containers ----
+  const registerContainer = () => {
+    prompt({ title: 'Container number', placeholder: 'e.g. MSCU1234567' }).then((num) => {
+      if (!num?.trim()) return
+      prompt({ title: 'Container type', placeholder: '20GP (default)', defaultValue: '20GP' }).then((type) => {
+        api.post('/containers', { number: num.trim().toUpperCase(), type: (type ?? '20GP').trim() || '20GP' })
+          .then(() => { Alert.alert('Registered', 'Container added to fleet'); fetch() })
+          .catch((e) => Alert.alert('Error', e.message))
+      })
+    })
+  }
+
+  const transitionContainer = (c: ContainerRow) => {
+    const next = CONTAINER_NEXT[c.status] ?? []
+    if (!next.length) { Alert.alert('Final', 'Container is in a final state'); return }
+    showActionSheet({
+      title: `Container · ${c.number}`,
+      message: `${c.type} · ${c.status}`,
+      options: next.map((s) => ({ text: s.replace(/_/g, ' '), onPress: () => {
+        api.patch(`/containers/${c.id}/status`, { status: s }).then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
+      } })),
+    })
+  }
+
+  const inspectContainer = (c: ContainerRow) => {
+    prompt({ title: 'Inspection note', placeholder: 'Condition, seal, damage…' }).then((note) => {
+      if (!note?.trim()) return
+      api.post(`/containers/${c.id}/inspect`, { note: note.trim() }).then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
+    })
+  }
+
   const postTransportNeed = () => {
     alertPrompt('Post transport shipment', 'Origin (city)', [
       { text: 'Cancel', style: 'cancel' },
@@ -98,7 +228,7 @@ export function StorageScreen({ onBack }: Props) {
 
       <FlatList
         contentContainerStyle={styles.list}
-        data={[{ k: 'facilities' as const }, { k: 'operations' as const }]}
+        data={[{ k: 'facilities' as const }, { k: 'operations' as const }, { k: 'appointments' as const }, { k: 'docks' as const }, { k: 'containers' as const }]}
         keyExtractor={(i) => i.k}
         ListHeaderComponent={
           <View style={[styles.form, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -119,9 +249,25 @@ export function StorageScreen({ onBack }: Props) {
         }
         renderItem={({ item }) => (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.foreground }]}>
-              {item.k === 'facilities' ? `Facilities (${facilities.length})` : `Operations (${operations.length})`}
-            </Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm }}>
+              <Text style={[styles.sectionTitle, { color: theme.foreground }]}>
+                {item.k === 'facilities' ? `Facilities (${facilities.length})`
+                  : item.k === 'operations' ? `Operations (${operations.length})`
+                  : item.k === 'appointments' ? `Yard appointments (${appointments.length})`
+                  : item.k === 'docks' ? `Docks (${docks.length})`
+                  : `Containers (${containers.length})`}
+              </Text>
+              {item.k === 'appointments' && (
+                <Pressable style={[styles.advanceBtn, { backgroundColor: '#F97316' }]} onPress={createAppointment}>
+                  <Text style={styles.advanceBtnText}>+ Book dock</Text>
+                </Pressable>
+              )}
+              {item.k === 'containers' && (
+                <Pressable style={[styles.advanceBtn, { backgroundColor: '#F97316' }]} onPress={registerContainer}>
+                  <Text style={styles.advanceBtnText}>+ Register</Text>
+                </Pressable>
+              )}
+            </View>
             {item.k === 'facilities' && (facilities.length === 0
               ? <EmptyState title="No facilities" message="Create a warehouse/CFS above" icon="🏭" />
               : facilities.map((f) => (
@@ -134,6 +280,52 @@ export function StorageScreen({ onBack }: Props) {
                   <Pressable style={[styles.advanceBtn, { backgroundColor: '#F97316' }]} onPress={() => startOperation(f.id)}>
                     <Text style={styles.advanceBtnText}>Start operation →</Text>
                   </Pressable>
+                </View>
+              )))}
+            {item.k === 'appointments' && (appointments.length === 0
+              ? <EmptyState title="No appointments" message="Book a dock slot for a vehicle/container" icon="🕐" />
+              : appointments.map((a) => (
+                <Pressable key={a.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => transitionAppointment(a)}>
+                  <View style={styles.cardTop}>
+                    <Text style={[styles.cardTitle, { color: theme.foreground }]}>{a.ref}</Text>
+                    <Text style={[styles.chip, { color: theme.warning, borderColor: theme.warning }]}>{a.status}</Text>
+                  </View>
+                  <Text style={[styles.meta, { color: theme.mutedForeground }]}>
+                    {a.facility.name}{a.dock ? ` · ${a.dock.name}` : ''}{a.vehicleNo ? ` · ${a.vehicleNo}` : ''}
+                  </Text>
+                  <Text style={[styles.meta, { color: theme.mutedForeground }]}>
+                    {new Date(a.windowStart).toLocaleString()} → {new Date(a.windowEnd).toLocaleTimeString()}
+                  </Text>
+                </Pressable>
+              )))}
+            {item.k === 'docks' && (docks.length === 0
+              ? <EmptyState title="No docks" message="Docks appear once a facility exists" icon="🚧" />
+              : docks.map((d) => (
+                <View key={d.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                  <View style={styles.cardTop}>
+                    <Text style={[styles.cardTitle, { color: theme.foreground }]}>{d.name}</Text>
+                    <Text style={[styles.chip, { color: d.status === 'available' ? '#16a34a' : d.status === 'busy' ? '#F97316' : theme.danger, borderColor: d.status === 'available' ? '#16a34a' : d.status === 'busy' ? '#F97316' : theme.danger }]}>{d.status}</Text>
+                  </View>
+                  <Text style={[styles.meta, { color: theme.mutedForeground }]}>{d.kind}</Text>
+                </View>
+              )))}
+            {item.k === 'containers' && (containers.length === 0
+              ? <EmptyState title="No containers" message="Register a container to track its lifecycle" icon="📦" />
+              : containers.map((c) => (
+                <View key={c.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                  <View style={styles.cardTop}>
+                    <Text style={[styles.cardTitle, { color: theme.foreground }]}>{c.number}</Text>
+                    <Text style={[styles.chip, { color: theme.warning, borderColor: theme.warning }]}>{c.status}</Text>
+                  </View>
+                  <Text style={[styles.meta, { color: theme.mutedForeground }]}>{c.type}</Text>
+                  <View style={styles.row}>
+                    <Pressable style={[styles.advanceBtn, styles.flexBtn, { backgroundColor: '#F97316' }]} onPress={() => transitionContainer(c)}>
+                      <Text style={styles.advanceBtnText}>Move →</Text>
+                    </Pressable>
+                    <Pressable style={[styles.advanceBtn, styles.flexBtn, { backgroundColor: theme.mutedForeground }]} onPress={() => inspectContainer(c)}>
+                      <Text style={styles.advanceBtnText}>Inspect</Text>
+                    </Pressable>
+                  </View>
                 </View>
               )))}
             {item.k === 'operations' && (operations.length === 0

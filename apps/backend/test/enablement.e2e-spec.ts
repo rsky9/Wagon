@@ -466,6 +466,74 @@ describe('Enablement platform (e2e)', () => {
     })
   })
 
+  describe('Yard', () => {
+    it('registers docks, schedules non-overlapping appointments and releases the dock on completion', async () => {
+      const dock = await api(supToken).post('/yard/docks', { facilityId, name: 'E2E Bay 1', kind: 'loading' }).expect(201)
+      expect(dock.body.dock.facilityId).toBe(facilityId)
+
+      const start = new Date()
+      const end = new Date(start.getTime() + 3600000)
+      const appt = await api(supToken).post('/yard/appointments', { facilityId, dockId: dock.body.dock.id, vehicleNo: 'KA01AB1234', windowStart: start.toISOString(), windowEnd: end.toISOString() }).expect(201)
+      expect(appt.body.appointment.status).toBe('requested')
+      expect(appt.body.appointment.ref).toMatch(/^APPT-/)
+      // The dock is now busy for the window.
+      const docks = await api(supToken).get('/yard/docks').expect(200)
+      expect(docks.body.docks.find((d: any) => d.id === dock.body.dock.id)?.status).toBe('busy')
+
+      // Overlap on the same dock in the same window is rejected.
+      await api(supToken).post('/yard/appointments', { facilityId, dockId: dock.body.dock.id, windowStart: start.toISOString(), windowEnd: end.toISOString() }).expect(400)
+
+      // Full gate lifecycle.
+      const confirmed = await api(supToken).patch(`/yard/appointments/${appt.body.appointment.id}/status`, { status: 'confirmed' }).expect(200)
+      expect(confirmed.body.appointment.status).toBe('confirmed')
+      const gated = await api(supToken).patch(`/yard/appointments/${appt.body.appointment.id}/status`, { status: 'in_progress' }).expect(200)
+      expect(gated.body.appointment.gateInAt).toBeTruthy()
+      const done = await api(supToken).patch(`/yard/appointments/${appt.body.appointment.id}/status`, { status: 'completed' }).expect(200)
+      expect(done.body.appointment.gateOutAt).toBeTruthy()
+
+      // Dock is released after completion; illegal transition rejected.
+      const after = await api(supToken).get('/yard/docks').expect(200)
+      expect(after.body.docks.find((d: any) => d.id === dock.body.dock.id)?.status).toBe('available')
+      await api(supToken).patch(`/yard/appointments/${appt.body.appointment.id}/status`, { status: 'in_progress' }).expect(400)
+    })
+
+    it('denies cross-tenant dock scheduling', async () => {
+      const start = new Date()
+      const end = new Date(start.getTime() + 3600000)
+      await api(trToken).post('/yard/appointments', { facilityId, windowStart: start.toISOString(), windowEnd: end.toISOString() }).expect(403)
+    })
+  })
+
+  describe('Containers', () => {
+    it('registers, moves through the lifecycle and inspects with tenant isolation', async () => {
+      const reg = await api(supToken).post('/containers', { number: 'MSCU-E2E-0001', type: '40HC' }).expect(201)
+      expect(reg.body.container.status).toBe('available')
+      expect(reg.body.container.ownerOrgId).toBeTruthy()
+      // Duplicate container number rejected.
+      await api(supToken).post('/containers', { number: 'MSCU-E2E-0001' }).expect(400)
+
+      const id = reg.body.container.id
+      await api(supToken).patch(`/containers/${id}/status`, { status: 'reserved' }).expect(200)
+      await api(supToken).patch(`/containers/${id}/status`, { status: 'stuffed' }).expect(200)
+      await api(supToken).patch(`/containers/${id}/status`, { status: 'gate_in' }).expect(200)
+      const loaded = await api(supToken).patch(`/containers/${id}/status`, { status: 'loaded' }).expect(200)
+      expect(loaded.body.container.status).toBe('loaded')
+      const discharged = await api(supToken).patch(`/containers/${id}/status`, { status: 'discharged', vessel: 'E2E-VSL', voyage: 'V01' }).expect(200)
+      expect(discharged.body.container.vessel).toBe('E2E-VSL')
+      await api(supToken).patch(`/containers/${id}/status`, { status: 'released' }).expect(200)
+
+      // Illegal transition rejected.
+      await api(supToken).patch(`/containers/${id}/status`, { status: 'stuffed' }).expect(400)
+
+      // Inspection records the note.
+      const insp = await api(supToken).post(`/containers/${id}/inspect`, { note: 'Seal intact, minor scuffing' }).expect(201)
+      expect(insp.body.container.lastInspectionNote).toBe('Seal intact, minor scuffing')
+
+      // Cross-tenant access denied.
+      await api(trToken).patch(`/containers/${id}/status`, { status: 'available' }).expect(403)
+    })
+  })
+
   describe('Load↔Shipment unification + settlement payments', () => {
     it('exposes load->shipment and shipment->load linkage', async () => {
       // The e2e fixture shipment exists; create a fresh one so ref != a load id.
