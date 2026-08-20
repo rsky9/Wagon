@@ -69,15 +69,7 @@ export function NotificationsScreen({ onBack, onNavigate, onOpenPrefs }: Props) 
     fetch()
   }
 
-  const [prefs, setPrefs] = useState<Record<string, boolean> | null>(null)
-  useEffect(() => { api.get<{ preferences: Record<string, boolean> }>('/notifications/preferences').then((r) => setPrefs(r.preferences)).catch(() => {}) }, [])
-  const togglePref = async (key: string, value: boolean) => {
-    setPrefs((p) => (p ? { ...p, [key]: value } : p))
-    await api.patch('/notifications/preferences', { [key]: value }).catch(() => {})
-  }
-
   const filtered = filter === 'all' ? items : items.filter((i) => (i.type ?? '').startsWith('market'))
-
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
@@ -117,29 +109,6 @@ export function NotificationsScreen({ onBack, onNavigate, onOpenPrefs }: Props) 
                   </Pressable>
                 ))}
               </View>
-
-              {prefs && (
-                <View style={[styles.prefs, { borderColor: theme.border }]}>
-                  <Text style={[styles.prefsTitle, { color: theme.mutedForeground }]}>Notify me about</Text>
-                  {([
-                    ['loadAlerts', 'New loads'],
-                    ['booking', 'Bookings'],
-                    ['trip', 'Trips'],
-                    ['payment', 'Payments'],
-                    ['kyc', 'KYC & verification'],
-                    ['docExpiry', 'Document expiry'],
-                    ['promo', 'Promotions'],
-                    ['market', 'Marketplace'],
-                  ] as [string, string][]).map(([key, label]) => (
-                    <Pressable key={key} style={styles.prefRow} onPress={() => togglePref(key, !prefs[key])}>
-                      <Text style={{ color: theme.foreground, fontSize: 13 }}>{label}</Text>
-                      <View style={[styles.switch, prefs[key] && styles.switchOn, { backgroundColor: prefs[key] ? theme.primary : 'rgba(128,128,128,0.3)' }]}>
-                        <View style={[styles.switchKnob, prefs[key] && { transform: [{ translateX: 16 }] }]} />
-                      </View>
-                    </Pressable>
-                  ))}
-                </View>
-              )}
             </View>
           }
           ListEmptyComponent={
@@ -192,10 +161,4 @@ const styles = StyleSheet.create({
   rowBodyText: { fontSize: 13, marginTop: 1 },
   time: { fontSize: 12, marginTop: 3, opacity: 0.8 },
   unreadDot: { width: 8, height: 8, borderRadius: 4 },
-  prefs: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.md, marginBottom: spacing.sm },
-  prefsTitle: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: spacing.sm },
-  prefRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 },
-  switch: { width: 40, height: 24, borderRadius: 12, padding: 2 },
-  switchOn: { },
-  switchKnob: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' },
 })
