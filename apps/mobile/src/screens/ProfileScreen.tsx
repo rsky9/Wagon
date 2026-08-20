@@ -180,8 +180,8 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
         {isTransporter && (
           <>
             <GroupTitle>Fleet</GroupTitle>
-            <SettingRow icon="🚚" label={t('profile.fleet')} sub="Trucks · documents · maintenance" onPress={onOpenFleet} />
-            <SettingRow icon="🚛" label={t('profile.myTrucks')} onPress={onOpenTrucks} />
+            <SettingRow icon="🚚" label={t('profile.fleet')} sub="Vehicles · documents · maintenance" onPress={onOpenFleet} />
+            <SettingRow icon="🚛" label={t('profile.myVehicles')} onPress={onOpenTrucks} />
             <SettingRow icon="👤" label={t('profile.drivers')} onPress={onOpenDrivers} />
             <SettingRow icon="📋" label={t('profile.rateCard')} onPress={onOpenRateCard} />
           </>

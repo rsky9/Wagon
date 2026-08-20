@@ -185,7 +185,7 @@ export class GamificationService {
     const supplier = await this.prisma.supplier.findUnique({ where: { userId: user.id } })
     const transporter = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
     const [trucks, drivers, loads] = await Promise.all([
-      transporter ? this.prisma.truck.count({ where: { transporterId: transporter.id } }) : Promise.resolve(0),
+      transporter ? this.prisma.vehicle.count({ where: { transporterId: transporter.id } }) : Promise.resolve(0),
       transporter ? this.prisma.driver.count({ where: { transporterId: transporter.id } }) : Promise.resolve(0),
       supplier ? this.prisma.load.count({ where: { supplierId: supplier.id } }) : Promise.resolve(0),
     ])

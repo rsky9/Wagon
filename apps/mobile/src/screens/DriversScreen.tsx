@@ -3,7 +3,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { StyleSheet, Text, View, TextInput, FlatList, Pressable, Alert, KeyboardAvoidingView, Platform } from 'react-native'
 import { useTheme, spacing, radius } from '@wagon/design'
 import { Button, EmptyState } from '@wagon/components'
+import * as ImagePicker from 'expo-image-picker'
 import { api } from '../config'
+import { uploadToPresignedUrl } from '@wagon/api-client'
 import { completeQuestWithXp } from '../gamification'
 import { useI18n } from '@wagon/i18n'
 
@@ -12,6 +14,7 @@ interface DriverRow {
   name: string
   mobile: string
   licenseVerified: boolean
+  verificationStatus: string
   status: boolean
   payRate: number | null
 }
@@ -70,6 +73,30 @@ export function DriversScreen({ onBack }: Props) {
     } catch (e) {
       Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to update pay rate')
     } finally { setSubmitting(false) }
+  }
+
+  const verifyLicense = async (id: string, name: string) => {
+    try {
+      const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7 })
+      if (picked.canceled || !picked.assets?.[0]) return
+      const asset = picked.assets[0]
+      const presigned = await api.post<{ uploadUrl: string; key: string }>(`/drivers/${id}/upload`, {
+        mimeType: asset.mimeType ?? 'image/jpeg',
+        size: asset.fileSize ?? 0,
+      })
+      await uploadToPresignedUrl(presigned.uploadUrl, {
+        uri: asset.uri,
+        name: `dl-${id}.jpg`,
+        type: asset.mimeType ?? 'image/jpeg',
+      })
+      const res = await api.post<{ driver: DriverRow; verification: { source: string; verified: boolean } }>(`/drivers/${id}/verify`, {
+        imageKey: presigned.key,
+      })
+      Alert.alert('Verified', `${name}'s licence verified via ${res.verification.source}`)
+      fetch()
+    } catch (e) {
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Verification failed')
+    }
   }
 
   const viewPerformance = async (id: string) => {
@@ -136,6 +163,11 @@ export function DriversScreen({ onBack }: Props) {
                 </Pressable>
               </View>
               <View style={styles.actions}>
+                {item.verificationStatus !== 'approved' && (
+                  <Pressable onPress={() => verifyLicense(item.id, item.name)} hitSlop={8}>
+                    <Text style={{ color: theme.primary, fontSize: 13, fontWeight: '700' }}>Verify DL</Text>
+                  </Pressable>
+                )}
                 <Pressable onPress={() => viewPerformance(item.id)} hitSlop={8}>
                   <Text style={{ color: theme.primary, fontSize: 13, fontWeight: '700' }}>View performance</Text>
                 </Pressable>

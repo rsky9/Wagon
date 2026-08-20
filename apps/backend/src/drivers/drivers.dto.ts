@@ -12,6 +12,9 @@ export class CreateDriverDto {
   licenseKey?: string
 
   @IsOptional()
+  licenseImages?: string[]
+
+  @IsOptional()
   @IsBoolean()
   status?: boolean
 

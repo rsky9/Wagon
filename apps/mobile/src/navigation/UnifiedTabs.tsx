@@ -240,7 +240,7 @@ function AccountTab({ navigation }: any) {
     <ProfileScreen
       onOpenKyc={() => root?.navigate('Kyc')}
       onLogout={logout}
-      onOpenTrucks={() => root?.navigate('MyTrucks')}
+      onOpenTrucks={() => root?.navigate('MyVehicles')}
       onOpenDrivers={() => root?.navigate('Drivers')}
       onOpenRateCard={() => root?.navigate('RateCard')}
       onOpenNotifications={() => root?.navigate('Notifications')}

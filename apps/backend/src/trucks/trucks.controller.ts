@@ -3,7 +3,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { Roles } from '../auth/guards/roles.decorator'
 import { CurrentUser } from '../auth/guards/current-user.decorator'
 import { TrucksService } from './trucks.service'
-import { CreateTruckDto } from './trucks.dto'
+import { CreateVehicleDto } from './trucks.dto'
 import type { User } from '@prisma/client'
 
 @Controller('trucks')
@@ -32,6 +32,26 @@ export class TrucksController {
     return this.trucks.maintenanceDue(user)
   }
 
+  @Get(':id')
+  get(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.trucks.get(id, user)
+  }
+
+  @Patch(':id/assign-driver')
+  assignDriver(@Param('id') id: string, @Body() body: { driverId: string | null }, @CurrentUser() user: User) {
+    return this.trucks.assignDriver(id, body.driverId ?? null, user)
+  }
+
+  @Post(':id/verify')
+  verifyVehicle(@Param('id') id: string, @Body() body: { rcNumber?: string; imageKey?: string }, @CurrentUser() user: User) {
+    return this.trucks.verifyVehicle(id, body, user)
+  }
+
+  @Post(':id/upload')
+  requestUpload(@Param('id') id: string, @Body() body: { mimeType: string; size: number }, @CurrentUser() user: User) {
+    return this.trucks.requestUpload(id, body.mimeType, body.size, user)
+  }
+
   @Get(':id/maintenance')
   maintenanceHistory(@Param('id') id: string, @CurrentUser() user: User) {
     return this.trucks.maintenanceHistory(id, user)
@@ -39,16 +59,16 @@ export class TrucksController {
 
   @Post(':id/maintenance')
   logMaintenance(@Param('id') id: string, @Body() body: Record<string, unknown>, @CurrentUser() user: User) {
-    return this.trucks.logMaintenance({ ...(body as object), truckId: id } as never, user)
+    return this.trucks.logMaintenance({ ...(body as object), vehicleId: id } as never, user)
   }
 
   @Post()
-  create(@Body() body: CreateTruckDto, @CurrentUser() user: User) {
+  create(@Body() body: CreateVehicleDto, @CurrentUser() user: User) {
     return this.trucks.create(body, user)
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: CreateTruckDto, @CurrentUser() user: User) {
+  update(@Param('id') id: string, @Body() body: CreateVehicleDto, @CurrentUser() user: User) {
     return this.trucks.update(id, body, user)
   }
 

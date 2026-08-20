@@ -493,7 +493,7 @@ export class MarketService {
     const supplier = await this.prisma.supplier.findUnique({ where: { userId: user.id } })
     if (!supplier) return null
     const material = await this.prisma.material.findFirst()
-    const model = await this.prisma.truckModel.findFirst()
+    const model = await this.prisma.vehicleModel.findFirst()
     if (!material || !model) return null
     const weightT = Math.max(1, Math.round((request.capacityNeeded ?? 1000) / 1000))
     await this.prisma.load.create({

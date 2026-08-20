@@ -23,8 +23,8 @@ import { ProfileScreen } from '../screens/ProfileScreen'
 import { PostLoadWizard } from '../screens/PostLoadWizard'
 import { TripDetailScreen } from '../screens/TripDetailScreen'
 import { TrackingScreen } from '../screens/TrackingScreen'
-import { MyTrucksScreen } from '../screens/MyTrucksScreen'
-import { AddTruckScreen } from '../screens/AddTruckScreen'
+import { MyVehiclesScreen } from '../screens/MyVehiclesScreen'
+import { AddVehicleScreen } from '../screens/AddVehicleScreen'
 import { DriversScreen } from '../screens/DriversScreen'
 import { RateCardScreen } from '../screens/RateCardScreen'
 import { NotificationsScreen } from '../screens/NotificationsScreen'
@@ -50,7 +50,7 @@ import { TransporterOnboarding } from '../screens/TransporterOnboarding'
 import { SupplierOnboarding } from '../screens/SupplierOnboarding'
 import { FleetDashboardScreen } from '../screens/FleetDashboardScreen'
 import { NotificationPrefsScreen } from '../screens/NotificationPrefsScreen'
-import { TruckDetailScreen } from '../screens/TruckDetailScreen'
+import { VehicleDetailScreen } from '../screens/VehicleDetailScreen'
 import { InvoicesScreen } from '../screens/InvoicesScreen'
 import { LoadHistoryScreen } from '../screens/LoadHistoryScreen'
 import { ResponsesScreen } from '../screens/ResponsesScreen'
@@ -90,8 +90,8 @@ export type RootStackParamList = {
   Disputes: undefined
   RaiseDispute: undefined
   Notifications: undefined
-  MyTrucks: undefined
-  AddTruck: undefined
+  MyVehicles: undefined
+  AddVehicle: undefined
   Drivers: undefined
   RateCard: undefined
   Settings: undefined
@@ -109,7 +109,7 @@ export type RootStackParamList = {
   ChatList: undefined
   Fleet: undefined
   NotifPrefs: undefined
-  TruckDetail: { truckId: string }
+  VehicleDetail: { vehicleId: string }
   Invoices: undefined
   LoadHistory: undefined
   Quests: undefined
@@ -146,7 +146,7 @@ function navigateToUrl(nav: any, url: string, item?: { data?: { loadId?: string;
   // Raw stack route names (notification data.route) navigate directly.
   const STACK_ROUTES = new Set([
     'Kyc', 'Passbook', 'Bank', 'MyBids', 'Favorites', 'Disputes', 'RaiseDispute',
-    'Notifications', 'MyTrucks', 'AddTruck', 'Drivers', 'RateCard', 'Settings',
+    'Notifications', 'MyVehicles', 'AddVehicle', 'Drivers', 'RateCard', 'Settings',
     'Search', 'Filters', 'Finance', 'Reviews', 'Tickets', 'Emergency', 'Chat',
     'ChatList', 'Fleet', 'NotifPrefs', 'Invoices', 'LoadHistory', 'Quests',
     'RoleChange', 'PostLoadWizard', 'DecisionRoom', 'BidForm', 'Negotiation',
@@ -330,12 +330,12 @@ function NotificationsRoute({ navigation }: any) {
   )
 }
 
-function MyTrucksRoute({ navigation }: any) {
-  return <MyTrucksScreen onBack={() => navigation.goBack()} onAdd={() => navigation.navigate('AddTruck')} />
+function MyVehiclesRoute({ navigation }: any) {
+  return <MyVehiclesScreen onBack={() => navigation.goBack()} onAdd={() => navigation.navigate('AddVehicle')} onOpenVehicle={(vehicleId) => navigation.navigate('VehicleDetail', { vehicleId })} />
 }
 
-function AddTruckRoute({ navigation }: any) {
-  return <AddTruckScreen onBack={() => navigation.goBack()} onDone={() => navigation.goBack()} />
+function AddVehicleRoute({ navigation }: any) {
+  return <AddVehicleScreen onBack={() => navigation.goBack()} onDone={() => navigation.goBack()} />
 }
 
 function DriversRoute({ navigation }: any) {
@@ -545,8 +545,9 @@ function FleetRoute({ navigation }: any) {
   return (
     <FleetDashboardScreen
       onBack={() => navigation.goBack()}
-      onOpenTruck={(id) => navigation.navigate('TruckDetail', { truckId: id })}
-      onAddTruck={() => navigation.navigate('AddTruck')}
+      onOpenVehicle={(id) => navigation.navigate('VehicleDetail', { vehicleId: id })}
+      onAddVehicle={() => navigation.navigate('AddVehicle')}
+      onOpenDrivers={() => navigation.navigate('Drivers')}
     />
   )
 }
@@ -555,8 +556,8 @@ function NotifPrefsRoute({ navigation }: any) {
   return <NotificationPrefsScreen onBack={() => navigation.goBack()} />
 }
 
-function TruckDetailRoute({ navigation, route }: any) {
-  return <TruckDetailScreen truckId={route.params?.truckId} onBack={() => navigation.goBack()} />
+function VehicleDetailRoute({ navigation, route }: any) {
+  return <VehicleDetailScreen vehicleId={route.params?.vehicleId} onBack={() => navigation.goBack()} />
 }
 
 function InvoicesRoute({ navigation }: any) {
@@ -747,8 +748,8 @@ export function MobileNavigator() {
                 <Stack.Screen name="Disputes" component={DisputesRoute} />
                 <Stack.Screen name="RaiseDispute" component={RaiseDisputeRoute} />
                 <Stack.Screen name="Notifications" component={NotificationsRoute} />
-                <Stack.Screen name="MyTrucks" component={MyTrucksRoute} />
-                <Stack.Screen name="AddTruck" component={AddTruckRoute} />
+                <Stack.Screen name="MyVehicles" component={MyVehiclesRoute} />
+                <Stack.Screen name="AddVehicle" component={AddVehicleRoute} />
                 <Stack.Screen name="Drivers" component={DriversRoute} />
                 <Stack.Screen name="RateCard" component={RateCardRoute} />
                 <Stack.Screen name="Settings" component={SettingsRoute} />
@@ -766,7 +767,7 @@ export function MobileNavigator() {
                 <Stack.Screen name="ChatList" component={ChatListRoute} />
                 <Stack.Screen name="Fleet" component={FleetRoute} />
                 <Stack.Screen name="NotifPrefs" component={NotifPrefsRoute} />
-                <Stack.Screen name="TruckDetail" component={TruckDetailRoute} />
+                <Stack.Screen name="VehicleDetail" component={VehicleDetailRoute} />
                 <Stack.Screen name="Invoices" component={InvoicesRoute} />
                 <Stack.Screen name="LoadHistory" component={LoadHistoryRoute} />
                 <Stack.Screen name="Quests" component={QuestsRoute} />

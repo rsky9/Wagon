@@ -1,7 +1,8 @@
 import { IsBoolean, IsDateString, IsNumber, IsOptional, IsString } from 'class-validator'
 
-export class CreateTruckDto {
-  @IsString() truckNo!: string
+export class CreateVehicleDto {
+  @IsString() vehicleNo!: string
+  @IsOptional() @IsString() rcNumber?: string
   @IsString() type!: string
   @IsString() modelId!: string
   @IsOptional() @IsString() capacityId?: string
@@ -10,6 +11,7 @@ export class CreateTruckDto {
   @IsOptional() lat?: number
   @IsOptional() lng?: number
   @IsOptional() @IsString() gpsLogin?: string
+  @IsOptional() images?: string[]
   @IsOptional() @IsBoolean() activeStatus?: boolean
   @IsOptional() @IsDateString() insuranceUpto?: string
   @IsOptional() @IsDateString() permitUpto?: string

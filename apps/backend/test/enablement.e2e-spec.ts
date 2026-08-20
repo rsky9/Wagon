@@ -102,7 +102,7 @@ describe('Enablement platform (e2e)', () => {
       prisma.tradeDocument.deleteMany(),
       prisma.organizationDocument.deleteMany(),
       prisma.ediMessage.deleteMany(),
-      prisma.truckMaintenance.deleteMany(),
+      prisma.vehicleMaintenance.deleteMany(),
       prisma.vehicle.deleteMany(),
       prisma.laneAlert.deleteMany(),
       prisma.fcmToken.deleteMany(),
@@ -569,34 +569,35 @@ describe('Enablement platform (e2e)', () => {
   })
 
   describe('Vehicles', () => {
-    it('registers, lists, updates and deletes a transporter vehicle with admin verification', async () => {
-      const created = await api(trToken).post('/vehicles', { rcNumber: 'ka01ab1234' }).expect(201)
-      expect(created.body.vehicle.rcNumber).toBe('KA01AB1234')
-      expect(created.body.vehicle.status).toBe('pending')
+    it('registers, lists, verifies and deletes a transporter vehicle', async () => {
+      const models = (await api(trToken).get('/reference').expect(200)).body.models as Array<{ id: string; type: string }>
+      const containerModel = models.find((m: { type: string }) => m.type === 'container')!
 
-      // Duplicate rcNumber for the same transporter rejected.
-      await api(trToken).post('/vehicles', { rcNumber: 'ka01ab1234' }).expect(400)
+      const created = await api(trToken).post('/trucks', { vehicleNo: 'ka01ab1234', type: 'container', modelId: containerModel.id }).expect(201)
+      expect(created.body.vehicle.vehicleNo).toBe('KA01AB1234')
+      expect(created.body.vehicle.verificationStatus).toBe('not_started')
 
-      const list = await api(trToken).get('/vehicles').expect(200)
+      // Duplicate vehicleNo for the same transporter rejected.
+      await api(trToken).post('/trucks', { vehicleNo: 'ka01ab1234', type: 'container', modelId: containerModel.id }).expect(400)
+
+      const list = await api(trToken).get('/trucks').expect(200)
       expect(list.body.vehicles.length).toBeGreaterThan(0)
 
-      const updated = await api(trToken).patch(`/vehicles/${created.body.vehicle.id}`, { permit: 'MH-2026-001' }).expect(200)
-      expect(updated.body.vehicle.permit).toBe('MH-2026-001')
-
-      // Admin verifies; a transporter cannot.
-      const verified = await api(admToken).post(`/vehicles/${created.body.vehicle.id}/verify`).expect(201)
+      // Self-service verification via the provider chain (mock by default).
+      const verified = await api(trToken).post(`/trucks/${created.body.vehicle.id}/verify`, { rcNumber: 'ka01ab1234' }).expect(201)
       expect(verified.body.vehicle.rcVerified).toBe(true)
-      expect(verified.body.vehicle.status).toBe('approved')
-      await api(trToken).post(`/vehicles/${created.body.vehicle.id}/verify`).expect(403)
+      expect(verified.body.vehicle.verificationStatus).toBe('approved')
 
-      const removed = await api(trToken).delete(`/vehicles/${created.body.vehicle.id}`).expect(200)
-      expect(removed.body.ok).toBe(true)
+      const removed = await api(trToken).delete(`/trucks/${created.body.vehicle.id}`).expect(200)
+      expect(removed.body.success).toBe(true)
     })
 
     it('isolates vehicles by transporter', async () => {
-      const created = await api(trToken).post('/vehicles', { rcNumber: 'KA99ZZ9999' }).expect(201)
-      await api(supToken).patch(`/vehicles/${created.body.vehicle.id}`, { permit: 'x' }).expect(403)
-      await api(supToken).delete(`/vehicles/${created.body.vehicle.id}`).expect(403)
+      const models = (await api(trToken).get('/reference').expect(200)).body.models as Array<{ id: string; type: string }>
+      const containerModel = models.find((m: { type: string }) => m.type === 'container')!
+      const created = await api(trToken).post('/trucks', { vehicleNo: 'KA99ZZ9999', type: 'container', modelId: containerModel.id }).expect(201)
+      await api(supToken).patch(`/trucks/${created.body.vehicle.id}`, { vehicleNo: 'x' }).expect(404)
+      await api(supToken).delete(`/trucks/${created.body.vehicle.id}`).expect(404)
     })
   })
 
@@ -705,7 +706,7 @@ describe('Enablement platform (e2e)', () => {
       const reqs = await api(supToken).get('/market/requests?kind=transport').expect(200)
       expect(reqs.body.requests.some((r: { sourceType?: string }) => r.sourceType === 'load')).toBe(true)
       // Creating a truck auto-publishes a truck_capacity listing.
-      await api(trToken).post('/trucks', { truckNo: 'DL9NETE2E', type: 'open', modelId: model.id, origin: 'Delhi' }).expect(201)
+      await api(trToken).post('/trucks', { vehicleNo: 'DL9NETE2E', type: 'open', modelId: model.id, origin: 'Delhi' }).expect(201)
       const listings = await api(supToken).get('/market/listings?kind=truck_capacity').expect(200)
       expect(listings.body.listings.some((l: { sourceType?: string }) => l.sourceType === 'truck')).toBe(true)
     })
@@ -1431,7 +1432,7 @@ describe('Enablement platform (e2e)', () => {
 
   describe('driver performance & fleet overview (e2e)', () => {
     it('reports driver performance and fleet earnings for a transporter', async () => {
-      const truck = await api(trToken).post('/trucks', { truckNo: `AP44DRV${Date.now().toString().slice(-4)}`, type: 'container', modelId: (await api(trToken).get('/reference').expect(200)).body.models.find((m: { type: string }) => m.type === 'container').id, origin: 'Hyderabad' }).expect(201)
+      const truck = await api(trToken).post('/trucks', { vehicleNo: `AP44DRV${Date.now().toString().slice(-4)}`, type: 'container', modelId: (await api(trToken).get('/reference').expect(200)).body.models.find((m: { type: string }) => m.type === 'container').id, origin: 'Hyderabad' }).expect(201)
 
       const driver = await api(trToken).post('/drivers', { name: 'E2E Driver', mobile: '9876543210' }).expect(201)
       const driverId = driver.body.driver.id
@@ -1444,7 +1445,7 @@ describe('Enablement platform (e2e)', () => {
 
       // Fleet overview returns the expected shape.
       const ov = await api(trToken).get('/trucks/fleet/overview').expect(200)
-      expect(ov.body.fleet.trucks).toBeGreaterThanOrEqual(1)
+      expect(ov.body.fleet.vehicles).toBeGreaterThanOrEqual(1)
       expect(typeof ov.body.earnings).toBe('number')
       expect(typeof ov.body.coverage.driverCoverage).toBe('number')
       void truck
@@ -1548,8 +1549,8 @@ describe('Enablement platform (e2e)', () => {
 
     it('logs maintenance and reports service-due across the fleet', async () => {
       const model = (await api(trToken).get('/reference').expect(200)).body.models.find((m: { type: string }) => m.type === 'container')
-      const truck = await api(trToken).post('/trucks', { truckNo: `AP55MNT${Date.now().toString().slice(-4)}`, type: 'container', modelId: model.id, origin: 'Hyderabad', odometerKm: 120000, nextServiceKm: 150000 }).expect(201)
-      truckId = truck.body.truck.id
+      const truck = await api(trToken).post('/trucks', { vehicleNo: `AP55MNT${Date.now().toString().slice(-4)}`, type: 'container', modelId: model.id, origin: 'Hyderabad', odometerKm: 120000, nextServiceKm: 150000 }).expect(201)
+      truckId = truck.body.vehicle.id
 
       // Log a service with a new next-service odometer.
       const logged = await api(trToken).post(`/trucks/${truckId}/maintenance`, {

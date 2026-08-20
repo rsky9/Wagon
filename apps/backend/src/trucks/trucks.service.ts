@@ -1,7 +1,9 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { MarketService } from '../market/market.service'
-import type { User, TruckType } from '@prisma/client'
+import { UploadsService, ALLOWED_UPLOAD_MIMES } from '../uploads/uploads.service'
+import { VerificationService } from '../verification/verification.service'
+import type { User, TruckType, KycStatus, VerificationSource } from '@prisma/client'
 
 const VALID_TYPES: TruckType[] = ['open', 'container', 'trailer']
 
@@ -10,6 +12,8 @@ export class TrucksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly market: MarketService,
+    private readonly uploads: UploadsService,
+    private readonly verification: VerificationService,
   ) {}
 
   private async transporterId(user: User) {
@@ -17,22 +21,39 @@ export class TrucksService {
     return t?.id
   }
 
+  private assertMime(mimeType: string) {
+    if (!ALLOWED_UPLOAD_MIMES.has(mimeType)) {
+      throw new BadRequestException(`File type not allowed: ${mimeType}`)
+    }
+  }
+
   async list(user: User) {
     const transporterId = await this.transporterId(user)
-    if (!transporterId) return { trucks: [] }
-    const trucks = await this.prisma.truck.findMany({
+    if (!transporterId) return { vehicles: [] }
+    const vehicles = await this.prisma.vehicle.findMany({
       where: { transporterId },
       include: { driver: true },
       orderBy: { createdAt: 'desc' },
     })
-    return { trucks }
+    return { vehicles }
   }
 
-  /** Fleet dashboard: trucks grouped by status + document-expiry alerts + maintenance due. */
+  async get(id: string, user: User) {
+    const transporterId = await this.transporterId(user)
+    if (!transporterId) throw new BadRequestException('Transporter profile not found')
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id, transporterId },
+      include: { driver: true, model: true },
+    })
+    if (!vehicle) throw new NotFoundException('Vehicle not found')
+    return { vehicle }
+  }
+
+  /** Fleet dashboard: vehicles grouped by status + verification + document-expiry alerts. */
   async fleetDashboard(user: User) {
     const transporterId = await this.transporterId(user)
-    if (!transporterId) return { trucks: [], alerts: [], summary: { active: 0, inactive: 0 } }
-    const trucks = await this.prisma.truck.findMany({
+    if (!transporterId) return { vehicles: [], alerts: [], summary: { active: 0, inactive: 0, verified: 0, unverified: 0 } }
+    const vehicles = await this.prisma.vehicle.findMany({
       where: { transporterId },
       include: { driver: true },
       orderBy: { createdAt: 'desc' },
@@ -41,34 +62,38 @@ export class TrucksService {
     const now = Date.now()
     const days = (d: Date | null) => (d ? Math.ceil((d.getTime() - now) / 86400000) : null)
 
-    const alerts: Array<{ truckId: string; truckNo: string; kind: string; daysLeft: number | null; critical: boolean }> = []
-    for (const t of trucks) {
+    const alerts: Array<{ vehicleId: string; vehicleNo: string; kind: string; daysLeft: number | null; critical: boolean }> = []
+    for (const v of vehicles) {
       const docs = [
-        { kind: 'insurance', d: t.insuranceUpto },
-        { kind: 'permit', d: t.permitUpto },
-        { kind: 'fitness', d: t.fitnessUpto },
-        { kind: 'pollution', d: t.pollutionUpto },
+        { kind: 'insurance', d: v.insuranceUpto },
+        { kind: 'permit', d: v.permitUpto },
+        { kind: 'fitness', d: v.fitnessUpto },
+        { kind: 'pollution', d: v.pollutionUpto },
       ]
       for (const doc of docs) {
         if (doc.d) {
           const left = days(doc.d)!
           if (left <= 30) {
-            alerts.push({ truckId: t.id, truckNo: t.truckNo, kind: doc.kind, daysLeft: left, critical: left <= 0 })
+            alerts.push({ vehicleId: v.id, vehicleNo: v.vehicleNo, kind: doc.kind, daysLeft: left, critical: left <= 0 })
           }
         }
       }
-      // Service-due alert: next service odometer reached or within 1000 km.
-      const svc = await this.serviceDue(t)
-      if (svc?.due) alerts.push({ truckId: t.id, truckNo: t.truckNo, kind: 'service-due', daysLeft: -1, critical: true })
-      else if (svc?.dueSoon) alerts.push({ truckId: t.id, truckNo: t.truckNo, kind: 'service-due', daysLeft: Math.ceil((svc.kmLeft ?? 0) / 100), critical: false })
+      const svc = await this.serviceDue(v)
+      if (svc?.due) alerts.push({ vehicleId: v.id, vehicleNo: v.vehicleNo, kind: 'service-due', daysLeft: -1, critical: true })
+      else if (svc?.dueSoon) alerts.push({ vehicleId: v.id, vehicleNo: v.vehicleNo, kind: 'service-due', daysLeft: Math.ceil((svc.kmLeft ?? 0) / 100), critical: false })
+      if (v.verificationStatus !== 'approved') {
+        alerts.push({ vehicleId: v.id, vehicleNo: v.vehicleNo, kind: 'verification', daysLeft: -1, critical: true })
+      }
     }
 
     return {
-      trucks,
+      vehicles,
       alerts: alerts.sort((a, b) => (a.daysLeft ?? 999) - (b.daysLeft ?? 999)),
       summary: {
-        active: trucks.filter((t) => t.activeStatus).length,
-        inactive: trucks.filter((t) => !t.activeStatus).length,
+        active: vehicles.filter((v) => v.activeStatus).length,
+        inactive: vehicles.filter((v) => !v.activeStatus).length,
+        verified: vehicles.filter((v) => v.verificationStatus === 'approved').length,
+        unverified: vehicles.filter((v) => v.verificationStatus !== 'approved').length,
         expiringSoon: alerts.filter((a) => !a.critical).length,
         expired: alerts.filter((a) => a.critical).length,
       },
@@ -78,12 +103,12 @@ export class TrucksService {
   /** Fleet earnings & utilization overview: aggregate trips, earnings, driver coverage. */
   async fleetOverview(user: User) {
     const transporterId = await this.transporterId(user)
-    if (!transporterId) return { fleet: { trucks: 0, activeTrips: 0 }, earnings: 0, drivers: 0, covered: 0, driverCoverage: 0 }
+    if (!transporterId) return { fleet: { vehicles: 0, activeTrips: 0 }, earnings: 0, drivers: 0, covered: 0, driverCoverage: 0 }
 
-    const [trucks, trips, drivers, earnedTrips] = await Promise.all([
-      this.prisma.truck.findMany({ where: { transporterId }, select: { id: true, activeStatus: true } }),
+    const [vehicles, trips, drivers, earnedTrips] = await Promise.all([
+      this.prisma.vehicle.findMany({ where: { transporterId }, select: { id: true, activeStatus: true, verificationStatus: true } }),
       this.prisma.trip.findMany({ where: { transporterId }, select: { id: true, status: true, driverId: true, load: { select: { fareEstimate: true } }, booking: true } }),
-      this.prisma.driver.findMany({ where: { transporterId }, select: { id: true, payRate: true, status: true } }),
+      this.prisma.driver.findMany({ where: { transporterId }, select: { id: true, payRate: true, status: true, verificationStatus: true } }),
       this.prisma.trip.findMany({ where: { transporterId, status: 'delivered' }, include: { load: true, booking: true } }),
     ])
 
@@ -93,27 +118,32 @@ export class TrucksService {
     const activeDrivers = drivers.filter((d) => d.status).length
 
     return {
-      fleet: { trucks: trucks.length, activeTrucks: trucks.filter((t) => t.activeStatus).length, activeTrips },
-      drivers: { total: drivers.length, active: activeDrivers },
+      fleet: { vehicles: vehicles.length, activeVehicles: vehicles.filter((v) => v.activeStatus).length, verifiedVehicles: vehicles.filter((v) => v.verificationStatus === 'approved').length, activeTrips },
+      drivers: { total: drivers.length, active: activeDrivers, verified: drivers.filter((d) => d.verificationStatus === 'approved').length },
       coverage: { assignedTrips, totalTrips: trips.length, driverCoverage: trips.length ? Math.round((assignedTrips / trips.length) * 100) / 100 : 0 },
       earnings,
       currency: 'INR',
     }
   }
 
-  async create(input: CreateTruckInput, user: User) {
+  async create(input: CreateVehicleInput, user: User) {
     const transporterId = await this.transporterId(user)
     if (!transporterId) throw new BadRequestException('Transporter profile not found')
-    if (!input.truckNo?.trim()) throw new BadRequestException('truckNo is required')
-    if (!VALID_TYPES.includes(input.type as TruckType)) throw new BadRequestException('Invalid truck type')
+    if (!input.vehicleNo?.trim()) throw new BadRequestException('vehicleNo is required')
+    if (!VALID_TYPES.includes(input.type as TruckType)) throw new BadRequestException('Invalid vehicle type')
 
-    const model = await this.prisma.truckModel.findUnique({ where: { id: input.modelId } })
-    if (!model) throw new BadRequestException('Unknown truck model')
+    const model = await this.prisma.vehicleModel.findUnique({ where: { id: input.modelId } })
+    if (!model) throw new BadRequestException('Unknown vehicle model')
 
-    const truck = await this.prisma.truck.create({
+    const vehicleNo = input.vehicleNo.trim().toUpperCase()
+    const duplicate = await this.prisma.vehicle.findFirst({ where: { transporterId, vehicleNo } })
+    if (duplicate) throw new BadRequestException('A vehicle with this number is already registered')
+
+    const vehicle = await this.prisma.vehicle.create({
       data: {
         transporterId,
-        truckNo: input.truckNo.trim().toUpperCase(),
+        vehicleNo,
+        rcNumber: input.rcNumber ? input.rcNumber.trim().toUpperCase() : vehicleNo,
         type: input.type as TruckType,
         modelId: input.modelId,
         capacityId: input.capacityId,
@@ -122,6 +152,7 @@ export class TrucksService {
         lat: input.lat,
         lng: input.lng,
         gpsLogin: input.gpsLogin,
+        images: input.images ?? [],
         activeStatus: input.activeStatus ?? true,
         insuranceUpto: input.insuranceUpto ? new Date(input.insuranceUpto) : undefined,
         permitUpto: input.permitUpto ? new Date(input.permitUpto) : undefined,
@@ -132,26 +163,27 @@ export class TrucksService {
         odometerKm: input.odometerKm,
       },
     })
-    // Marketplace bridge: every truck is publishable capacity.
-    await this.market.publishTruck(truck, user).catch(() => {})
-    return { truck }
+    await this.market.publishTruck(vehicle as never, user).catch(() => {})
+    return { vehicle }
   }
 
-  async update(id: string, input: Partial<CreateTruckInput>, user: User) {
+  async update(id: string, input: Partial<CreateVehicleInput>, user: User) {
     const transporterId = await this.transporterId(user)
     if (!transporterId) throw new BadRequestException('Transporter profile not found')
-    const truck = await this.prisma.truck.findFirst({ where: { id, transporterId } })
-    if (!truck) throw new NotFoundException('Truck not found')
-    const updated = await this.prisma.truck.update({
+    const vehicle = await this.prisma.vehicle.findFirst({ where: { id, transporterId } })
+    if (!vehicle) throw new NotFoundException('Vehicle not found')
+    const updated = await this.prisma.vehicle.update({
       where: { id },
       data: {
-        truckNo: input.truckNo?.toUpperCase(),
+        vehicleNo: input.vehicleNo?.toUpperCase(),
+        rcNumber: input.rcNumber?.toUpperCase(),
         type: input.type as TruckType | undefined,
         modelId: input.modelId,
         capacityId: input.capacityId,
         driverId: input.driverId,
         origin: input.origin,
         gpsLogin: input.gpsLogin,
+        images: input.images,
         activeStatus: input.activeStatus,
         insuranceUpto: input.insuranceUpto ? new Date(input.insuranceUpto) : undefined,
         permitUpto: input.permitUpto ? new Date(input.permitUpto) : undefined,
@@ -162,57 +194,106 @@ export class TrucksService {
         odometerKm: input.odometerKm,
       },
     })
-    // Keep the market truck_capacity listing in sync with availability changes
-    // (paused truck → paused listing, re-enabled → live again).
     if (input.activeStatus !== undefined) {
-      await this.market.publishTruck(updated, user).catch(() => {})
+      await this.market.publishTruck(updated as never, user).catch(() => {})
     }
-    return { truck: updated }
+    return { vehicle: updated }
+  }
+
+  /** Reassign which (verified) driver is currently driving this vehicle. */
+  async assignDriver(vehicleId: string, driverId: string | null, user: User) {
+    const transporterId = await this.transporterId(user)
+    if (!transporterId) throw new BadRequestException('Transporter profile not found')
+    const vehicle = await this.prisma.vehicle.findFirst({ where: { id: vehicleId, transporterId } })
+    if (!vehicle) throw new NotFoundException('Vehicle not found')
+    if (driverId) {
+      const driver = await this.prisma.driver.findFirst({ where: { id: driverId, transporterId } })
+      if (!driver) throw new NotFoundException('Driver not found')
+      if (driver.verificationStatus !== 'approved') {
+        throw new BadRequestException('Assign a verified driver (licence verification required)')
+      }
+    }
+    const updated = await this.prisma.vehicle.update({ where: { id: vehicleId }, data: { driverId } })
+    return { vehicle: updated, driverId }
+  }
+
+  /** Verify a vehicle's RC via the provider chain (Vahan→ULIP→mock) or an uploaded RC image. */
+  async verifyVehicle(id: string, body: { rcNumber?: string; imageKey?: string }, user: User) {
+    const transporterId = await this.transporterId(user)
+    if (!transporterId) throw new BadRequestException('Transporter profile not found')
+    const vehicle = await this.prisma.vehicle.findFirst({ where: { id, transporterId } })
+    if (!vehicle) throw new NotFoundException('Vehicle not found')
+    const rcNumber = body.rcNumber ?? vehicle.rcNumber ?? vehicle.vehicleNo
+    const result = await this.verification.verifyVehicle(rcNumber, { imageKey: body.imageKey })
+    const updated = await this.prisma.vehicle.update({
+      where: { id },
+      data: {
+        rcNumber,
+        rcVerified: result.verified,
+        verificationStatus: 'approved' as KycStatus,
+        verificationSource: result.source,
+        verifiedAt: result.verified ? new Date() : undefined,
+        registeredOwner: result.registeredOwner ?? undefined,
+        makerModel: result.makerModel ?? undefined,
+        insuranceUpto: result.insuranceUpto ?? undefined,
+        fitnessUpto: result.fitnessUpto ?? undefined,
+        images: body.imageKey && !vehicle.images.includes(body.imageKey) ? [...vehicle.images, body.imageKey] : undefined,
+      },
+    })
+    return { vehicle: updated, verification: result }
+  }
+
+  /** Request a presigned upload URL for a vehicle document / RC image. */
+  async requestUpload(vehicleId: string, mimeType: string, size: number, user: User) {
+    const transporterId = await this.transporterId(user)
+    if (!transporterId) throw new BadRequestException('Transporter profile not found')
+    const vehicle = await this.prisma.vehicle.findFirst({ where: { id: vehicleId, transporterId } })
+    if (!vehicle) throw new NotFoundException('Vehicle not found')
+    this.assertMime(mimeType)
+    const presigned = await this.uploads.presignUpload({ folder: `vehicles/${vehicleId}`, mimeType, size, maxSizeMb: 10 })
+    return { uploadUrl: presigned.uploadUrl, key: presigned.key }
   }
 
   async remove(id: string, user: User) {
     const transporterId = await this.transporterId(user)
     if (!transporterId) throw new BadRequestException('Transporter profile not found')
-    const truck = await this.prisma.truck.findFirst({ where: { id, transporterId } })
-    if (!truck) throw new NotFoundException('Truck not found')
-    // Block removal while the truck is committed to an active trip or booking.
+    const vehicle = await this.prisma.vehicle.findFirst({ where: { id, transporterId } })
+    if (!vehicle) throw new NotFoundException('Vehicle not found')
     const active = await this.prisma.trip.findFirst({
       where: {
         booking: { truckId: id },
         status: { in: ['accepted', 'in_transit'] },
       },
     })
-    if (active) throw new BadRequestException('Cannot remove a truck that is on an active trip')
+    if (active) throw new BadRequestException('Cannot remove a vehicle that is on an active trip')
     const pending = await this.prisma.bid.findFirst({
       where: { truckId: id, status: { in: ['accepted', 'booking_pending', 'shortlisted'] } },
     })
-    if (pending) throw new BadRequestException('Cannot remove a truck with a committed booking')
-    await this.prisma.truck.delete({ where: { id } })
-    // Pause/expire the truck_capacity market listing so no one books removed capacity.
-    await this.market.publishTruck({ ...truck, activeStatus: false } as never, user).catch(() => {})
+    if (pending) throw new BadRequestException('Cannot remove a vehicle with a committed booking')
+    await this.prisma.vehicle.delete({ where: { id } })
+    await this.market.publishTruck({ ...vehicle, activeStatus: false } as never, user).catch(() => {})
     return { success: true }
   }
 
-  private async requireTruck(user: User, truckId: string) {
+  private async requireVehicle(user: User, vehicleId: string) {
     const transporterId = await this.transporterId(user)
     if (!transporterId) throw new BadRequestException('Transporter profile not found')
-    const truck = await this.prisma.truck.findFirst({ where: { id: truckId, transporterId } })
-    if (!truck) throw new NotFoundException('Truck not found')
-    return truck
+    const vehicle = await this.prisma.vehicle.findFirst({ where: { id: vehicleId, transporterId } })
+    if (!vehicle) throw new NotFoundException('Vehicle not found')
+    return vehicle
   }
 
-  private async serviceDue(truck: { id: string; odometerKm: number | null; nextServiceKm: number | null }) {
-    if (!truck.nextServiceKm) return null
-    const current = truck.odometerKm ?? 0
-    const diff = truck.nextServiceKm - current
-    if (diff <= 0) return { due: true, kmOver: Math.abs(diff), nextServiceKm: truck.nextServiceKm }
-    if (diff <= 1000) return { dueSoon: true, kmLeft: diff, nextServiceKm: truck.nextServiceKm }
+  private async serviceDue(vehicle: { id: string; odometerKm: number | null; nextServiceKm: number | null }) {
+    if (!vehicle.nextServiceKm) return null
+    const current = vehicle.odometerKm ?? 0
+    const diff = vehicle.nextServiceKm - current
+    if (diff <= 0) return { due: true, kmOver: Math.abs(diff), nextServiceKm: vehicle.nextServiceKm }
+    if (diff <= 1000) return { dueSoon: true, kmLeft: diff, nextServiceKm: vehicle.nextServiceKm }
     return null
   }
 
-  /** Log a maintenance/repair event for a truck and update its service odometer. */
   async logMaintenance(input: {
-    truckId: string
+    vehicleId: string
     kind: string
     title: string
     odometerKm?: number
@@ -222,7 +303,7 @@ export class TrucksService {
     notes?: string
     documents?: string[]
   }, user: User) {
-    await this.requireTruck(user, input.truckId)
+    await this.requireVehicle(user, input.vehicleId)
     if (!input.title?.trim()) throw new BadRequestException('Maintenance title is required')
     if (!['service', 'repair', 'inspection', 'tyre', 'battery'].includes(input.kind)) {
       throw new BadRequestException('Invalid maintenance kind')
@@ -230,9 +311,9 @@ export class TrucksService {
     if (input.cost != null && input.cost < 0) throw new BadRequestException('Cost cannot be negative')
 
     const record = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.truckMaintenance.create({
+      const created = await tx.vehicleMaintenance.create({
         data: {
-          truckId: input.truckId,
+          vehicleId: input.vehicleId,
           kind: input.kind,
           title: input.title.trim(),
           odometerKm: input.odometerKm,
@@ -244,50 +325,48 @@ export class TrucksService {
           createdBy: user.id,
         },
       })
-      // Reflect the latest odometer and next-service odometer on the truck.
       const data: Record<string, unknown> = {}
       if (input.odometerKm != null) data.odometerKm = input.odometerKm
       if (input.kind === 'service' && input.nextServiceKm != null) data.nextServiceKm = input.nextServiceKm
       if (input.kind === 'service') data.lastServiceAt = new Date()
-      if (Object.keys(data).length) await tx.truck.update({ where: { id: input.truckId }, data })
+      if (Object.keys(data).length) await tx.vehicle.update({ where: { id: input.vehicleId }, data })
       return created
     })
     return { maintenance: record }
   }
 
-  /** Maintenance history for a truck (most recent first). */
-  async maintenanceHistory(truckId: string, user: User) {
-    await this.requireTruck(user, truckId)
-    const records = await this.prisma.truckMaintenance.findMany({
-      where: { truckId },
+  async maintenanceHistory(vehicleId: string, user: User) {
+    await this.requireVehicle(user, vehicleId)
+    const records = await this.prisma.vehicleMaintenance.findMany({
+      where: { vehicleId },
       orderBy: { performedAt: 'desc' },
       take: 100,
     })
     return { maintenance: records }
   }
 
-  /** Maintenance-due overview across the transporter's fleet. */
   async maintenanceDue(user: User) {
     const transporterId = await this.transporterId(user)
     if (!transporterId) return { due: [], dueSoon: [], totalMaintenanceCost: 0 }
-    const trucks = await this.prisma.truck.findMany({
+    const vehicles = await this.prisma.vehicle.findMany({
       where: { transporterId },
-      select: { id: true, truckNo: true, odometerKm: true, nextServiceKm: true },
+      select: { id: true, vehicleNo: true, odometerKm: true, nextServiceKm: true },
     })
     const due: Array<Record<string, unknown>> = []
     const dueSoon: Array<Record<string, unknown>> = []
-    for (const t of trucks) {
-      const status = await this.serviceDue(t)
-      if (status?.due) due.push({ truckId: t.id, truckNo: t.truckNo, ...status })
-      else if (status?.dueSoon) dueSoon.push({ truckId: t.id, truckNo: t.truckNo, ...status })
+    for (const v of vehicles) {
+      const status = await this.serviceDue(v)
+      if (status?.due) due.push({ vehicleId: v.id, vehicleNo: v.vehicleNo, ...status })
+      else if (status?.dueSoon) dueSoon.push({ vehicleId: v.id, vehicleNo: v.vehicleNo, ...status })
     }
-    const costAgg = await this.prisma.truckMaintenance.aggregate({ where: { truck: { transporterId } }, _sum: { cost: true } })
+    const costAgg = await this.prisma.vehicleMaintenance.aggregate({ where: { vehicle: { transporterId } }, _sum: { cost: true } })
     return { due, dueSoon, totalMaintenanceCost: costAgg._sum.cost ?? 0 }
   }
 }
 
-export interface CreateTruckInput {
-  truckNo: string
+export interface CreateVehicleInput {
+  vehicleNo: string
+  rcNumber?: string
   type: string
   modelId: string
   capacityId?: string
@@ -296,6 +375,7 @@ export interface CreateTruckInput {
   lat?: number
   lng?: number
   gpsLogin?: string
+  images?: string[]
   activeStatus?: boolean
   insuranceUpto?: string
   permitUpto?: string

@@ -321,7 +321,7 @@ export class AdminService {
     const validTypes = ['open', 'container', 'trailer']
     if (!validTypes.includes(input.type)) throw new BadRequestException('Invalid truck type')
     if (!input.model?.trim()) throw new BadRequestException('Model name is required')
-    const model = await this.prisma.truckModel.upsert({
+    const model = await this.prisma.vehicleModel.upsert({
       where: { type_model: { type: input.type as TruckType, model: input.model.trim() } },
       update: {},
       create: { type: input.type as TruckType, model: input.model.trim(), capacities: input.capacities ?? [] },

@@ -21,7 +21,7 @@ export class LoadMatchingService {
   async fleetContext(userId: string) {
     const transporter = await this.prisma.transporter.findUnique({ where: { userId } })
     if (!transporter) return { fleet: [], goodsAffinity: new Set<string>(), reliability: 0 }
-    const fleet = await this.prisma.truck.findMany({
+    const fleet = await this.prisma.vehicle.findMany({
       where: { transporterId: transporter.id },
       include: { model: true, driver: true },
     })
@@ -43,7 +43,7 @@ export class LoadMatchingService {
   async marketContext(userId: string) {
     const transporter = await this.prisma.transporter.findUnique({ where: { userId } })
     const fleet = transporter
-      ? await this.prisma.truck.findMany({ where: { transporterId: transporter.id }, select: { origin: true, lat: true, lng: true } })
+      ? await this.prisma.vehicle.findMany({ where: { transporterId: transporter.id }, select: { origin: true, lat: true, lng: true } })
       : []
     const trips = transporter
       ? await this.prisma.trip.findMany({
@@ -114,7 +114,7 @@ export class LoadMatchingService {
       pickupLng?: number | null
     },
     ctx: {
-      fleet: Array<{ id: string; truckNo: string; type: string; origin?: string | null; lat?: number | null; lng?: number | null; model?: { capacities: number[] } | null }>
+      fleet: Array<{ id: string; vehicleNo: string; type: string; origin?: string | null; lat?: number | null; lng?: number | null; model?: { capacities: number[] } | null }>
       goodsAffinity: Set<string>
       reliability: number
     },
@@ -134,20 +134,20 @@ export class LoadMatchingService {
       const maxT = caps.length ? Math.max(...caps) : 0
       const capacityFits = maxT >= load.weight
 
-      if (typeMatches) { score += 30; reasons.push(`${truck.truckNo} (${truck.type}) fits this truck type`) }
+      if (typeMatches) { score += 30; reasons.push(`${truck.vehicleNo} (${truck.type}) fits this truck type`) }
       if (capacityFits) { score += 30; reasons.push(`Fits up to ${maxT}t`) }
-      if (typeMatches && !capacityFits) reasons.push(`${truck.truckNo} too small for ${load.weight}t`)
+      if (typeMatches && !capacityFits) reasons.push(`${truck.vehicleNo} too small for ${load.weight}t`)
 
       // Location: truck home base vs load pickup (distance-banded).
       const km = truckToPickupKm(truck, load)
       if (km != null) {
-        if (km <= 50) { score += 25; reasons.push(`Near your ${truck.truckNo} (${Math.round(km)} km away)`) }
-        else if (km <= 150) { score += 18; reasons.push(`${Math.round(km)} km from your ${truck.truckNo}`) }
-        else if (km <= 300) { score += 8; reasons.push(`${Math.round(km)} km from your ${truck.truckNo}`) }
+        if (km <= 50) { score += 25; reasons.push(`Near your ${truck.vehicleNo} (${Math.round(km)} km away)`) }
+        else if (km <= 150) { score += 18; reasons.push(`${Math.round(km)} km from your ${truck.vehicleNo}`) }
+        else if (km <= 300) { score += 8; reasons.push(`${Math.round(km)} km from your ${truck.vehicleNo}`) }
       } else if (truck.origin) {
         // No coords: if the truck's home city appears in the pickup, give partial credit.
         const pickupCity = (load.pickupAddr ?? '').toLowerCase()
-        if (pickupCity.includes(truck.origin.toLowerCase())) { score += 25; reasons.push(`Pickup matches your ${truck.truckNo} home (${truck.origin})`) }
+        if (pickupCity.includes(truck.origin.toLowerCase())) { score += 25; reasons.push(`Pickup matches your ${truck.vehicleNo} home (${truck.origin})`) }
       }
 
       // Goods affinity: has hauled this material before.
@@ -158,7 +158,7 @@ export class LoadMatchingService {
 
       if (score > bestScore) {
         bestScore = score
-        best = { matchedTruckId: truck.id, matchedTruckNo: truck.truckNo, matchedTruckType: truck.type, matchedDistanceKm: km, reasons }
+        best = { matchedTruckId: truck.id, matchedTruckNo: truck.vehicleNo, matchedTruckType: truck.type, matchedDistanceKm: km, reasons }
       }
     }
 

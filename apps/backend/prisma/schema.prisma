@@ -224,7 +224,6 @@ model Transporter {
   onboarded    Boolean  @default(false)
   vehicles     Vehicle[]
   drivers      Driver[]
-  trucks       Truck[]
   laneAlerts   LaneAlert[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -245,50 +244,41 @@ model KycDocument {
   @@index([userId, kind])
 }
 
+/// Verification source used to establish a vehicle or driver record's identity.
+enum VerificationSource {
+  manual
+  image
+  vahan
+  ulip
+  digilocker
+  mock
+}
+
+/// A transporter's operational vehicle (a truck). Unifies the RC/registration
+/// identity with the operational profile (type, model, driver assignment,
+/// documents, maintenance and odometer) so one record powers both the fleet
+/// dashboard and the marketplace.
 model Vehicle {
-  id              String   @id @default(cuid())
-  transporterId   String
-  transporter     Transporter @relation(fields: [transporterId], references: [id], onDelete: Cascade)
-  rcNumber        String
-  rcVerified      Boolean  @default(false)
-  insuranceUpto   DateTime?
-  permit          String?
-  status          KycStatus @default(pending)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  @@index([transporterId])
-}
-
-model Driver {
-  id              String   @id @default(cuid())
-  transporterId   String
-  transporter     Transporter @relation(fields: [transporterId], references: [id], onDelete: Cascade)
-  name            String
-  mobile          String
-  licenseKey      String?
-  licenseVerified Boolean  @default(false)
-  status          Boolean  @default(true)
-  // Driver's per-trip pay rate (₹); when null, driver pay defaults to a share
-  // of the trip fare (see driver earnings). The transporter sets this.
-  payRate         Float?
-  // Driver's own bank destination for real payouts (mirrors transporter bank).
-  bankAccount     String?
-  ifsc            String?
-  trucks          Truck[]
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  @@index([transporterId])
-}
-
-model Truck {
-  id           String    @id @default(cuid())
+  id           String   @id @default(cuid())
   transporterId String
   transporter  Transporter @relation(fields: [transporterId], references: [id], onDelete: Cascade)
-  truckNo      String
+  // Registration details (RC).
+  vehicleNo    String
+  rcNumber     String?
+  rcVerified   Boolean  @default(false)
+  // Verification lifecycle: who/how it was verified, when, and the evidence.
+  verificationStatus KycStatus @default(not_started)
+  verificationSource VerificationSource @default(manual)
+  verifiedAt   DateTime?
+  // Registered owner / maker / model auto-extracted from RC or entered.
+  registeredOwner String?
+  makerModel   String?
+  // Operational profile.
   type         TruckType
   modelId      String
-  model        TruckModel @relation(fields: [modelId], references: [id])
+  model        VehicleModel @relation(fields: [modelId], references: [id])
   capacityId   String?
+  // Current assigned driver (can be re-assigned when another driver drives).
   driverId     String?
   driver       Driver?   @relation(fields: [driverId], references: [id])
   origin       String?
@@ -296,6 +286,7 @@ model Truck {
   lng          Float?
   gpsLogin     String?
   attachments  String[]
+  images       String[]   // presigned RC / vehicle photos stored in MinIO
   activeStatus Boolean   @default(true)
   insuranceUpto DateTime?
   permitUpto    DateTime?
@@ -306,16 +297,43 @@ model Truck {
   odometerKm    Float?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
-  maintenance  TruckMaintenance[]
+  maintenance  VehicleMaintenance[]
+  @@index([transporterId])
+  @@index([driverId])
+}
+
+model Driver {
+  id              String   @id @default(cuid())
+  transporterId   String
+  transporter     Transporter @relation(fields: [transporterId], references: [id], onDelete: Cascade)
+  name            String
+  mobile          String
+  // Driving licence details + verification.
+  licenseKey      String?
+  licenseVerified Boolean  @default(false)
+  verificationStatus KycStatus @default(not_started)
+  verificationSource VerificationSource @default(manual)
+  verifiedAt      DateTime?
+  licenseImages   String[]
+  status          Boolean  @default(true)
+  // Driver's per-trip pay rate (₹); when null, driver pay defaults to a share
+  // of the trip fare (see driver earnings). The transporter sets this.
+  payRate         Float?
+  // Driver's own bank destination for real payouts (mirrors transporter bank).
+  bankAccount     String?
+  ifsc            String?
+  vehicles        Vehicle[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
   @@index([transporterId])
 }
 
 /// A fleet maintenance record: scheduled service, repair, inspection or part
-/// replacement with odometer, cost and next-due tracking per truck.
-model TruckMaintenance {
+/// replacement with odometer, cost and next-due tracking per vehicle.
+model VehicleMaintenance {
   id           String   @id @default(cuid())
-  truckId      String
-  truck        Truck    @relation(fields: [truckId], references: [id], onDelete: Cascade)
+  vehicleId    String
+  vehicle      Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   kind         String   // service | repair | inspection | tyre | battery
   title        String
   odometerKm   Float?
@@ -326,18 +344,18 @@ model TruckMaintenance {
   documents    String[]
   createdBy    String?
   createdAt    DateTime @default(now())
-  @@index([truckId])
+  @@index([vehicleId])
   @@index([performedAt])
 }
 
-model TruckModel {
+model VehicleModel {
   id         String      @id @default(cuid())
   type       TruckType
   model      String
   capacities Float[]
   status     Boolean     @default(true)
   rateCards  RateCard[]
-  trucks     Truck[]
+  vehicles   Vehicle[]
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
   @@unique([type, model])
@@ -720,7 +738,7 @@ model LaneAlert {
 model RateCard {
   id         String      @id @default(cuid())
   modelId    String
-  model      TruckModel  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  model      VehicleModel  @relation(fields: [modelId], references: [id], onDelete: Cascade)
   weight     Float?
   pricePerKm Float
   status     Boolean     @default(true)

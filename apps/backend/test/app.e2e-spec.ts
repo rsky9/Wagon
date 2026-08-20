@@ -281,7 +281,7 @@ describe('Wagon API (e2e)', () => {
       await request(app.getHttpServer())
         .post('/api/v1/trucks')
         .set('Authorization', `Bearer ${trToken}`)
-        .send({ truckNo: 'AP11LIFE', type: 'container', modelId: model.id, origin: 'Hyderabad' })
+        .send({ vehicleNo: 'AP11LIFE', type: 'container', modelId: model.id, origin: 'Hyderabad' })
         .expect(201)
     })
 
@@ -751,15 +751,15 @@ describe('Wagon API (e2e)', () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/trucks')
         .set('Authorization', `Bearer ${trToken}`)
-        .send({ truckNo: 'AP99TEST', type: 'container', modelId: model.id, origin: 'Hyderabad' })
+        .send({ vehicleNo: 'AP99TEST', type: 'container', modelId: model.id, origin: 'Hyderabad' })
         .expect(201)
-      expect(res.body.truck.truckNo).toBe('AP99TEST')
+      expect(res.body.vehicle.vehicleNo).toBe('AP99TEST')
 
       const list = await request(app.getHttpServer())
         .get('/api/v1/trucks')
         .set('Authorization', `Bearer ${trToken}`)
         .expect(200)
-      expect(list.body.trucks.length).toBeGreaterThan(0)
+      expect(list.body.vehicles.length).toBeGreaterThan(0)
     })
 
     it('transporter creates a driver', async () => {

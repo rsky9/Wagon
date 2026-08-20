@@ -37,6 +37,16 @@ export class DriversController {
     return this.drivers.remove(id, user)
   }
 
+  @Post(':id/verify')
+  verify(@Param('id') id: string, @Body() body: { licenseKey?: string; imageKey?: string }, @CurrentUser() user: User) {
+    return this.drivers.verifyDriver(id, body, user)
+  }
+
+  @Post(':id/upload')
+  requestUpload(@Param('id') id: string, @Body() body: { mimeType: string; size: number }, @CurrentUser() user: User) {
+    return this.drivers.requestUpload(id, body.mimeType, body.size, user)
+  }
+
   @Get(':id/performance')
   performance(@Param('id') id: string, @CurrentUser() user: User) {
     return this.drivers.performance(id, user)

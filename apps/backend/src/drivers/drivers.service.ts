@@ -1,14 +1,26 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
-import type { User } from '@prisma/client'
+import { UploadsService, ALLOWED_UPLOAD_MIMES } from '../uploads/uploads.service'
+import { VerificationService } from '../verification/verification.service'
+import type { User, KycStatus } from '@prisma/client'
 
 @Injectable()
 export class DriversService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly uploads: UploadsService,
+    private readonly verification: VerificationService,
+  ) {}
 
   private async transporterId(user: User) {
     const t = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
     return t?.id
+  }
+
+  private assertMime(mimeType: string) {
+    if (!ALLOWED_UPLOAD_MIMES.has(mimeType)) {
+      throw new BadRequestException(`File type not allowed: ${mimeType}`)
+    }
   }
 
   async list(user: User) {
@@ -63,6 +75,7 @@ export class DriversService {
         name: input.name.trim(),
         mobile: input.mobile.trim(),
         licenseKey: input.licenseKey,
+        licenseImages: input.licenseImages ?? [],
       },
     })
     return { driver }
@@ -79,11 +92,46 @@ export class DriversService {
         name: input.name,
         mobile: input.mobile,
         licenseKey: input.licenseKey,
+        licenseImages: input.licenseImages,
         status: input.status,
         payRate: input.payRate,
       },
     })
     return { driver: updated }
+  }
+
+  /** Verify a driver's driving licence via the provider chain (DigiLocker→mock) or an uploaded DL image. */
+  async verifyDriver(id: string, body: { licenseKey?: string; imageKey?: string }, user: User) {
+    const transporterId = await this.transporterId(user)
+    if (!transporterId) throw new BadRequestException('Transporter profile not found')
+    const driver = await this.prisma.driver.findFirst({ where: { id, transporterId } })
+    if (!driver) throw new NotFoundException('Driver not found')
+    const licenseKey = body.licenseKey ?? driver.licenseKey
+    if (!licenseKey?.trim()) throw new BadRequestException('A driving licence number is required')
+    const result = await this.verification.verifyDriver(licenseKey, { imageKey: body.imageKey })
+    const updated = await this.prisma.driver.update({
+      where: { id },
+      data: {
+        licenseKey,
+        licenseVerified: result.verified,
+        verificationStatus: 'approved' as KycStatus,
+        verificationSource: result.source,
+        verifiedAt: result.verified ? new Date() : undefined,
+        licenseImages: body.imageKey && !driver.licenseImages.includes(body.imageKey) ? [...driver.licenseImages, body.imageKey] : undefined,
+      },
+    })
+    return { driver: updated, verification: result }
+  }
+
+  /** Request a presigned upload URL for a driver's DL image. */
+  async requestUpload(driverId: string, mimeType: string, size: number, user: User) {
+    const transporterId = await this.transporterId(user)
+    if (!transporterId) throw new BadRequestException('Transporter profile not found')
+    const driver = await this.prisma.driver.findFirst({ where: { id: driverId, transporterId } })
+    if (!driver) throw new NotFoundException('Driver not found')
+    this.assertMime(mimeType)
+    const presigned = await this.uploads.presignUpload({ folder: `drivers/${driverId}`, mimeType, size, maxSizeMb: 10 })
+    return { uploadUrl: presigned.uploadUrl, key: presigned.key }
   }
 
   async remove(id: string, user: User) {
@@ -136,6 +184,7 @@ export interface CreateDriverInput {
   name: string
   mobile: string
   licenseKey?: string
+  licenseImages?: string[]
   status?: boolean
   payRate?: number | null
 }

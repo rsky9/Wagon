@@ -101,7 +101,7 @@ export class LoadsService {
       throw new BadRequestException('Complete KYC verification to post loads')
     }
 
-    const model = await this.prisma.truckModel.findUnique({ where: { id: input.modelId } })
+    const model = await this.prisma.vehicleModel.findUnique({ where: { id: input.modelId } })
     if (!model) {
       throw new BadRequestException('Unknown truck model')
     }

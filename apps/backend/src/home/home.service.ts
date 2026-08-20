@@ -215,9 +215,9 @@ export class HomeService {
       this.prisma.bid.count({
         where: { status: 'booking_pending', transporter: { userId: user.id } },
       }),
-      this.prisma.truck.findMany({
+      this.prisma.vehicle.findMany({
         where: { transporterId: (await this.transporterId(user)) ?? '__none__' },
-        select: { id: true, truckNo: true, insuranceUpto: true, permitUpto: true, fitnessUpto: true },
+        select: { id: true, vehicleNo: true, insuranceUpto: true, permitUpto: true, fitnessUpto: true },
       }),
     ])
 
@@ -228,7 +228,7 @@ export class HomeService {
         const out: Array<{ truckNo: string; doc: string; daysLeft: number }> = []
         for (const [doc, date] of [['insurance', t.insuranceUpto], ['permit', t.permitUpto], ['fitness', t.fitnessUpto]] as const) {
           if (date && new Date(date).getTime() - now < soon && new Date(date).getTime() > now) {
-            out.push({ truckNo: t.truckNo, doc, daysLeft: Math.ceil((new Date(date).getTime() - now) / (24 * 60 * 60 * 1000)) })
+            out.push({ truckNo: t.vehicleNo, doc, daysLeft: Math.ceil((new Date(date).getTime() - now) / (24 * 60 * 60 * 1000)) })
           }
         }
         return out

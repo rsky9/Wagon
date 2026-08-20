@@ -33,7 +33,7 @@ async function main() {
   console.log('Seeding Wagon reference data…')
 
   for (const m of MODELS) {
-    await prisma.truckModel.upsert({
+    await prisma.vehicleModel.upsert({
       where: { type_model: { type: m.type, model: m.model } },
       update: { capacities: m.capacities },
       create: m,
@@ -91,7 +91,7 @@ async function main() {
   })
 
   // A sample load posted by the demo supplier
-  const model = await prisma.truckModel.findFirst({ where: { model: '12 Tyre', type: 'container' } })
+  const model = await prisma.vehicleModel.findFirst({ where: { model: '12 Tyre', type: 'container' } })
   const material = await prisma.material.findFirst({ where: { name: 'Packaged Boxes' } })
   const supplierRow = await prisma.supplier.findUnique({ where: { userId: supplier.id } })
 
@@ -122,7 +122,7 @@ async function main() {
   }
 
   // Rate cards: price/km per model
-  const rateModels = await prisma.truckModel.findMany()
+  const rateModels = await prisma.vehicleModel.findMany()
   for (const m of rateModels) {
     await prisma.rateCard.upsert({
       where: { id: `rc_${m.id}` },

@@ -9,7 +9,7 @@ export class ReferenceController {
   @Get()
   async reference() {
     const [models, materials] = await Promise.all([
-      this.prisma.truckModel.findMany({ where: { status: true }, orderBy: { createdAt: 'asc' } }),
+      this.prisma.vehicleModel.findMany({ where: { status: true }, orderBy: { createdAt: 'asc' } }),
       this.prisma.material.findMany({ where: { status: true }, orderBy: { createdAt: 'asc' } }),
     ])
     return { models, materials }
@@ -41,7 +41,7 @@ export class ReferenceController {
 
   @Get('rate-cards')
   async rateCards() {
-    const models = await this.prisma.truckModel.findMany({
+    const models = await this.prisma.vehicleModel.findMany({
       where: { status: true },
       include: { rateCards: { where: { status: true } } },
       orderBy: { createdAt: 'asc' },

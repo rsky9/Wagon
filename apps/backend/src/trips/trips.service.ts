@@ -99,7 +99,7 @@ export class TripsService {
       throw new BadRequestException('Complete KYC verification to accept loads')
     }
     // A transporter can only accept with an active truck in their fleet.
-    const activeTruck = await this.prisma.truck.findFirst({
+    const activeTruck = await this.prisma.vehicle.findFirst({
       where: { transporterId: transporter.id, activeStatus: true },
     })
     if (!activeTruck) {

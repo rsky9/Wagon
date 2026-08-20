@@ -7,9 +7,9 @@ import { api } from '../config'
 import type { Load } from '@wagon/contracts'
 import { useI18n } from '@wagon/i18n'
 
-interface TruckRef {
+interface VehicleRef {
   id: string
-  truckNo: string
+  vehicleNo: string
   type: string
 }
 
@@ -29,7 +29,7 @@ interface Props {
 export function BidFormScreen({ load, onBack, onSubmitted }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
-  const [trucks, setTrucks] = useState<TruckRef[]>([])
+  const [vehicles, setVehicles] = useState<VehicleRef[]>([])
   const [drivers, setDrivers] = useState<DriverRef[]>([])
   const [amount, setAmount] = useState(String(Math.round(load.fareEstimate)))
   const [truckId, setTruckId] = useState('')
@@ -43,12 +43,12 @@ export function BidFormScreen({ load, onBack, onSubmitted }: Props) {
 
   useEffect(() => {
     Promise.all([
-      api.get<{ trucks: TruckRef[] }>('/trucks'),
+      api.get<{ vehicles: VehicleRef[] }>('/trucks'),
       api.get<{ drivers: DriverRef[] }>('/drivers'),
     ]).then(([t, d]) => {
-      setTrucks(t.trucks)
+      setVehicles(t.vehicles)
       setDrivers(d.drivers)
-      if (t.trucks[0]) setTruckId(t.trucks[0].id)
+      if (t.vehicles[0]) setTruckId(t.vehicles[0].id)
       if (d.drivers[0]) setDriverId(d.drivers[0].id)
     }).catch(() => {})
   }, [])
@@ -100,13 +100,13 @@ export function BidFormScreen({ load, onBack, onSubmitted }: Props) {
 
         <Field label={t('bidForm.selectTruck')} theme={theme}>
           <View style={styles.chipRow}>
-            {trucks.map((t) => (
+            {vehicles.map((t) => (
               <Pressable key={t.id} onPress={() => setTruckId(t.id)} style={[styles.chip, { backgroundColor: truckId === t.id ? theme.primary : theme.card, borderColor: truckId === t.id ? theme.primary : theme.border }]}>
-                <Text style={{ color: truckId === t.id ? '#fff' : theme.foreground, fontSize: 12, fontWeight: '700' }}>{t.truckNo}</Text>
+                <Text style={{ color: truckId === t.id ? '#fff' : theme.foreground, fontSize: 12, fontWeight: '700' }}>{t.vehicleNo}</Text>
                 <Text style={{ color: truckId === t.id ? 'rgba(255,255,255,0.8)' : theme.mutedForeground, fontSize: 10 }}>{t.type}</Text>
               </Pressable>
             ))}
-            {trucks.length === 0 && <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>{t('bidForm.noTrucks')}</Text>}
+            {vehicles.length === 0 && <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>{t('bidForm.noTrucks')}</Text>}
           </View>
         </Field>
 

@@ -1,16 +1,18 @@
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useCallback, useEffect, useState } from 'react'
 import { StyleSheet, Text, View, FlatList, Pressable, Alert } from 'react-native'
-import { useTheme, spacing, radius, formatWeight } from '@wagon/design'
-import { StatusChip, EmptyState } from '@wagon/components'
+import { useTheme, spacing, radius } from '@wagon/design'
+import { StatusChip, EmptyState, type StatusTone } from '@wagon/components'
 import { api } from '../config'
 import { useI18n } from '@wagon/i18n'
 
-interface TruckRow {
+interface VehicleRow {
   id: string
-  truckNo: string
+  vehicleNo: string
   type: string
   activeStatus: boolean
+  verificationStatus: string
+  rcVerified: boolean
   origin?: string
   driver?: { name: string; mobile: string } | null
 }
@@ -18,25 +20,38 @@ interface TruckRow {
 interface Props {
   onBack: () => void
   onAdd: () => void
+  onOpenVehicle: (vehicleId: string) => void
 }
 
-export function MyTrucksScreen({ onBack, onAdd }: Props) {
+const VERIFY_TONE: Record<string, StatusTone> = {
+  approved: 'success',
+  pending: 'warning',
+  rejected: 'danger',
+  not_started: 'neutral',
+}
+
+export function MyVehiclesScreen({ onBack, onAdd, onOpenVehicle }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
-  const [trucks, setTrucks] = useState<TruckRow[]>([])
+  const [vehicles, setVehicles] = useState<VehicleRow[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetch = useCallback(() => {
-    api.get<{ trucks: TruckRow[] }>('/trucks').then((res) => setTrucks(res.trucks)).catch(() => {}).finally(() => setLoading(false))
+    api.get<{ vehicles: VehicleRow[] }>('/trucks').then((res) => setVehicles(res.vehicles)).catch(() => {}).finally(() => setLoading(false))
   }, [])
 
   useEffect(() => { fetch() }, [fetch])
 
-  const remove = (id: string, truckNo: string) => {
-    Alert.alert(t('ui.removeTruck'), `Remove ${truckNo}?`, [
+  const remove = (id: string, vehicleNo: string) => {
+    Alert.alert('Remove vehicle', `Remove ${vehicleNo}?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: async () => { await api.request('DELETE', `/trucks/${id}`).catch(() => {}); fetch() } },
     ])
+  }
+
+  const toggle = async (id: string, current: boolean) => {
+    await api.patch(`/trucks/${id}`, { activeStatus: !current }).catch(() => {})
+    fetch()
   }
 
   return (
@@ -45,7 +60,7 @@ export function MyTrucksScreen({ onBack, onAdd }: Props) {
         <Pressable onPress={onBack} hitSlop={8}>
           <Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text>
         </Pressable>
-        <Text style={[styles.title, { color: theme.foreground }]}>{t('trucks.title')}</Text>
+        <Text style={[styles.title, { color: theme.foreground }]}>{t('vehicles.title')}</Text>
         <Pressable onPress={onAdd}>
           <Text style={{ color: theme.primary, fontWeight: '800', fontSize: 22 }}>+</Text>
         </Pressable>
@@ -55,27 +70,35 @@ export function MyTrucksScreen({ onBack, onAdd }: Props) {
         <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
       ) : (
         <FlatList
-          data={trucks}
-          keyExtractor={(t) => t.id}
+          data={vehicles}
+          keyExtractor={(v) => v.id}
           contentContainerStyle={styles.list}
           ListEmptyComponent={
-            <EmptyState title={t('trucks.noTrucks')} message="Add your first truck to start taking loads" actionLabel={t('trucks.add')} onAction={onAdd} icon="🚛" />
+            <EmptyState title={t('vehicles.noVehicles')} message="Add your first vehicle to start taking loads" actionLabel={t('vehicles.add')} onAction={onAdd} icon="🚛" />
           }
           renderItem={({ item }) => (
-            <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Pressable style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => onOpenVehicle(item.id)}>
               <View style={styles.cardTop}>
-                <Text style={[styles.truckNo, { color: theme.foreground }]}>{item.truckNo}</Text>
+                <Text style={[styles.vehicleNo, { color: theme.foreground }]}>{item.vehicleNo}</Text>
                 <StatusChip label={item.activeStatus ? 'Active' : 'Inactive'} tone={item.activeStatus ? 'success' : 'neutral'} />
               </View>
               <View style={styles.metaRow}>
-                <Meta label={t('trucks.type')} value={item.type} theme={theme} />
-                <Meta label={t('trucks.origin')} value={item.origin ?? '—'} theme={theme} />
-                <Meta label={t('trucks.driver')} value={item.driver?.name ?? 'Unassigned'} theme={theme} />
+                <Meta label={t('vehicles.type')} value={item.type} theme={theme} />
+                <Meta label={t('vehicles.origin')} value={item.origin ?? '—'} theme={theme} />
+                <Meta label={t('vehicles.driver')} value={item.driver?.name ?? 'Unassigned'} theme={theme} />
               </View>
-              <Pressable onPress={() => remove(item.id, item.truckNo)} hitSlop={8} style={{ alignSelf: 'flex-end' }}>
-                <Text style={{ color: theme.danger, fontSize: 13 }}>{t('common.remove')}</Text>
-              </Pressable>
-            </View>
+              <View style={styles.footerRow}>
+                <StatusChip label={`Verify: ${item.verificationStatus.replace('_', ' ')}`} tone={VERIFY_TONE[item.verificationStatus] ?? 'neutral'} />
+                <View style={{ flexDirection: 'row', gap: spacing.md }}>
+                  <Pressable onPress={() => toggle(item.id, item.activeStatus)} hitSlop={8}>
+                    <Text style={{ color: theme.primary, fontSize: 13, fontWeight: '700' }}>{item.activeStatus ? 'Set inactive' : 'Set active'}</Text>
+                  </Pressable>
+                  <Pressable onPress={() => remove(item.id, item.vehicleNo)} hitSlop={8}>
+                    <Text style={{ color: theme.danger, fontSize: 13 }}>{t('common.remove')}</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </Pressable>
           )}
         />
       )}
@@ -99,8 +122,9 @@ const styles = StyleSheet.create({
   list: { padding: spacing.lg, gap: spacing.md },
   card: { borderRadius: radius.xl, borderWidth: 1, padding: spacing.lg, gap: spacing.md },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  truckNo: { fontSize: 18, fontWeight: '800', letterSpacing: 0.5 },
+  vehicleNo: { fontSize: 18, fontWeight: '800', letterSpacing: 0.5 },
   metaRow: { flexDirection: 'row', gap: spacing.md },
   metaLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 },
   metaValue: { fontSize: 14, fontWeight: '600', marginTop: 1 },
+  footerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xs },
 })
