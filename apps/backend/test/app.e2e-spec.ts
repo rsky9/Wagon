@@ -2049,4 +2049,183 @@ describe('Wagon API (e2e)', () => {
       expect(rated.route).toContain('→')
     })
   })
+
+  describe('address book, lane alerts & contact gating', () => {
+    let contactLoadId: string
+    let bidId: string
+
+    beforeAll(async () => {
+      // A fresh load with explicit contact info (owner = supplier).
+      const ref = await request(app.getHttpServer()).get('/api/v1/reference').expect(200)
+      const model = ref.body.models[0]
+      const material = ref.body.materials[0]
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/loads')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({
+          pickupAddr: 'Contact City', dropAddr: 'Contact Drop',
+          pickupLat: 17.4, pickupLng: 78.5, dropLat: 13.1, dropLng: 80.3,
+          date: '2026-10-01T08:00:00Z', truckType: model.type, modelId: model.id,
+          weight: 20, distanceKm: 100, materialId: material.id,
+          contactName: 'Contact Person', contactPhone: '9963712337',
+        })
+        .expect(201)
+      contactLoadId = res.body.load.id
+    })
+
+    it('saves, lists and deletes address-book locations and contacts', async () => {
+      const loc = await request(app.getHttpServer())
+        .post('/api/v1/addressbook/locations')
+        .set('Authorization', `Bearer ${trToken}`)
+        .send({ label: 'Home depot', address: 'Madhapur, Hyderabad', city: 'Hyderabad' })
+        .expect(201)
+      const locId = loc.body.location.id
+      expect(loc.body.location.kind).toBe('both')
+
+      const con = await request(app.getHttpServer())
+        .post('/api/v1/addressbook/contacts')
+        .set('Authorization', `Bearer ${trToken}`)
+        .send({ name: 'Frequent Shipper', mobile: '9000011111', label: 'Shipper' })
+        .expect(201)
+      const conId = con.body.contact.id
+
+      const list = await request(app.getHttpServer())
+        .get('/api/v1/addressbook/locations')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      expect(list.body.locations.some((l: { id: string }) => l.id === locId)).toBe(true)
+
+      const contacts = await request(app.getHttpServer())
+        .get('/api/v1/addressbook/contacts')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      expect(contacts.body.contacts.some((c: { id: string }) => c.id === conId)).toBe(true)
+
+      await request(app.getHttpServer())
+        .delete(`/api/v1/addressbook/locations/${locId}`)
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      await request(app.getHttpServer())
+        .delete(`/api/v1/addressbook/contacts/${conId}`)
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+
+      const after = await request(app.getHttpServer())
+        .get('/api/v1/addressbook/locations')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      expect(after.body.locations.some((l: { id: string }) => l.id === locId)).toBe(false)
+    })
+
+    it('rejects invalid address-book payloads and cross-user deletes', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/addressbook/locations')
+        .set('Authorization', `Bearer ${trToken}`)
+        .send({ label: '', address: '' })
+        .expect(400)
+
+      // The supplier owns the contact load, not the location — deleting another
+      // user's location is a 404 (scoped to the caller).
+      await request(app.getHttpServer())
+        .delete('/api/v1/addressbook/locations/nonexistent')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(404)
+    })
+
+    it('lets a transporter manage lane alerts (create/list/toggle/delete)', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/api/v1/alerts')
+        .set('Authorization', `Bearer ${trToken}`)
+        .send({ fromLane: 'Hyderabad', truckType: 'container' })
+        .expect(201)
+      const alertId = created.body.alert.id
+
+      const mine = await request(app.getHttpServer())
+        .get('/api/v1/alerts/mine')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      expect(mine.body.alerts.some((a: { id: string }) => a.id === alertId)).toBe(true)
+
+      await request(app.getHttpServer())
+        .patch(`/api/v1/alerts/${alertId}/toggle`)
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+
+      await request(app.getHttpServer())
+        .delete(`/api/v1/alerts/${alertId}`)
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+
+      const after = await request(app.getHttpServer())
+        .get('/api/v1/alerts/mine')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      expect(after.body.alerts.some((a: { id: string }) => a.id === alertId)).toBe(false)
+    })
+
+    it('blocks non-transporters from the lane-alerts endpoint', async () => {
+      // Restrict supplier to supplier-only, then the @Roles('transporter') guard blocks.
+      await request(app.getHttpServer())
+        .patch('/api/v1/auth/capabilities')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ capabilities: ['supplier'] })
+        .expect(200)
+      await request(app.getHttpServer())
+        .post('/api/v1/alerts')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ fromLane: 'Mumbai' })
+        .expect(403)
+      // Restore to the supplier-only capability state expected by later suites.
+      await request(app.getHttpServer())
+        .patch('/api/v1/auth/capabilities')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ capabilities: ['supplier'] })
+        .expect(200)
+    })
+
+    it('gates supplier contact: 403 before bidding, revealed after a bid, visible to owner', async () => {
+      // Owner (supplier) can always see the contact.
+      const owner = await request(app.getHttpServer())
+        .get(`/api/v1/loads/${contactLoadId}/contact`)
+        .set('Authorization', `Bearer ${supToken}`)
+        .expect(200)
+      expect(owner.body.contactName).toBe('Contact Person')
+      expect(owner.body.contactPhone).toBe('9963712337')
+
+      // Transporter without a bid is denied.
+      await request(app.getHttpServer())
+        .get(`/api/v1/loads/${contactLoadId}/contact`)
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(403)
+
+      // Transporter submits a bid, then the contact is revealed. Bid above 60%
+      // of the reference rate to satisfy the rate-sanity gate.
+      const loadDetail = await request(app.getHttpServer())
+        .get(`/api/v1/loads/${contactLoadId}`)
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      const fare = loadDetail.body.load.fareEstimate
+      const bid = await request(app.getHttpServer())
+        .post('/api/v1/bidding/bid')
+        .set('Authorization', `Bearer ${trToken}`)
+        .send({ loadId: contactLoadId, amount: Math.round(fare), validityHours: 24 })
+        .expect(201)
+      bidId = bid.body.bid.id
+      expect(bidId).toBeTruthy()
+
+      const revealed = await request(app.getHttpServer())
+        .get(`/api/v1/loads/${contactLoadId}/contact`)
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(200)
+      expect(revealed.body.contactName).toBe('Contact Person')
+      expect(revealed.body.contactPhone).toBe('9963712337')
+    })
+
+    it('returns 404 for contact on a nonexistent load', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/loads/nonexistent/contact')
+        .set('Authorization', `Bearer ${trToken}`)
+        .expect(404)
+    })
+  })
 })

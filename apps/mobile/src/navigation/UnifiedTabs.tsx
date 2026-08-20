@@ -261,6 +261,8 @@ function AccountTab({ navigation }: any) {
       onOpenDisputes={() => root?.navigate('Disputes')}
       onOpenEnablement={() => root?.navigate('EnablementHub')}
       onOpenMarket={() => root?.navigate('Market')}
+      onOpenAddressBook={() => root?.navigate('AddressBook')}
+      onOpenLaneAlerts={() => root?.navigate('LaneAlerts')}
     />
   )
 }

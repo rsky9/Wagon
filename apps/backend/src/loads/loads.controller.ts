@@ -64,6 +64,11 @@ export class LoadsController {
     return this.loads.complete(id, user)
   }
 
+  @Get(':id/contact')
+  contact(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.loads.contact(id, user)
+  }
+
   @Get(':id')
   detail(@Param('id') id: string, @CurrentUser() user: User) {
     return this.loads.detail(id, user)

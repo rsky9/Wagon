@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common'
+import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { AlertsService } from '../alerts/alerts.service'
 import { NotificationsService } from '../notifications/notifications.service'
@@ -322,6 +322,32 @@ export class LoadsService {
 
   private async isSupplier(user: User) {
     return this.prisma.supplier.findUnique({ where: { userId: user.id } })
+  }
+
+  /** Reveal a load's supplier contact to the load owner or a transporter who has
+   *  meaningfully engaged (submitted a bid/quote) — the phone-first contact flow.
+   *  Prevents open spam while enabling call/WhatsApp before committing. */
+  async contact(id: string, user: User) {
+    const load = await this.prisma.load.findUnique({ where: { id } })
+    if (!load) throw new NotFoundException('Load not found')
+    const isOwner = (await this.isSupplier(user))?.id === load.supplierId
+    let canSee = isOwner
+    if (!canSee) {
+      const transporter = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
+      if (transporter) {
+        // A transporter who has meaningfully engaged (submitted a bid or, once
+        // accepted into a trip, holds a quote) may contact the supplier.
+        const [bid, quote] = await Promise.all([
+          this.prisma.bid.findFirst({
+            where: { loadId: id, transporterId: transporter.id, status: { notIn: ['withdrawn'] } },
+          }),
+          this.prisma.quote.findFirst({ where: { loadId: id, transporterId: transporter.id } }),
+        ])
+        canSee = !!bid || !!quote
+      }
+    }
+    if (!canSee) throw new ForbiddenException('Contact is shared after you bid on this load')
+    return { contactName: load.contactName, contactPhone: load.contactPhone }
   }
 
   /** Supplier: all quotes/interest received on their posted loads. */

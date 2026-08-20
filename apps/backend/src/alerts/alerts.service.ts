@@ -57,6 +57,21 @@ export class AlertsService {
     })
   }
 
+  async remove(id: string, user: User) {
+    const transporter = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
+    if (!transporter) {
+      throw new BadRequestException('Transporter profile not found')
+    }
+    const alert = await this.prisma.laneAlert.findFirst({
+      where: { id, transporterId: transporter.id },
+    })
+    if (!alert) {
+      throw new BadRequestException('Alert not found')
+    }
+    await this.prisma.laneAlert.delete({ where: { id } })
+    return { ok: true }
+  }
+
   /** Called after a new load is posted — notify transporters with matching lane alerts. */
   async notifyForLoad(load: { pickupAddr: string; truckType: string }) {
     const alerts = await this.prisma.laneAlert.findMany({

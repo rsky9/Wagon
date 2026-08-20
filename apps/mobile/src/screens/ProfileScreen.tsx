@@ -40,6 +40,8 @@ interface Props {
   onOpenDisputes: () => void
   onOpenEnablement: () => void
   onOpenMarket?: () => void
+  onOpenAddressBook?: () => void
+  onOpenLaneAlerts?: () => void
 }
 
 const CAP_LABEL: Record<string, string> = {
@@ -51,7 +53,7 @@ const CAP_LABEL: Record<string, string> = {
   driver: 'Driver',
 }
 
-export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers, onOpenRateCard, onOpenNotifications, onOpenSettings, onOpenSearch, onOpenFinance, onOpenReviews, onOpenTickets, onOpenEmergency, onOpenChat, onOpenFleet, onOpenNotifPrefs, onOpenInvoices, onOpenLoadHistory, onOpenQuests, onOpenSaved, onOpenBids, onOpenDisputes, onOpenEnablement, onOpenMarket }: Props) {
+export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers, onOpenRateCard, onOpenNotifications, onOpenSettings, onOpenSearch, onOpenFinance, onOpenReviews, onOpenTickets, onOpenEmergency, onOpenChat, onOpenFleet, onOpenNotifPrefs, onOpenInvoices, onOpenLoadHistory, onOpenQuests, onOpenSaved, onOpenBids, onOpenDisputes, onOpenEnablement, onOpenMarket, onOpenAddressBook, onOpenLaneAlerts }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
   const { isDark, cycle } = useThemeMode()
@@ -169,6 +171,8 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
         <SettingRow icon="🔖" label={t('profile.saved')} sub={t('profile.savedSub')} onPress={onOpenSaved} />
         <SettingRow icon="🔍" label={t('profile.searchLoads')} onPress={onOpenSearch} />
         <SettingRow icon="🗂️" label={t('profile.loadHistory')} onPress={onOpenLoadHistory} />
+        {isTransporter && onOpenLaneAlerts && <SettingRow icon="🛣️" label="Lane alerts" sub="Get notified on new loads for your lanes" onPress={onOpenLaneAlerts} />}
+        {onOpenAddressBook && <SettingRow icon="📍" label="Address book" sub="Saved pickup/drop locations & contacts" onPress={onOpenAddressBook} />}
 
         {isEnablement && (
           <>

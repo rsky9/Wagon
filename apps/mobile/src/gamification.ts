@@ -33,7 +33,7 @@ export const XP_PER_LEVEL = 120
 export const QUESTS: Record<string, Quest[]> = {
   transporter: [
     { id: 'company', title: 'Company profile', description: 'Tell us about your business', icon: '🏢', xp: 40, target: 'Settings' },
-    { id: 'truck', title: 'Add your first truck', description: 'Start building your fleet', icon: '🚚', xp: 60, target: 'MyTrucks' },
+    { id: 'truck', title: 'Add your first vehicle', description: 'Start building your fleet', icon: '🚚', xp: 60, target: 'MyVehicles' },
     { id: 'driver', title: 'Add a driver', description: 'Bring a driver on board', icon: '🧑‍✈️', xp: 40, target: 'Drivers' },
     { id: 'kyc', title: 'Verify your identity', description: 'Complete KYC to unlock more loads', icon: '🛡️', xp: 60, target: 'Kyc' },
     { id: 'bank', title: 'Connect payouts', description: 'Add bank details for settlements', icon: '₹', xp: 40, target: 'Finance' },

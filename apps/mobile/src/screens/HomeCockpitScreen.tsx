@@ -180,7 +180,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
   }
   // Setup nudges: a transporter with no fleet can't accept loads yet.
   if (showTransporter && data?.transporter && data.transporter.fleetSize === 0) {
-    needsAttention.push({ icon: '🚚', text: 'Add your first truck to start accepting loads', onPress: onOpenFleet ?? onOpenMarketplace })
+    needsAttention.push({ icon: '🚚', text: 'Add your first vehicle to start accepting loads', onPress: onOpenFleet ?? onOpenMarketplace })
   }
   if (forYou && forYou.shipmentsForMe.length > 0) {
     const d = forYou.shipmentsForMe[0]!

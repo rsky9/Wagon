@@ -7,6 +7,8 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  Linking,
+  Share,
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius, formatINR, formatWeight, shadows } from '@wagon/design'
@@ -91,6 +93,28 @@ export function LoadDetailScreen({ load, onBack, onAccepted, onOpenBid }: Props)
     minute: '2-digit',
   })
 
+  // Phone-first contact: fetch the supplier's contact (gated by backend to the
+  // owner or a transporter who has bid) then offer call / WhatsApp.
+  const [contact, setContact] = useState<{ contactName?: string | null; contactPhone?: string | null } | null>(null)
+  const [contactError, setContactError] = useState<string | null>(null)
+  const revealContact = async () => {
+    if (contact) return
+    setContactError(null)
+    try {
+      const r = await api.get<{ contactName?: string | null; contactPhone?: string | null }>(`/loads/${load.id}/contact`)
+      setContact(r)
+    } catch (e) {
+      setContactError(e instanceof Error ? e.message : 'Contact is shared after you bid on this load')
+    }
+  }
+  const dial = (number: string) => Linking.openURL(`tel:${number}`).catch(() => {})
+  const whatsapp = (number: string) => Linking.openURL(`https://wa.me/91${number.replace(/\D/g, '')}`).catch(() => {})
+  const shareLoad = () => {
+    Share.share({
+      message: `Load: ${load.pickupAddr} → ${load.dropAddr}\n${formatWeight(load.weight)} · ₹${load.fareEstimate.toLocaleString('en-IN')} · ${new Date(load.date).toLocaleDateString('en-IN')}\n${load.description ?? ''}`,
+    }).catch(() => {})
+  }
+
   const matchTransporters = () => {
     setLoading(true)
     api.post<{ matches: Array<{ userId: string; name?: string | null; rating?: number | null; score?: number }> }>(`/ai/match/${load.id}`)
@@ -142,6 +166,31 @@ export function LoadDetailScreen({ load, onBack, onAccepted, onOpenBid }: Props)
           <Row label={t('loadDetail.pickup')} value={date} />
           <Row label={t('loadDetail.payment')} value={load.payLater ? 'Pay later' : 'Advance / booking'} />
           {load.description ? <Row label={t('loadDetail.notes')} value={load.description} /> : null}
+        </View>
+
+        <Text style={[styles.sectionTitle, { color: theme.foreground }]}>Contact &amp; share</Text>
+        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          {canHaul && !contact && (
+            <Pressable style={[styles.contactBtn, { borderColor: theme.primary }]} onPress={revealContact}>
+              <Text style={{ color: theme.primary, fontWeight: '700' }}>{contactError ? 'Contact shared after you bid' : 'Reveal supplier contact'}</Text>
+            </Pressable>
+          )}
+          {contactError && !contact && (
+            <Text style={{ color: theme.mutedForeground, fontSize: 12, marginTop: spacing.xs }}>Submit a bid to unlock the supplier's phone.</Text>
+          )}
+          {contact?.contactPhone && (
+            <View style={styles.contactActions}>
+              <Pressable style={[styles.contactBtn, { borderColor: theme.success }]} onPress={() => dial(contact.contactPhone!)}>
+                <Text style={{ color: theme.success, fontWeight: '700' }}>📞 Call {contact.contactName ?? 'supplier'}</Text>
+              </Pressable>
+              <Pressable style={[styles.contactBtn, { borderColor: '#25D366' }]} onPress={() => whatsapp(contact.contactPhone!)}>
+                <Text style={{ color: '#25D366', fontWeight: '700' }}>WhatsApp</Text>
+              </Pressable>
+            </View>
+          )}
+          <Pressable style={[styles.contactBtn, { borderColor: theme.border }]} onPress={shareLoad}>
+            <Text style={{ color: theme.foreground, fontWeight: '700' }}>↗ Share load</Text>
+          </Pressable>
         </View>
       </ScrollView>
 
@@ -237,8 +286,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   spec: { width: '50%', padding: spacing.sm },
-  specLabel: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
-  specValue: { fontSize: 15, fontWeight: '700', marginTop: 2 },
+  specLabel: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 },  specValue: { fontSize: 15, fontWeight: '700', marginTop: 2 },
   row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.sm },
   rowLabel: { fontSize: 14 },
   rowValue: { fontSize: 14, fontWeight: '600', flex: 1, textAlign: 'right', marginLeft: spacing.lg },
@@ -254,4 +302,6 @@ const styles = StyleSheet.create({
   },
   rejectBtn: { borderRadius: radius.md, borderWidth: 1, paddingVertical: spacing.md, alignItems: 'center' },
   saveBtn: { borderRadius: radius.md, borderWidth: 1, paddingVertical: spacing.md, alignItems: 'center' },
+  contactBtn: { borderRadius: radius.md, borderWidth: 1, borderStyle: 'dashed', paddingVertical: spacing.md, alignItems: 'center', marginBottom: spacing.sm },
+  contactActions: { flexDirection: 'row', gap: spacing.sm },
 })

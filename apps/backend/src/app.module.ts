@@ -22,6 +22,7 @@ import { RatingsModule } from './ratings/ratings.module'
 import { DisputesModule } from './disputes/disputes.module'
 import { TrackingModule } from './tracking/tracking.module'
 import { AlertsModule } from './alerts/alerts.module'
+import { AddressBookModule } from './addressbook/addressbook.module'
 import { AuditModule } from './audit/audit.module'
 import { UploadsModule } from './uploads/uploads.module'
 import { KycModule } from './kyc/kyc.module'
@@ -92,6 +93,7 @@ import { AnalyticsModule } from './analytics/analytics.module'
     DisputesModule,
     TrackingModule,
     AlertsModule,
+    AddressBookModule,
     AuditModule,
     UploadsModule,
     KycModule,

@@ -146,6 +146,8 @@ model User {
   notifPrefs   NotificationPreference?
   favorites    Favorite[]
   savedSearches SavedSearch[]
+  savedLocations SavedLocation[]
+  savedContacts SavedContact[]
   messages     Message[]
   reviewsGiven   Review[] @relation("Reviewer")
   reviewsReceived Review[] @relation("Reviewee")
@@ -614,6 +616,33 @@ model SavedSearch {
   userId    String
   name      String
   query     Json?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@index([userId])
+}
+
+// Address book: reusable pickup/drop locations per user (supplier/transporter).
+model SavedLocation {
+  id        String   @id @default(cuid())
+  userId    String
+  label     String
+  address   String
+  city      String?
+  lat       Float?
+  lng       Float?
+  kind      String   @default("both") // pickup | drop | both
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@index([userId])
+}
+
+// Address book: reusable contacts (e.g. frequent shippers / transporters).
+model SavedContact {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  mobile    String
+  label     String?
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   @@index([userId])

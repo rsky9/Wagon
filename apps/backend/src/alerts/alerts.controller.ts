@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Param, Post, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Patch, Param, Post, UseGuards } from '@nestjs/common'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { Roles } from '../auth/guards/roles.decorator'
 import { CurrentUser } from '../auth/guards/current-user.decorator'
@@ -24,5 +24,10 @@ export class AlertsController {
   @Patch(':id/toggle')
   toggle(@Param('id') id: string, @CurrentUser() user: User) {
     return this.alerts.toggle(id, user)
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.alerts.remove(id, user)
   }
 }

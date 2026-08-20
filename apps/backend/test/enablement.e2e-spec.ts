@@ -596,8 +596,9 @@ describe('Enablement platform (e2e)', () => {
       const models = (await api(trToken).get('/reference').expect(200)).body.models as Array<{ id: string; type: string }>
       const containerModel = models.find((m: { type: string }) => m.type === 'container')!
       const created = await api(trToken).post('/trucks', { vehicleNo: 'KA99ZZ9999', type: 'container', modelId: containerModel.id }).expect(201)
-      await api(supToken).patch(`/trucks/${created.body.vehicle.id}`, { vehicleNo: 'x' }).expect(404)
-      await api(supToken).delete(`/trucks/${created.body.vehicle.id}`).expect(404)
+      // The trucks module is transporter-gated; a pure supplier is forbidden (403).
+      await api(supToken).patch(`/trucks/${created.body.vehicle.id}`, { vehicleNo: 'x' }).expect(403)
+      await api(supToken).delete(`/trucks/${created.body.vehicle.id}`).expect(403)
     })
   })
 

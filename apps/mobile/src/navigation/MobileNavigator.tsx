@@ -33,6 +33,8 @@ import { SettingsScreen } from '../screens/SettingsScreen'
 import { HowWagonWorks } from '../screens/HowWagonWorks'
 import { SearchScreen } from '../screens/SearchScreen'
 import { FiltersScreen } from '../screens/FiltersScreen'
+import { AddressBookScreen } from '../screens/AddressBookScreen'
+import { LaneAlertsScreen } from '../screens/LaneAlertsScreen'
 import { useLoadFilters, filtersActions } from '../filters'
 import { FinanceScreen } from '../screens/FinanceScreen'
 import { ReviewsScreen } from '../screens/ReviewsScreen'
@@ -109,6 +111,8 @@ export type RootStackParamList = {
   ChatList: undefined
   Fleet: undefined
   NotifPrefs: undefined
+  AddressBook: undefined
+  LaneAlerts: undefined
   VehicleDetail: { vehicleId: string }
   Invoices: undefined
   LoadHistory: undefined
@@ -149,6 +153,7 @@ function navigateToUrl(nav: any, url: string, item?: { data?: { loadId?: string;
     'Notifications', 'MyVehicles', 'AddVehicle', 'Drivers', 'RateCard', 'Settings',
     'Search', 'Filters', 'Finance', 'Reviews', 'Tickets', 'Emergency', 'Chat',
     'ChatList', 'Fleet', 'NotifPrefs', 'Invoices', 'LoadHistory', 'Quests',
+    'AddressBook', 'LaneAlerts',
     'RoleChange', 'PostLoadWizard', 'DecisionRoom', 'BidForm', 'Negotiation',
     'TripExceptions', 'Responses', 'Bookings', 'ReturnLoads', 'Track',
     'ShipmentDetail', 'Forwarding', 'Planning', 'EnablementFinance', 'Storage',
@@ -556,6 +561,14 @@ function NotifPrefsRoute({ navigation }: any) {
   return <NotificationPrefsScreen onBack={() => navigation.goBack()} />
 }
 
+function AddressBookRoute({ navigation }: any) {
+  return <AddressBookScreen onBack={() => navigation.goBack()} />
+}
+
+function LaneAlertsRoute({ navigation }: any) {
+  return <LaneAlertsScreen onBack={() => navigation.goBack()} />
+}
+
 function VehicleDetailRoute({ navigation, route }: any) {
   return <VehicleDetailScreen vehicleId={route.params?.vehicleId} onBack={() => navigation.goBack()} />
 }
@@ -767,6 +780,8 @@ export function MobileNavigator() {
                 <Stack.Screen name="ChatList" component={ChatListRoute} />
                 <Stack.Screen name="Fleet" component={FleetRoute} />
                 <Stack.Screen name="NotifPrefs" component={NotifPrefsRoute} />
+                <Stack.Screen name="AddressBook" component={AddressBookRoute} />
+                <Stack.Screen name="LaneAlerts" component={LaneAlertsRoute} />
                 <Stack.Screen name="VehicleDetail" component={VehicleDetailRoute} />
                 <Stack.Screen name="Invoices" component={InvoicesRoute} />
                 <Stack.Screen name="LoadHistory" component={LoadHistoryRoute} />

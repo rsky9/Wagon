@@ -72,6 +72,9 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
   const [commercialModel, setCommercialModel] = useState('fixed_rate')
   const [referenceRate, setReferenceRate] = useState('')
   const [advancePct, setAdvancePct] = useState('')
+  const [savedLocations, setSavedLocations] = useState<Array<{ id: string; label: string; address: string; kind: string }>>([])
+  const [showSavedPickup, setShowSavedPickup] = useState(false)
+  const [showSavedDrop, setShowSavedDrop] = useState(false)
 
   useEffect(() => {
     api.get<{ models: TruckModel[]; materials: Material[] }>('/reference').then((res) => {
@@ -80,6 +83,8 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
       setMaterial(res.materials[0]?.name ?? '')
       setModelId(res.models.find((m) => m.type === 'container')?.id ?? res.models[0]?.id ?? '')
     }).catch(() => {})
+    api.get<{ locations: Array<{ id: string; label: string; address: string; kind: string }> }>('/addressbook/locations')
+      .then((r) => setSavedLocations(r.locations)).catch(() => {})
   }, [])
 
   const inputStyle = {
@@ -180,9 +185,29 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
         <>
           <Field label={t('postLoad.whereFrom')}>
             <TextInput style={inputStyle} value={pickup} onChangeText={setPickup} placeholder={t('postLoad.fromExample')} placeholderTextColor={theme.mutedForeground + '88'} />
+            {savedLocations.length > 0 && (
+              <Pressable onPress={() => setShowSavedPickup((s) => !s)}>
+                <Text style={{ color: theme.primary, fontSize: 13, fontWeight: '700' }}>{showSavedPickup ? 'Hide saved' : '📋 Use saved location'}</Text>
+              </Pressable>
+            )}
+            {showSavedPickup && savedLocations.map((l) => (
+              <Pressable key={l.id} onPress={() => { setPickup(l.address); setShowSavedPickup(false) }} style={{ paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+                <Text style={{ color: theme.foreground, fontSize: 14 }}>{l.label} · {l.address}</Text>
+              </Pressable>
+            ))}
           </Field>
           <Field label={t('postLoad.whereTo')}>
             <TextInput style={inputStyle} value={drop} onChangeText={setDrop} placeholder={t('postLoad.toExample')} placeholderTextColor={theme.mutedForeground + '88'} />
+            {savedLocations.length > 0 && (
+              <Pressable onPress={() => setShowSavedDrop((s) => !s)}>
+                <Text style={{ color: theme.primary, fontSize: 13, fontWeight: '700' }}>{showSavedDrop ? 'Hide saved' : '📋 Use saved location'}</Text>
+              </Pressable>
+            )}
+            {showSavedDrop && savedLocations.map((l) => (
+              <Pressable key={l.id} onPress={() => { setDrop(l.address); setShowSavedDrop(false) }} style={{ paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+                <Text style={{ color: theme.foreground, fontSize: 14 }}>{l.label} · {l.address}</Text>
+              </Pressable>
+            ))}
           </Field>
           <Field label={t('postLoad.distance')}>
             <TextInput style={inputStyle} value={distance} onChangeText={setDistance} placeholder={t('postLoad.distanceExample')} keyboardType="decimal-pad" placeholderTextColor={theme.mutedForeground + '88'} />
