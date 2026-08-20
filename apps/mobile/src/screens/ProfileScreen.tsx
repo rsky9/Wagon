@@ -158,51 +158,51 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
 
         {/* Identity & Trust */}
         <GroupTitle>Identity &amp; Trust</GroupTitle>
-        <SettingRow icon="🛡️" label={t('profile.verification')} sub={`${kycPct}% complete · ${(profile?.kycStatus ?? 'not_started').replace('_', ' ')}`} onPress={onOpenKyc} trailing={kycPct > 0 ? `${kycPct}%` : undefined} />
-        <SettingRow icon="⭐" label={t('profile.reviews')} onPress={onOpenReviews} />
-        <SettingRow icon="🎯" label={t('profile.quests')} sub={t('profile.questsSub')} onPress={onOpenQuests} />
+        <SettingRow icon="kyc" label={t('profile.verification')} sub={`${kycPct}% complete · ${(profile?.kycStatus ?? 'not_started').replace('_', ' ')}`} onPress={onOpenKyc} trailing={kycPct > 0 ? `${kycPct}%` : undefined} />
+        <SettingRow icon="star" label={t('profile.reviews')} onPress={onOpenReviews} />
+        <SettingRow icon="target" label={t('profile.quests')} sub={t('profile.questsSub')} onPress={onOpenQuests} />
 
         {/* Marketplace & Operations */}
         <GroupTitle>Marketplace</GroupTitle>
-        <SettingRow icon="📦" label="Capability marketplace" sub="Capacity, shipments & quotes" onPress={onOpenMarket ?? onOpenEnablement} />
-        {isTransporter && <SettingRow icon="🤝" label={t('profile.myBids')} sub="Bids you've submitted" onPress={onOpenBids} />}
-        <SettingRow icon="🔖" label={t('profile.saved')} sub={t('profile.savedSub')} onPress={onOpenSaved} />
-        <SettingRow icon="🔍" label={t('profile.searchLoads')} onPress={onOpenSearch} />
-        <SettingRow icon="🗂️" label={t('profile.loadHistory')} onPress={onOpenLoadHistory} />
+        <SettingRow icon="shipment" label="Capability marketplace" sub="Capacity, shipments & quotes" onPress={onOpenMarket ?? onOpenEnablement} />
+        {isTransporter && <SettingRow icon="handover" label={t('profile.myBids')} sub="Bids you've submitted" onPress={onOpenBids} />}
+        <SettingRow icon="bookmark" label={t('profile.saved')} sub={t('profile.savedSub')} onPress={onOpenSaved} />
+        <SettingRow icon="search" label={t('profile.searchLoads')} onPress={onOpenSearch} />
+        <SettingRow icon="layers" label={t('profile.loadHistory')} onPress={onOpenLoadHistory} />
 
         {isEnablement && (
           <>
             <GroupTitle>Enablement</GroupTitle>
-            <SettingRow icon="🧩" label="Enablement hub" sub="Shipments · forwarding · plans · finance · storage · integrations" onPress={onOpenEnablement} />
+            <SettingRow icon="integrations" label="Enablement hub" sub="Shipments · forwarding · plans · finance · storage · integrations" onPress={onOpenEnablement} />
           </>
         )}
 
         {isTransporter && (
           <>
             <GroupTitle>Fleet</GroupTitle>
-            <SettingRow icon="🚚" label={t('profile.fleet')} sub="Trucks · documents · maintenance" onPress={onOpenFleet} />
-            <SettingRow icon="🚛" label={t('profile.myTrucks')} onPress={onOpenTrucks} />
-            <SettingRow icon="👤" label={t('profile.drivers')} onPress={onOpenDrivers} />
-            <SettingRow icon="📋" label={t('profile.rateCard')} onPress={onOpenRateCard} />
+            <SettingRow icon="truck" label={t('profile.fleet')} sub="Trucks · documents · maintenance" onPress={onOpenFleet} />
+            <SettingRow icon="truckLarge" label={t('profile.myTrucks')} onPress={onOpenTrucks} />
+            <SettingRow icon="driver" label={t('profile.drivers')} onPress={onOpenDrivers} />
+            <SettingRow icon="doc" label={t('profile.rateCard')} onPress={onOpenRateCard} />
           </>
         )}
 
         {/* Finance */}
         <GroupTitle>Finance</GroupTitle>
-        <SettingRow icon="💰" label="Earnings & payments" onPress={onOpenFinance} />
-        <SettingRow icon="🧾" label={t('profile.invoices')} sub={t('profile.invoicesSub')} onPress={onOpenInvoices} />
-        <SettingRow icon="⚖️" label={t('profile.disputes')} sub={t('profile.disputesSub')} onPress={onOpenDisputes} />
+        <SettingRow icon="money" label="Earnings & payments" onPress={onOpenFinance} />
+        <SettingRow icon="invoice" label={t('profile.invoices')} sub={t('profile.invoicesSub')} onPress={onOpenInvoices} />
+        <SettingRow icon="dispute" label={t('profile.disputes')} sub={t('profile.disputesSub')} onPress={onOpenDisputes} />
 
         {/* Support & Preferences */}
         <GroupTitle>Support</GroupTitle>
-        <SettingRow icon="🔔" label={t('profile.notifications')} onPress={onOpenNotifications} />
-        <SettingRow icon="🔕" label={t('profile.notifSettings')} onPress={onOpenNotifPrefs} />
-        <SettingRow icon="💬" label={t('profile.messages')} sub={t('profile.tripConvos')} onPress={onOpenChat} />
-        <SettingRow icon="🎫" label={t('profile.tickets')} onPress={onOpenTickets} />
-        <SettingRow icon="🆘" label={t('profile.emergency')} onPress={onOpenEmergency} danger />
+        <SettingRow icon="notification" label={t('profile.notifications')} onPress={onOpenNotifications} />
+        <SettingRow icon="notificationOff" label={t('profile.notifSettings')} onPress={onOpenNotifPrefs} />
+        <SettingRow icon="chat" label={t('profile.messages')} sub={t('profile.tripConvos')} onPress={onOpenChat} />
+        <SettingRow icon="ticket" label={t('profile.tickets')} onPress={onOpenTickets} />
+        <SettingRow icon="emergency" label={t('profile.emergency')} onPress={onOpenEmergency} danger />
 
         <GroupTitle>Preferences</GroupTitle>
-        <SettingRow icon="⚙️" label={t('profile.settings')} sub="Language · Help" onPress={onOpenSettings} />
+        <SettingRow icon="settings" label={t('profile.settings')} sub="Language · Help" onPress={onOpenSettings} />
 
         <Pressable style={[styles.logout, { borderColor: theme.danger + '44' }]} onPress={onLogout}>
           <Text style={{ color: theme.danger, fontWeight: '700', fontSize: 15 }}>{t('profile.logout')}</Text>

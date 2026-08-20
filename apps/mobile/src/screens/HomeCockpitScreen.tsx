@@ -9,6 +9,7 @@ import { useI18n } from '@wagon/i18n'
 import { useAuth } from '../auth'
 import { api } from '../config'
 import { Greeting, KpiCard, QuickAction, SectionHeader, StatTile, CapabilityChip } from '../components/ui'
+import { Glyph } from '../components/Icon'
 import { subscribeDataChanged } from '../lib/dataBus'
 
 interface LoadRef {
@@ -118,8 +119,8 @@ const KIND_LABEL: Record<string, string> = {
 }
 
 const KIND_ICON: Record<string, string> = {
-  truck_capacity: '🚚', warehouse_space: '🏭', carrier_service: '🚢', forwarder_service: '📦',
-  transport: '🚚', warehouse: '🏭', forwarding: '📦', carrier: '🚢', insurance: '🛡️',
+  truck_capacity: 'truck', warehouse_space: 'warehouse', carrier_service: 'carrier', forwarder_service: 'forwarding',
+  transport: 'truck', warehouse: 'warehouse', forwarding: 'forwarding', carrier: 'carrier', insurance: 'insurance',
 }
 
 export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, onPostLoad, onOpenMarket, onOpenMarketRequests, onOpenMarketMine, onOpenNotifications, onOpenKyc, onOpenFleet }: Props) {
@@ -163,38 +164,38 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
   const alerts = data?.alerts
   if (alerts) {
     if (alerts.unreadNotifications > 0) {
-      needsAttention.push({ icon: '🔔', text: `${alerts.unreadNotifications} unread notification${alerts.unreadNotifications > 1 ? 's' : ''}`, onPress: onOpenNotifications ?? onOpenTrips })
+      needsAttention.push({ icon: 'notification', text: `${alerts.unreadNotifications} unread notification${alerts.unreadNotifications > 1 ? 's' : ''}`, onPress: onOpenNotifications ?? onOpenTrips })
     }
     if (alerts.pendingBookings > 0) {
-      needsAttention.push({ icon: '📋', text: `${alerts.pendingBookings} booking${alerts.pendingBookings > 1 ? 's' : ''} waiting for your confirmation`, onPress: onOpenTrips })
+      needsAttention.push({ icon: 'booking', text: `${alerts.pendingBookings} booking${alerts.pendingBookings > 1 ? 's' : ''} waiting for your confirmation`, onPress: onOpenTrips })
     }
     if (alerts.activeExceptions > 0) {
-      needsAttention.push({ icon: '⚠️', text: `${alerts.activeExceptions} open exception${alerts.activeExceptions > 1 ? 's' : ''} need attention`, onPress: onOpenTrips })
+      needsAttention.push({ icon: 'alert', text: `${alerts.activeExceptions} open exception${alerts.activeExceptions > 1 ? 's' : ''} need attention`, onPress: onOpenTrips })
     }
     if (alerts.kycPending) {
-      needsAttention.push({ icon: '🛡️', text: 'Complete your KYC to unlock bookings', onPress: onOpenKyc ?? onOpenMarketplace })
+      needsAttention.push({ icon: 'kyc', text: 'Complete your KYC to unlock bookings', onPress: onOpenKyc ?? onOpenMarketplace })
     }
     for (const d of alerts.expiringDocs) {
-      needsAttention.push({ icon: '📄', text: `${d.truckNo}: ${d.doc} expires in ${d.daysLeft}d`, onPress: onOpenFleet ?? onOpenMarketplace })
+      needsAttention.push({ icon: 'doc', text: `${d.truckNo}: ${d.doc} expires in ${d.daysLeft}d`, onPress: onOpenFleet ?? onOpenMarketplace })
     }
   }
   // Setup nudges: a transporter with no fleet can't accept loads yet.
   if (showTransporter && data?.transporter && data.transporter.fleetSize === 0) {
-    needsAttention.push({ icon: '🚚', text: 'Add your first truck to start accepting loads', onPress: onOpenFleet ?? onOpenMarketplace })
+    needsAttention.push({ icon: 'truck', text: 'Add your first truck to start accepting loads', onPress: onOpenFleet ?? onOpenMarketplace })
   }
   if (forYou && forYou.shipmentsForMe.length > 0) {
     const d = forYou.shipmentsForMe[0]!
-    needsAttention.push({ icon: KIND_ICON[d.kind] ?? '📦', text: `${forYou.shipmentsForMe.length} open ${d.kind} shipment${forYou.shipmentsForMe.length > 1 ? 's' : ''} you can quote`, onPress: onOpenMarketRequests ?? onOpenMarket ?? onOpenMarketplace })
+    needsAttention.push({ icon: KIND_ICON[d.kind] ?? 'shipment', text: `${forYou.shipmentsForMe.length} open ${d.kind} shipment${forYou.shipmentsForMe.length > 1 ? 's' : ''} you can quote`, onPress: onOpenMarketRequests ?? onOpenMarket ?? onOpenMarketplace })
   }
   if (data?.supplier && data.supplier.awaitingResponses > 0) {
-    needsAttention.push({ icon: '⏳', text: `${data.supplier.awaitingResponses} loads awaiting responses`, onPress: onOpenMarketplace })
+    needsAttention.push({ icon: 'pending', text: `${data.supplier.awaitingResponses} loads awaiting responses`, onPress: onOpenMarketplace })
   }
   if (data?.transporter?.truckNowAvailable && data.transporter.lastTripDrop) {
-    needsAttention.push({ icon: '🎯', text: `Truck free near ${data.transporter.lastTripDrop} — find return loads`, onPress: onOpenTrips })
+    needsAttention.push({ icon: 'target', text: `Truck free near ${data.transporter.lastTripDrop} — find return loads`, onPress: onOpenTrips })
   }
   if (forYou && forYou.capacityForMe.length > 0) {
     const s = forYou.capacityForMe[0]!
-    needsAttention.push({ icon: KIND_ICON[s.kind] ?? '🏗️', text: `${s.providerOrg?.name ?? 'A partner'} lists ${KIND_LABEL[s.kind] ?? s.kind}`, onPress: onOpenMarket ?? onOpenMarketplace })
+    needsAttention.push({ icon: KIND_ICON[s.kind] ?? 'warehouse', text: `${s.providerOrg?.name ?? 'A partner'} lists ${KIND_LABEL[s.kind] ?? s.kind}`, onPress: onOpenMarket ?? onOpenMarketplace })
   }
 
   return (
@@ -235,10 +236,10 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
 
         {/* Quick actions */}
         <View style={styles.quickRow}>
-          {isSupplier && <QuickAction icon="➕" label="Add load" onPress={onPostLoad} tone="primary" />}
-          <QuickAction icon="🔎" label={isTransporter ? 'Find loads' : isSupplier ? 'My loads' : 'Marketplace'} onPress={onOpenMarketplace} tone="primary" />
-          {onOpenMarket && <QuickAction icon="🏗️" label="List capacity" onPress={onOpenMarket} tone="primary" />}
-          {onOpenMarketRequests && <QuickAction icon="📦" label="Post shipment" onPress={onOpenMarketRequests} tone="primary" />}
+          {isSupplier && <QuickAction icon="plus" label="Add load" onPress={onPostLoad} tone="primary" />}
+          <QuickAction icon="search" label={isTransporter ? 'Find loads' : isSupplier ? 'My loads' : 'Marketplace'} onPress={onOpenMarketplace} tone="primary" />
+          {onOpenMarket && <QuickAction icon="facility" label="List capacity" onPress={onOpenMarket} tone="primary" />}
+          {onOpenMarketRequests && <QuickAction icon="shipment" label="Post shipment" onPress={onOpenMarketRequests} tone="primary" />}
         </View>
 
         {/* KPI hero grid */}
@@ -249,7 +250,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
               value={`${data.transporter.availableTrucks}/${data.transporter.fleetSize}`}
               sub={`${data.transporter.matchingLoads} matching loads`}
               gradient={gradients.navy}
-              icon="🚚"
+              icon="truck"
               onPress={onOpenFleet ?? onOpenTrips}
               style={styles.kpiFlex}
             />
@@ -260,7 +261,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
               value={`${data.supplier.activeLoads}`}
               sub={`${data.supplier.inTransit} in transit`}
               gradient={['#F97316', '#FB923C']}
-              icon="📦"
+              icon="shipment"
               onPress={onOpenMarketplace}
               style={styles.kpiFlex}
             />
@@ -304,16 +305,16 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
         {/* Secondary stats */}
         {showSupplier && data?.supplier && (
           <View style={styles.statRow}>
-            <StatTile label="Awaiting bids" value={data.supplier.awaitingResponses} icon="⏳" onPress={onOpenMarketplace} />
-            <StatTile label="In transit" value={data.supplier.inTransit} icon="🚚" onPress={onOpenTrips} />
-            <StatTile label="Completed" value={data.supplier.completed} icon="✅" onPress={onOpenMarketplace} />
+            <StatTile label="Awaiting bids" value={data.supplier.awaitingResponses} icon="pending" onPress={onOpenMarketplace} />
+            <StatTile label="In transit" value={data.supplier.inTransit} icon="truck" onPress={onOpenTrips} />
+            <StatTile label="Completed" value={data.supplier.completed} icon="done" onPress={onOpenMarketplace} />
           </View>
         )}
         {showTransporter && data?.transporter && (
           <View style={styles.statRow}>
-            <StatTile label="Matching loads" value={data.transporter.matchingLoads} icon="🎯" onPress={onOpenMarketplace} />
-            <StatTile label="Fleet size" value={data.transporter.fleetSize} icon="🚚" onPress={onOpenFleet ?? onOpenMarketplace} />
-            <StatTile label="Available" value={data.transporter.availableTrucks} icon="🟢" onPress={onOpenFleet ?? onOpenMarketplace} />
+            <StatTile label="Matching loads" value={data.transporter.matchingLoads} icon="target" onPress={onOpenMarketplace} />
+            <StatTile label="Fleet size" value={data.transporter.fleetSize} icon="truck" onPress={onOpenFleet ?? onOpenMarketplace} />
+            <StatTile label="Available" value={data.transporter.availableTrucks} icon="active" onPress={onOpenFleet ?? onOpenMarketplace} />
           </View>
         )}
 
@@ -324,7 +325,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
             <View style={[styles.alertCard, { backgroundColor: 'rgba(249,115,22,0.08)', borderColor: '#F97316' }]}>
               {needsAttention.map((a, i) => (
                 <Pressable key={i} style={styles.alertRow} onPress={a.onPress}>
-                  <Text style={{ fontSize: 16 }}>{a.icon}</Text>
+                  <Glyph icon={a.icon} size={16} color={theme.foreground} />
                   <Text style={[styles.alertText, { color: theme.foreground }]}>{a.text}</Text>
                   <Text style={{ color: '#F97316', fontWeight: '800' }}>›</Text>
                 </Pressable>
@@ -338,9 +339,9 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
           <>
             <SectionHeader title="Your market" subtitle="Capability marketplace" action="Open" onAction={onOpenMarket} />
             <View style={styles.marketGrid}>
-              <StatTile label="Live capacity" value={forYou.myActivity.listings} icon="🏗️" onPress={onOpenMarket} />
-              <StatTile label="Open shipments" value={forYou.myActivity.openShipments} icon="📦" onPress={onOpenMarketRequests ?? onOpenMarket} />
-              <StatTile label="My quotes" value={forYou.myActivity.submittedQuotes} icon="🧾" onPress={onOpenMarketMine ?? onOpenMarket} />
+              <StatTile label="Live capacity" value={forYou.myActivity.listings} icon="warehouse" onPress={onOpenMarket} />
+              <StatTile label="Open shipments" value={forYou.myActivity.openShipments} icon="shipment" onPress={onOpenMarketRequests ?? onOpenMarket} />
+              <StatTile label="My quotes" value={forYou.myActivity.submittedQuotes} icon="invoice" onPress={onOpenMarketMine ?? onOpenMarket} />
             </View>
           </>
         )}
@@ -396,14 +397,14 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
           <>
             <SectionHeader title="Your operations" subtitle="Enablement workspace" action="Open" onAction={onOpenMarket ?? onOpenTrips} />
             <View style={styles.statRow}>
-              <StatTile label="Shipments" value={data.enablement.counts.shipments} icon="📦" onPress={onOpenTrips} />
-              <StatTile label="Forward orders" value={data.enablement.counts.forwardOrders} icon="🧾" onPress={onOpenTrips} />
-              <StatTile label="Active plans" value={data.enablement.counts.activePlans} icon="🗺️" onPress={onOpenTrips} />
+              <StatTile label="Shipments" value={data.enablement.counts.shipments} icon="shipment" onPress={onOpenTrips} />
+              <StatTile label="Forward orders" value={data.enablement.counts.forwardOrders} icon="invoice" onPress={onOpenTrips} />
+              <StatTile label="Active plans" value={data.enablement.counts.activePlans} icon="route" onPress={onOpenTrips} />
             </View>
             <View style={styles.statRow}>
-              <StatTile label="Facilities" value={data.enablement.counts.facilities} icon="🏭" onPress={onOpenTrips} />
-              <StatTile label="Policies" value={data.enablement.counts.policies} icon="🛡️" onPress={onOpenTrips} />
-              <StatTile label="Open shipments" value={data.enablement.counts.openShipments} icon="📢" onPress={onOpenMarketRequests ?? onOpenTrips} />
+              <StatTile label="Facilities" value={data.enablement.counts.facilities} icon="warehouse" onPress={onOpenTrips} />
+              <StatTile label="Policies" value={data.enablement.counts.policies} icon="shield" onPress={onOpenTrips} />
+              <StatTile label="Open shipments" value={data.enablement.counts.openShipments} icon="megaphone" onPress={onOpenMarketRequests ?? onOpenTrips} />
             </View>
           </>
         )}
@@ -413,14 +414,14 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
           <>
             <SectionHeader title="Platform" subtitle="Admin overview" />
             <View style={styles.statRow}>
-              <StatTile label="Active users" value={data.admin.activeUsers} icon="👤" onPress={onOpenTrips} />
-              <StatTile label="Loads (7d)" value={data.admin.loadsWeek} icon="📦" onPress={onOpenTrips} />
-              <StatTile label="Open disputes" value={data.admin.openDisputes} icon="⚖️" onPress={onOpenTrips} />
+              <StatTile label="Active users" value={data.admin.activeUsers} icon="user" onPress={onOpenTrips} />
+              <StatTile label="Loads (7d)" value={data.admin.loadsWeek} icon="shipment" onPress={onOpenTrips} />
+              <StatTile label="Open disputes" value={data.admin.openDisputes} icon="dispute" onPress={onOpenTrips} />
             </View>
             <View style={styles.statRow}>
-              <StatTile label="Live capacity" value={data.admin.liveListings} icon="🏗️" onPress={onOpenMarket} />
-              <StatTile label="Open shipments" value={data.admin.openRequests} icon="📦" onPress={onOpenMarketRequests ?? onOpenMarket} />
-              <StatTile label="Marketplace" value={data.admin.liveListings} icon="📦" onPress={onOpenMarket} />
+              <StatTile label="Live capacity" value={data.admin.liveListings} icon="warehouse" onPress={onOpenMarket} />
+              <StatTile label="Open shipments" value={data.admin.openRequests} icon="shipment" onPress={onOpenMarketRequests ?? onOpenMarket} />
+              <StatTile label="Marketplace" value={data.admin.liveListings} icon="shipment" onPress={onOpenMarket} />
             </View>
           </>
         )}

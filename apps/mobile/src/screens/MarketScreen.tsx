@@ -33,10 +33,10 @@ const KIND_LABEL: Record<string, string> = {
   forwarder_service: 'Forwarder service',
 }
 const KIND_ICON: Record<string, string> = {
-  truck_capacity: '🚚',
-  warehouse_space: '🏭',
-  carrier_service: '🚢',
-  forwarder_service: '📦',
+  truck_capacity: 'truck',
+  warehouse_space: 'warehouse',
+  carrier_service: 'carrier',
+  forwarder_service: 'forwarding',
 }
 const REQ_KINDS = ['transport', 'warehouse', 'forwarding', 'carrier', 'insurance']
 
@@ -347,7 +347,7 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
   const renderListing = (l: MarketListing) => (
     <MarketCard
       key={l.id}
-                    icon={KIND_ICON[l.kind] ?? '🏗️'}
+icon={KIND_ICON[l.kind] ?? 'warehouse'}
       title={KIND_LABEL[l.kind] ?? l.kind}
       subtitle={`${l.originRef ?? l.city ?? '—'} → ${l.destinationRef ?? '—'}`}
       status={l.onMarketNow === false ? 'not now' : l.status}
@@ -386,7 +386,7 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
   const renderRequest = (r: MarketRequest, withQuotes = false) => (
     <MarketCard
       key={r.id}
-      icon={KIND_ICON[r.kind] ?? '📦'}
+      icon={KIND_ICON[r.kind] ?? 'shipment'}
       title={`${r.kind} shipment`}
       subtitle={`${r.originRef ?? r.city ?? '—'} → ${r.destinationRef ?? '—'}`}
       status={r.status}
@@ -715,7 +715,7 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
                 : myListings.map((l) => (
                   <MarketCard
                     key={l.id}
-      icon={KIND_ICON[l.kind] ?? '🏗️'}
+      icon={KIND_ICON[l.kind] ?? 'warehouse'}
                     title={KIND_LABEL[l.kind] ?? l.kind}
                     subtitle={`${l.originRef ?? l.city ?? '—'} → ${l.destinationRef ?? '—'}`}
                     status={l.status}

@@ -10,6 +10,7 @@ import { useActiveMode } from '../mode'
 import { useLoadFilters } from '../filters'
 import { AppLogo } from '../components/AppLogo'
 import { RupeeIcon } from '../components/RupeeIcon'
+import { Glyph } from '../components/Icon'
 import { HomeCockpitScreen } from '../screens/HomeCockpitScreen'
 import { DriverHomeScreen } from '../screens/DriverHomeScreen'
 import { LoadFeedScreen } from '../screens/LoadFeedScreen'
@@ -31,11 +32,19 @@ export type UnifiedTabParamList = {
 const Tab = createBottomTabNavigator<UnifiedTabParamList>()
 
 const TAB_ICONS: Record<string, string> = {
-  Home: '🏠',
-  Marketplace: '📦',
-  Trips: '🚚',
-  Finance: '💰',
-  Account: '👤',
+  Home: 'homeFilled',
+  Marketplace: 'shipmentFilled',
+  Trips: 'truckFilled',
+  Finance: 'walletFilled',
+  Account: 'userFilled',
+}
+
+const TAB_ICONS_OUTLINE: Record<string, string> = {
+  Home: 'home',
+  Marketplace: 'shipment',
+  Trips: 'truck',
+  Finance: 'wallet',
+  Account: 'user',
 }
 
 function baseTabOptions(theme: ReturnType<typeof createTheme>) {
@@ -87,7 +96,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
                 {route.name === 'Finance' ? (
                   <RupeeIcon size={20} filled={isFocused} color="#FDBA74" />
                 ) : (
-                  <Text style={[styles.floatingIconText, { opacity: isFocused ? 1 : 0.55 }]}>{TAB_ICONS[route.name] ?? '•'}</Text>
+                  <Glyph icon={isFocused ? TAB_ICONS[route.name] ?? 'homeFilled' : TAB_ICONS_OUTLINE[route.name] ?? 'home'} size={19} color={isFocused ? '#fff' : 'rgba(255,255,255,0.6)'} />
                 )}
                 {isFocused && <View style={[styles.floatingIndicator, { backgroundColor: '#F97316' }]} />}
               </View>
@@ -344,7 +353,6 @@ const styles = StyleSheet.create({
   },
   floatingTab: { flex: 1, alignItems: 'center', gap: 3 },
   floatingIcon: { width: 46, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  floatingIconText: { fontSize: 19 },
   floatingIndicator: { position: 'absolute', bottom: 0, width: 6, height: 3, borderRadius: 2 },
   floatingLabel: { fontSize: 10, fontWeight: '600' },
   floatingShadow: {
