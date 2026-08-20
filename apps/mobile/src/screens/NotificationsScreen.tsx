@@ -5,7 +5,6 @@ import { useTheme, spacing, radius, timeAgo } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
 import { api } from '../config'
 import { useI18n } from '@wagon/i18n'
-import { Glyph } from '../components/Icon'
 
 interface NotificationItem {
   id: string
@@ -95,7 +94,7 @@ export function NotificationsScreen({ onBack, onNavigate, onOpenPrefs }: Props) 
         </View>
         {onOpenPrefs ? (
           <Pressable onPress={onOpenPrefs} hitSlop={8}>
-            <Glyph icon="prefs" size={20} color={theme.primary} />
+            <Text style={{ color: theme.primary, fontSize: 18 }}>⚙️</Text>
           </Pressable>
         ) : (
           <View style={{ width: 20 }} />

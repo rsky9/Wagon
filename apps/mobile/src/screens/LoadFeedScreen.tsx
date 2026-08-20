@@ -14,7 +14,6 @@ import { LoadCard, StatusChip, FeedSkeleton, EmptyState, type StatusTone } from 
 import { api } from '../config'
 import { useI18n } from '@wagon/i18n'
 import { AppLogo } from '../components/AppLogo'
-import { Glyph } from '../components/Icon'
 import type { LoadFilters } from './FiltersScreen'
 import type { Load } from '@wagon/contracts'
 
@@ -111,7 +110,7 @@ export function LoadFeedScreen({ onSelect, filters, onOpenFilters, onOpenSearch,
           </View>
           <View style={styles.headerActions}>
             <Pressable style={[styles.iconBtn, { backgroundColor: theme.muted }]} onPress={onOpenFilters}>
-              <Glyph icon="prefs" size={16} color={theme.foreground} />
+              <Text style={{ fontSize: 15 }}>⚙️</Text>
             </Pressable>
           </View>
         </View>

@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, Pressable, ViewStyle } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useTheme, spacing, radius, shadows, typography, gradients, toneFor, type ToneKey } from '@wagon/design'
 import { useThemeMode } from '../../theme'
-import { Glyph, IconTile } from '../Icon'
+import { IconTile } from '../Icon'
 
 /* ------------------------------------------------------------------ */
 /* Section header                                                       */
@@ -66,7 +66,7 @@ export function KpiCard({
     <LinearGradient colors={gradient} style={[styles.kpiCard, style]}>
       <View style={styles.kpiTop}>
         <Text style={[styles.kpiLabel, { color: 'rgba(255,255,255,0.72)' }]}>{label}</Text>
-        {icon ? <Glyph icon={icon} size={20} color="#fff" /> : null}
+        {icon ? <Text style={styles.kpiIcon}>{icon}</Text> : null}
       </View>
       <Text style={[styles.kpiValue, { color: '#fff' }]} numberOfLines={1} adjustsFontSizeToFit>
         {value}
@@ -86,7 +86,7 @@ export function StatTile({ label, value, icon, onPress }: { label: string; value
   const body = (
     <View style={[styles.statTile, { backgroundColor: theme.card, borderColor: theme.border }, shadows.sm]}>
       <View style={styles.statIconWrap}>
-        <Glyph icon={icon ?? 'empty'} size={18} color={theme.foreground} />
+        <Text style={{ fontSize: 18 }}>{icon ?? '•'}</Text>
       </View>
       <Text style={[styles.statValue, { color: theme.foreground }]} numberOfLines={1}>{value}</Text>
       <Text style={[styles.statLabel, { color: theme.mutedForeground }]} numberOfLines={2}>{label}</Text>
@@ -174,7 +174,7 @@ export function SettingRow({ icon, label, sub, onPress, danger, trailing }: { ic
   return (
     <Pressable style={[styles.settingRow, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={onPress}>
       <View style={[styles.settingIcon, { backgroundColor: theme.accent }]}>
-        <Glyph icon={icon} size={17} color={theme.foreground} />
+        <Text style={{ fontSize: 17 }}>{icon}</Text>
       </View>
       <View style={{ flex: 1 }}>
         <Text style={[styles.settingLabel, { color: danger ? theme.danger : theme.foreground }]}>{label}</Text>
@@ -225,7 +225,7 @@ export function MarketCard({
       <View style={styles.marketCardTop}>
         {icon ? (
           <View style={[styles.marketIcon, { backgroundColor: 'rgba(249,115,22,0.12)' }]}>
-            <Glyph icon={icon} size={18} color="#F97316" />
+            <Text style={{ fontSize: 18 }}>{icon}</Text>
           </View>
         ) : null}
         <View style={{ flex: 1 }}>
@@ -262,6 +262,7 @@ const styles = StyleSheet.create({
   kpiCard: { borderRadius: radius.xl, padding: spacing.xl, gap: spacing.sm, justifyContent: 'flex-end', minHeight: 132 },
   kpiTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   kpiLabel: { fontSize: 13, fontWeight: '700' },
+  kpiIcon: { fontSize: 20 },
   kpiValue: { fontSize: 32, fontWeight: '800', letterSpacing: -0.02 },
   kpiSub: { fontSize: 13, fontWeight: '600' },
   statTile: { flex: 1, borderRadius: radius.lg, borderWidth: 1, padding: spacing.md, gap: spacing.xs },
