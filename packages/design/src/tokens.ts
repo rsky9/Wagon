@@ -205,6 +205,50 @@ export const gradients = {
   warning: ['#F59E0B', '#FBBF24'] as const,
 } as const
 
+/**
+ * Semantic colour codes — the app's shared icon/tile tint language. Each tone
+ * carries a background, foreground (glyph/text) and border for BOTH themes so
+ * emoji glyphs and tinted tiles stay legible on dark surfaces. Call
+ * `toneFor('primary', isDark)` to resolve the active palette.
+ */
+export const tones = {
+  primary: {
+    light: { bg: 'rgba(249,115,22,0.12)', fg: palette.orange700, border: 'rgba(249,115,22,0.30)' },
+    dark: { bg: 'rgba(249,115,22,0.20)', fg: palette.orange300, border: 'rgba(249,115,22,0.45)' },
+  },
+  success: {
+    light: { bg: 'rgba(16,185,129,0.12)', fg: palette.successDark, border: 'rgba(16,185,129,0.30)' },
+    dark: { bg: 'rgba(16,185,129,0.20)', fg: '#6EE7B7', border: 'rgba(16,185,129,0.45)' },
+  },
+  warning: {
+    light: { bg: 'rgba(245,158,11,0.14)', fg: '#B45309', border: 'rgba(245,158,11,0.35)' },
+    dark: { bg: 'rgba(245,158,11,0.20)', fg: '#FBBF24', border: 'rgba(245,158,11,0.45)' },
+  },
+  danger: {
+    light: { bg: 'rgba(239,68,68,0.12)', fg: palette.dangerDark, border: 'rgba(239,68,68,0.30)' },
+    dark: { bg: 'rgba(239,68,68,0.20)', fg: '#FCA5A5', border: 'rgba(239,68,68,0.45)' },
+  },
+  info: {
+    light: { bg: 'rgba(59,130,246,0.12)', fg: palette.infoDark, border: 'rgba(59,130,246,0.30)' },
+    dark: { bg: 'rgba(59,130,246,0.20)', fg: '#93C5FD', border: 'rgba(59,130,246,0.45)' },
+  },
+  muted: {
+    light: { bg: palette.slate100, fg: palette.slate600, border: palette.slate200 },
+    dark: { bg: palette.slate800, fg: palette.slate300, border: 'rgba(255,255,255,0.10)' },
+  },
+  navy: {
+    light: { bg: 'rgba(15,23,42,0.08)', fg: palette.slate700, border: 'rgba(15,23,42,0.20)' },
+    dark: { bg: 'rgba(148,163,184,0.12)', fg: palette.slate200, border: 'rgba(148,163,184,0.30)' },
+  },
+} as const
+
+export type ToneKey = keyof typeof tones
+export type ToneVariant = { bg: string; fg: string; border: string }
+
+export function toneFor(key: ToneKey, dark = false): ToneVariant {
+  return tones[key][dark ? 'dark' : 'light']
+}
+
 export function createTheme(dark = false): Theme {
   return dark ? darkTheme : lightTheme
 }

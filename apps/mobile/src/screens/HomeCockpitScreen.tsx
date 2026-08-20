@@ -235,10 +235,10 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
 
         {/* Quick actions */}
         <View style={styles.quickRow}>
-          {isSupplier && <QuickAction icon="➕" label="Post load" onPress={onPostLoad} tone="orange" />}
-          <QuickAction icon="🔎" label={isTransporter ? 'Find loads' : isSupplier ? 'My loads' : 'Marketplace'} onPress={onOpenMarketplace} tone="navy" />
-          {onOpenMarket && <QuickAction icon="🏗️" label="List capacity" onPress={onOpenMarket} tone="blue" />}
-          {onOpenMarketRequests && <QuickAction icon="📦" label="Post shipment" onPress={onOpenMarketRequests} tone="green" />}
+          {isSupplier && <QuickAction icon="➕" label="Add load" sub="Post a new shipment" onPress={onPostLoad} tone="primary" />}
+          <QuickAction icon="🔎" label={isTransporter ? 'Find loads' : isSupplier ? 'My loads' : 'Marketplace'} sub={isTransporter ? 'Browse the feed' : isSupplier ? 'Manage & track' : 'Browse supply'} onPress={onOpenMarketplace} tone="navy" />
+          {onOpenMarket && <QuickAction icon="🏗️" label="List capacity" sub="Sell truck space" onPress={onOpenMarket} tone="info" />}
+          {onOpenMarketRequests && <QuickAction icon="📦" label="Post shipment" sub="Send a request" onPress={onOpenMarketRequests} tone="success" />}
         </View>
 
         {/* KPI hero grid */}

@@ -1,8 +1,9 @@
 import React from 'react'
-import { StyleSheet, Text, View, Pressable, ViewStyle, TextStyle } from 'react-native'
+import { StyleSheet, Text, View, Pressable, ViewStyle } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import { useTheme, spacing, radius, shadows, typography, gradients } from '@wagon/design'
+import { useTheme, spacing, radius, shadows, typography, gradients, toneFor, type ToneKey } from '@wagon/design'
 import { useThemeMode } from '../../theme'
+import { IconTile } from '../Icon'
 
 /* ------------------------------------------------------------------ */
 /* Section header                                                       */
@@ -96,24 +97,27 @@ export function StatTile({ label, value, icon, onPress }: { label: string; value
 }
 
 /* ------------------------------------------------------------------ */
-/* Quick action pill                                                    */
+/* Quick action card — the home screen's primary action tiles          */
 /* ------------------------------------------------------------------ */
-export function QuickAction({ icon, label, onPress, tone = 'orange' }: { icon: string; label: string; onPress: () => void; tone?: 'orange' | 'navy' | 'blue' | 'green' }) {
+export function QuickAction({ icon, label, onPress, tone = 'primary', sub }: { icon: string; label: string; onPress: () => void; tone?: ToneKey; sub?: string }) {
   const theme = useTheme()
   const { isDark } = useThemeMode()
-  // Tones must stay legible in both modes: dark-mode text on a hardcoded light
-  // tint is invisible (e.g. navy's #0F172A "Find loads" on a dark background).
-  const tones: Record<string, { bg: string; fg: string }> = {
-    orange: { bg: 'rgba(249,115,22,0.12)', fg: '#F97316' },
-    navy: { bg: theme.muted, fg: theme.foreground },
-    blue: { bg: isDark ? 'rgba(59,130,246,0.16)' : 'rgba(59,130,246,0.12)', fg: isDark ? '#93C5FD' : '#2563EB' },
-    green: { bg: isDark ? 'rgba(16,185,129,0.16)' : 'rgba(16,185,129,0.12)', fg: isDark ? '#6EE7B7' : '#047857' },
-  }
-  const t = tones[tone] ?? tones.orange!
+  // Colour codes come from the shared tone system: brighter glyphs and stronger
+  // tints on dark surfaces so every action reads identically in both themes.
+  const t = toneFor(tone, isDark)
   return (
-    <Pressable style={[styles.quickAction, { backgroundColor: t.bg, borderColor: t.bg }]} onPress={onPress}>
-      <Text style={{ fontSize: 20 }}>{icon}</Text>
+    <Pressable
+      style={({ pressed }) => [
+        styles.quickAction,
+        { backgroundColor: theme.card, borderColor: t.border },
+        shadows.sm,
+        pressed && { transform: [{ scale: 0.97 }], opacity: 0.92 },
+      ]}
+      onPress={onPress}
+    >
+      <IconTile icon={icon} tone={tone} size={36} radius={18} />
       <Text style={[styles.quickLabel, { color: t.fg }]} numberOfLines={1}>{label}</Text>
+      {sub ? <Text style={[styles.quickSub, { color: theme.mutedForeground }]} numberOfLines={1}>{sub}</Text> : null}
     </Pressable>
   )
 }
@@ -266,8 +270,9 @@ const styles = StyleSheet.create({
   statIconWrap: { width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(249,115,22,0.12)', alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
   statValue: { fontSize: 18, fontWeight: '800' },
   statLabel: { fontSize: 11, fontWeight: '600' },
-  quickAction: { flex: 1, borderRadius: radius.lg, borderWidth: 1, paddingVertical: spacing.md, paddingHorizontal: spacing.sm, alignItems: 'center', gap: 4 },
-  quickLabel: { fontSize: 12, fontWeight: '800' },
+  quickAction: { flex: 1, borderRadius: radius.lg, borderWidth: 1, paddingVertical: spacing.md, paddingHorizontal: spacing.sm, alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 86 },
+  quickLabel: { fontSize: 12, fontWeight: '800', textAlign: 'center' },
+  quickSub: { fontSize: 10, fontWeight: '600', textAlign: 'center' },
   capChip: { borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, flexDirection: 'row', alignItems: 'center' },
   trustBadge: { borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, flexDirection: 'row', alignItems: 'center' },
   liveBadge: { borderRadius: radius.full, paddingHorizontal: spacing.sm, paddingVertical: 3, flexDirection: 'row', alignItems: 'center' },
