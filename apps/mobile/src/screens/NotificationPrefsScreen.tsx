@@ -79,7 +79,7 @@ export function NotificationPrefsScreen({ onBack }: Props) {
           </Text>
           {visibleRows.map((row) => (
             <View key={row.key} style={[styles.row, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <Text style={{ fontSize: 18 }}>{row.icon}</Text>
+              <Text style={{ fontSize: 18, color: row.key === 'payment' ? theme.primary : undefined }}>{row.icon}</Text>
               <View style={{ flex: 1, marginLeft: spacing.md }}>
                 <Text style={[styles.label, { color: theme.foreground }]}>{row.label}</Text>
                 <Text style={[styles.desc, { color: theme.mutedForeground }]}>{row.desc}</Text>
