@@ -113,7 +113,12 @@ export function DriversScreen({ onBack }: Props) {
             <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <View style={styles.cardTop}>
                 <Text style={[styles.name, { color: theme.foreground }]}>{item.name}</Text>
-                {item.licenseVerified && <Text style={{ color: theme.success, fontSize: 12, fontWeight: '700' }}>✓ License</Text>}
+                <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
+                  <Text style={{ color: item.status ? theme.success : theme.mutedForeground, fontSize: 12, fontWeight: '700' }}>
+                    {item.status ? '● Online' : '○ Offline'}
+                  </Text>
+                  {item.licenseVerified && <Text style={{ color: theme.success, fontSize: 12, fontWeight: '700' }}>✓ License</Text>}
+                </View>
               </View>
               <Text style={[styles.mobile, { color: theme.mutedForeground }]}>{item.mobile}</Text>
               <View style={styles.payRow}>

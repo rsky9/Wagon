@@ -177,23 +177,27 @@ export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
   const assignDriver = async () => {
     setBusy(true)
     try {
-      const res = await api.get<{ drivers: Array<{ id: string; name: string; mobile: string; payRate: number | null }> }>('/drivers')
-      if (!res.drivers.length) { Alert.alert('No drivers', 'Add a driver in Fleet → Drivers first'); return }
+      const res = await api.get<{ drivers: Array<{ id: string; name: string; mobile: string; payRate: number | null; activeTrips?: number; free?: boolean }> }>('/drivers/available')
+      const drivers = res.drivers ?? []
+      if (!drivers.length) { Alert.alert('No drivers available', 'Add or free up a driver in Fleet → Drivers first'); return }
+      const free = drivers.filter((d) => d.free)
+      const busyDrivers = drivers.filter((d) => !d.free)
+      const options = [...free, ...busyDrivers].map((d) => ({
+        text: `${d.name} · ${d.mobile}${d.free ? ' · free' : ` · busy (${d.activeTrips} trip)`}`,
+        onPress: async () => {
+          try {
+            await api.patch(`/trips/${tripId}/assign`, { driverId: d.id })
+            Alert.alert('Driver assigned', `${d.name} can now execute this trip from the driver app.`)
+            fetch()
+          } catch (e) {
+            Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to assign')
+          }
+        },
+      }))
       showActionSheet({
-        title: 'Assign driver',
-        message: 'Choose the driver executing this trip',
-        options: res.drivers.map((d) => ({
-          text: `${d.name} · ${d.mobile}`,
-          onPress: async () => {
-            try {
-              await api.patch(`/trips/${tripId}/assign`, { driverId: d.id })
-              Alert.alert('Driver assigned', `${d.name} can now execute this trip from the driver app.`)
-              fetch()
-            } catch (e) {
-              Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to assign')
-            }
-          },
-        })),
+        title: 'Dispatch driver',
+        message: free.length ? 'Free drivers shown first' : 'All drivers are busy',
+        options,
       })
     } catch (e) {
       Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to load drivers')

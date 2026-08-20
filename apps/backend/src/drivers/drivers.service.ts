@@ -21,6 +21,36 @@ export class DriversService {
     return { drivers }
   }
 
+  /** Dispatch pool: drivers who are available (status=true) with their current
+   *  assignment load, so the transporter can pick a driver to assign to a trip. */
+  async available(user: User) {
+    const transporterId = await this.transporterId(user)
+    if (!transporterId) return { drivers: [] }
+    const drivers = await this.prisma.driver.findMany({
+      where: { transporterId, status: true },
+      orderBy: { createdAt: 'asc' },
+    })
+    const activeTrips = await this.prisma.trip.findMany({
+      where: { transporterId, status: { in: ['accepted', 'in_transit'] }, driverId: { not: null } },
+      select: { driverId: true },
+    })
+    const busyCounts = new Map<string, number>()
+    for (const t of activeTrips) {
+      if (t.driverId) busyCounts.set(t.driverId, (busyCounts.get(t.driverId) ?? 0) + 1)
+    }
+    return {
+      drivers: drivers.map((d) => ({
+        id: d.id,
+        name: d.name,
+        mobile: d.mobile,
+        licenseVerified: d.licenseVerified,
+        payRate: d.payRate,
+        activeTrips: busyCounts.get(d.id) ?? 0,
+        free: (busyCounts.get(d.id) ?? 0) === 0,
+      })),
+    }
+  }
+
   async create(input: CreateDriverInput, user: User) {
     const transporterId = await this.transporterId(user)
     if (!transporterId) throw new BadRequestException('Transporter profile not found')

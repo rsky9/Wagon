@@ -17,6 +17,11 @@ export class DriversController {
     return this.drivers.list(user)
   }
 
+  @Get('available')
+  available(@CurrentUser() user: User) {
+    return this.drivers.available(user)
+  }
+
   @Post()
   create(@Body() body: CreateDriverDto, @CurrentUser() user: User) {
     return this.drivers.create(body, user)
