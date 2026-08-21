@@ -514,6 +514,7 @@ function SearchRoute({ navigation, route }: any) {
     <SearchScreen
       onBack={() => navigation.goBack()}
       onSelect={(load) => navigation.navigate('LoadDetail', { load })}
+      onOpenMarket={() => navigation.navigate('Market')}
       initialQuery={route.params?.preset}
     />
   )

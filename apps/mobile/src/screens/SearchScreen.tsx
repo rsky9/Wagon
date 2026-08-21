@@ -11,6 +11,7 @@ interface Props {
   onBack: () => void
   onSelect: (load: Load) => void
   initialQuery?: string
+  onOpenMarket?: () => void
 }
 
 const TONE: Record<string, StatusTone> = {
@@ -52,7 +53,7 @@ const MARKET_SORTS: Array<{ key: string; label: string }> = [
   { key: 'capacity', label: 'Most capacity' },
 ]
 
-export function SearchScreen({ onBack, onSelect, initialQuery }: Props) {
+export function SearchScreen({ onBack, onSelect, onOpenMarket, initialQuery }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
   const [query, setQuery] = useState(typeof initialQuery === 'string' ? initialQuery : '')
@@ -202,14 +203,14 @@ export function SearchScreen({ onBack, onSelect, initialQuery }: Props) {
           contentContainerStyle={styles.list}
           keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => (
-            <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Pressable style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={onOpenMarket ? () => onOpenMarket() : undefined}>
               <View style={styles.cardTop}>
                 <Text style={[styles.fare, { color: theme.foreground }]}>{item.price != null ? formatINR(item.price) : '—'}</Text>
                 <StatusChip label={item.status.replace('_', ' ')} tone={TONE[item.status] ?? 'info'} />
               </View>
               <Text style={[styles.route, { color: theme.foreground }]}>{item.title}</Text>
-              <Text style={[styles.meta, { color: theme.mutedForeground }]}>{item.sub} · Open in the marketplace to quote or book</Text>
-            </View>
+              <Text style={[styles.meta, { color: theme.mutedForeground }]}>{item.sub} · {onOpenMarket ? 'Tap to view in marketplace ›' : 'View in marketplace to quote'}</Text>
+            </Pressable>
           )}
         />
       )}

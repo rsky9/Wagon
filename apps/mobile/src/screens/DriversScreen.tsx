@@ -89,10 +89,10 @@ export function DriversScreen({ onBack }: Props) {
         name: `dl-${id}.jpg`,
         type: asset.mimeType ?? 'image/jpeg',
       })
-      const res = await api.post<{ driver: DriverRow; verification: { source: string; verified: boolean } }>(`/drivers/${id}/verify`, {
+      await api.post<{ driver: DriverRow; verification: { verified: boolean } }>(`/drivers/${id}/verify`, {
         imageKey: presigned.key,
       })
-      Alert.alert('Verified', `${name}'s licence verified via ${res.verification.source}`)
+      Alert.alert('Verified', `${name}'s licence has been verified`)
       fetch()
     } catch (e) {
       Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Verification failed')

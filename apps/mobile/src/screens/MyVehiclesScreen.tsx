@@ -45,12 +45,23 @@ export function MyVehiclesScreen({ onBack, onAdd, onOpenVehicle }: Props) {
   const remove = (id: string, vehicleNo: string) => {
     Alert.alert('Remove vehicle', `Remove ${vehicleNo}?`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: async () => { await api.request('DELETE', `/trucks/${id}`).catch(() => {}); fetch() } },
+      { text: 'Remove', style: 'destructive', onPress: async () => {
+        try {
+          await api.request('DELETE', `/trucks/${id}`)
+        } catch (e) {
+          Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'This truck is on an active trip and cannot be removed')
+        }
+        fetch()
+      } },
     ])
   }
 
   const toggle = async (id: string, current: boolean) => {
-    await api.patch(`/trucks/${id}`, { activeStatus: !current }).catch(() => {})
+    try {
+      await api.patch(`/trucks/${id}`, { activeStatus: !current })
+    } catch (e) {
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Could not update availability — the truck may be on an active trip')
+    }
     fetch()
   }
 
