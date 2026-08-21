@@ -241,7 +241,6 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
           {isTransporter && onOpenLoadFeed && <QuickAction icon="🔎" label="Find loads" onPress={onOpenLoadFeed} tone="primary" />}
           {isSupplier && onOpenMyLoads && <QuickAction icon="🗂️" label="My loads" onPress={onOpenMyLoads} tone="primary" />}
           <QuickAction icon="🏬" label="Marketplace" onPress={onOpenMarketplace} tone="primary" />
-          {onOpenMarket && <QuickAction icon="🏗️" label="List capacity" onPress={onOpenMarket} tone="primary" />}
           {onOpenMarketRequests && <QuickAction icon="📦" label="Post shipment" onPress={onOpenMarketRequests} tone="primary" />}
         </View>
 
