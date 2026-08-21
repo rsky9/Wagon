@@ -186,10 +186,9 @@ export function VehicleDetailScreen({ vehicleId, onBack }: Props) {
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <View style={styles.verifyRow}>
             <StatusChip label={`Verify: ${vehicle.verificationStatus.replace('_', ' ')}`} tone={VERIFY_TONE[vehicle.verificationStatus] ?? 'neutral'} />
-            <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>via {vehicle.verificationSource}</Text>
           </View>
           <Text style={{ color: theme.mutedForeground, fontSize: 13, marginTop: spacing.xs }}>
-            {vehicle.rcVerified ? 'RC confirmed.' : 'Attach the RC image to verify registration (Vahan / ULIP / upload).'}
+            {vehicle.rcVerified ? 'RC confirmed.' : 'Upload a clear photo of the RC to verify your truck.'}
           </Text>
           <Pressable style={[styles.verifyBtn, { borderColor: theme.primary }]} onPress={verifyVehicle} disabled={verifying}>
             <Text style={{ color: theme.primary, fontWeight: '700' }}>{verifying ? 'Verifying…' : vehicle.rcVerified ? 'Re-verify RC' : '+ Upload RC & verify'}</Text>

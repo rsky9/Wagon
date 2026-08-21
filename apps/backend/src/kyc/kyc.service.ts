@@ -129,7 +129,7 @@ export class KycService {
         status,
         verificationSource: source as never,
         verifiedAt: result.verified ? new Date() : null,
-        adminNote: result.verified ? `Verified via ${source}` : 'Provider verification failed',
+        adminNote: result.verified ? 'Verified' : 'The details you entered could not be verified. Please check them and try again.',
       },
     })
 
