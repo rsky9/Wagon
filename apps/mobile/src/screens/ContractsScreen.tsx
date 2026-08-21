@@ -49,6 +49,7 @@ export function ContractsScreen({ onBack }: Props) {
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
   const [f, setF] = useState<Record<string, string>>({})
+  const [detail, setDetail] = useState<{ title: string; sub: string; meta: string; dot: string } | null>(null)
 
   const CREATABLE = ['contracts', 'invoices', 'containers', 'returns', 'handovers']
 
@@ -225,9 +226,13 @@ export function ContractsScreen({ onBack }: Props) {
           data={data}
           keyExtractor={(d) => d.key}
           contentContainerStyle={styles.list}
-          ListEmptyComponent={<EmptyState title="Nothing here yet" message="Data you create appears here" icon="📭" />}
+          ListEmptyComponent={
+            CREATABLE.includes(tab)
+              ? <EmptyState title="Nothing here yet" message={`Tap + to create your first ${tab.slice(0, -1)}`} icon="📭" actionLabel="Create" onAction={() => { setF({}); setShowCreate(true) }} />
+              : <EmptyState title="Nothing here yet" message="Data you create appears here" icon="📭" />
+          }
           renderItem={({ item }) => (
-            <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Pressable style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => setDetail(item)}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
                 <Text style={{ fontSize: 14 }}>{item.dot}</Text>
                 <View style={{ flex: 1 }}>
@@ -236,7 +241,8 @@ export function ContractsScreen({ onBack }: Props) {
                 </View>
                 <Text style={[styles.meta, { color: theme.primary }]}>{item.meta}</Text>
               </View>
-            </View>
+              <Text style={{ color: theme.mutedForeground, fontSize: 12, marginTop: 4 }}>Tap for details ›</Text>
+            </Pressable>
           )}
         />
       )}
@@ -268,6 +274,29 @@ export function ContractsScreen({ onBack }: Props) {
             </Pressable>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal visible={!!detail} transparent animationType="slide" onRequestClose={() => setDetail(null)}>
+        <View style={styles.modalWrap}>
+          <View style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={[styles.modalTitle, { color: theme.foreground }]}>{detail?.title ?? ''}</Text>
+              <Pressable onPress={() => setDetail(null)} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 18 }}>✕</Text></Pressable>
+            </View>
+            <Text style={[styles.meta, { color: theme.mutedForeground }]}>{detail?.sub ?? ''}</Text>
+            <View style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
+              <Text style={[styles.cardTitle, { color: theme.foreground }]}>{detail?.title ?? ''}</Text>
+              <Text style={{ color: theme.mutedForeground, fontSize: 13, marginTop: 4 }}>{detail?.sub ?? ''}</Text>
+              <View style={{ marginTop: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                <Text style={{ fontSize: 14 }}>{detail?.dot ?? ''}</Text>
+                <Text style={[styles.meta, { color: theme.primary }]}>{detail?.meta ?? ''}</Text>
+              </View>
+            </View>
+            <Pressable style={[styles.createBtn, { backgroundColor: theme.muted }]} onPress={() => setDetail(null)}>
+              <Text style={{ color: theme.foreground, fontWeight: '800' }}>Close</Text>
+            </Pressable>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   )

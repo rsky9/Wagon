@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { StyleSheet, Text, View, FlatList, Pressable, Alert, TextInput } from 'react-native'
+import { StyleSheet, Text, View, FlatList, Pressable, Alert, TextInput, Modal, ScrollView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
@@ -40,14 +40,22 @@ export function GlobalScreen({ onBack }: Props) {
       .catch((e) => Alert.alert('Error', e.message))
   }
 
+  const [docCountry, setDocCountry] = useState<Country | null>(null)
+  const [docList, setDocList] = useState<string[]>([])
+  const [docLoading, setDocLoading] = useState(false)
+
   const setHome = (code: string) => {
     api.post('/countries/home', { code }).then(() => { setHomeCode(code); setFromCode(code); Alert.alert('Home country', `Set to ${code}`) }).catch((e) => Alert.alert('Error', e.message))
   }
 
-  const viewDocuments = (code: string) => {
-    api.get<{ documents: string[] }>(`/countries/${code}/documents`)
-      .then((r) => Alert.alert(`${code} documents`, r.documents.join('\n')))
-      .catch((e) => Alert.alert('Error', e.message))
+  const viewDocuments = (country: Country) => {
+    setDocCountry(country)
+    setDocLoading(true)
+    setDocList([])
+    api.get<{ documents: string[] }>(`/countries/${country.code}/documents`)
+      .then((r) => setDocList(r.documents ?? []))
+      .catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'Could not load documents'))
+      .finally(() => setDocLoading(false))
   }
 
   return (
@@ -95,13 +103,48 @@ export function GlobalScreen({ onBack }: Props) {
               <Pressable style={[styles.createBtn, styles.flexBtn, { backgroundColor: homeCode === item.code ? theme.success : '#F97316' }]} onPress={() => setHome(item.code)}>
                 <Text style={styles.createBtnText}>{homeCode === item.code ? '✓ Home' : 'Set home'}</Text>
               </Pressable>
-              <Pressable style={[styles.createBtn, styles.flexBtn, { backgroundColor: theme.warning }]} onPress={() => viewDocuments(item.code)}>
+              <Pressable style={[styles.createBtn, styles.flexBtn, { backgroundColor: theme.warning }]} onPress={() => viewDocuments(item)}>
                 <Text style={styles.createBtnText}>Documents</Text>
               </Pressable>
             </View>
           </View>
         )}
       />
+
+      <Modal visible={!!docCountry} transparent animationType="slide" onRequestClose={() => setDocCountry(null)}>
+        <View style={styles.sheetWrap}>
+          <View style={[styles.sheet, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <View style={styles.sheetHeader}>
+              <View>
+                <Text style={[styles.sheetTitle, { color: theme.foreground }]}>{docCountry?.name ?? ''} · {docCountry?.code ?? ''}</Text>
+                <Text style={[styles.meta, { color: theme.mutedForeground }]}>{docCountry?.customsRegime ?? ''} · {docCountry?.currency ?? ''}</Text>
+              </View>
+              <Pressable onPress={() => setDocCountry(null)} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>✕</Text></Pressable>
+            </View>
+            <Text style={[styles.sheetSub, { color: theme.mutedForeground }]}>Required trade documents for this corridor</Text>
+            {docLoading ? (
+              <Text style={{ color: theme.mutedForeground, textAlign: 'center', paddingVertical: spacing.xl }}>Loading…</Text>
+            ) : docList.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: spacing.xl, gap: spacing.sm }}>
+                <Text style={{ fontSize: 28 }}>📄</Text>
+                <Text style={{ color: theme.mutedForeground, textAlign: 'center' }}>No document checklist published for this country yet.</Text>
+              </View>
+            ) : (
+              <ScrollView contentContainerStyle={{ gap: spacing.sm, paddingBottom: spacing.lg }}>
+                {docList.map((d, i) => (
+                  <View key={`${d}-${i}`} style={[styles.docRow, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                    <Text style={styles.docIndex}>{String(i + 1).padStart(2, '0')}</Text>
+                    <Text style={[styles.docName, { color: theme.foreground }]}>{d.replace(/_/g, ' ')}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+            <Pressable style={[styles.createBtn, { backgroundColor: '#F97316' }]} onPress={() => setDocCountry(null)}>
+              <Text style={styles.createBtnText}>Close</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   )
 }
@@ -124,4 +167,12 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 15, fontWeight: '800' },
   chip: { fontSize: 11, fontWeight: '700', borderWidth: 1, borderRadius: radius.full, paddingHorizontal: spacing.sm, paddingVertical: 2, textTransform: 'uppercase' },
   meta: { fontSize: 13 },
+  sheetWrap: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  sheet: { maxHeight: '78%', borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, borderTopWidth: 1, padding: spacing.xl, gap: spacing.md },
+  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  sheetTitle: { fontSize: 18, fontWeight: '800' },
+  sheetSub: { fontSize: 12 },
+  docRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderRadius: radius.md, borderWidth: 1, padding: spacing.md },
+  docIndex: { fontSize: 12, fontWeight: '800', color: '#F97316', width: 28 },
+  docName: { flex: 1, fontSize: 14, fontWeight: '600', textTransform: 'capitalize' },
 })

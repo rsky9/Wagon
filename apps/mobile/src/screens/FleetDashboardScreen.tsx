@@ -1,6 +1,6 @@
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useCallback, useEffect, useState } from 'react'
-import { StyleSheet, Text, View, FlatList, Pressable } from 'react-native'
+import { StyleSheet, Text, View, FlatList, Pressable, Alert as RNAlert } from 'react-native'
 import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { StatusChip, EmptyState, type StatusTone } from '@wagon/components'
 import { api } from '../config'
@@ -50,8 +50,12 @@ export function FleetDashboardScreen({ onBack, onOpenVehicle, onAddVehicle, onOp
 
   useEffect(() => { fetch() }, [fetch])
 
-  const toggleAvailability = async (id: string, current: boolean) => {
-    await api.patch(`/trucks/${id}`, { activeStatus: !current }).catch(() => {})
+  const toggleAvailability = async (id: string, _current: boolean) => {
+    try {
+      await api.patch(`/trucks/${id}`, { activeStatus: !_current })
+    } catch (e) {
+      RNAlert.alert('Could not update', e instanceof Error ? e.message : 'This truck is on an active trip and cannot be toggled')
+    }
     fetch()
   }
 
@@ -105,10 +109,13 @@ export function FleetDashboardScreen({ onBack, onOpenVehicle, onAddVehicle, onOp
                 <View style={styles.alerts}>
                   <Text style={[styles.sectionLabel, { color: theme.mutedForeground }]}>{t('fleet.docExpiry')}</Text>
                   {data!.alerts.map((a, i) => (
-                    <View key={i} style={[styles.alert, { backgroundColor: a.critical ? theme.danger + '1A' : theme.warning + '1A', borderColor: a.critical ? theme.danger + '44' : theme.warning + '44' }]}>
-                      <Text style={{ color: a.critical ? theme.danger : theme.warning, fontWeight: '700', fontSize: 14 }}>{a.vehicleNo}</Text>
-                      <Text style={{ color: theme.mutedForeground, fontSize: 13 }}>{a.kind} {a.critical ? (a.kind === 'verification' ? 'needs verification' : 'expired') : `expires in ${a.daysLeft}d`}</Text>
-                    </View>
+                    <Pressable key={i} style={[styles.alert, { backgroundColor: a.critical ? theme.danger + '1A' : theme.warning + '1A', borderColor: a.critical ? theme.danger + '44' : theme.warning + '44' }]} onPress={() => onOpenVehicle(a.vehicleId)}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: a.critical ? theme.danger : theme.warning, fontWeight: '700', fontSize: 14 }}>{a.vehicleNo}</Text>
+                        <Text style={{ color: theme.mutedForeground, fontSize: 13 }}>{a.kind} {a.critical ? (a.kind === 'verification' ? 'needs verification' : 'expired') : `expires in ${a.daysLeft}d`}</Text>
+                      </View>
+                      <Text style={{ color: a.critical ? theme.danger : theme.warning, fontWeight: '800' }}>›</Text>
+                    </Pressable>
                   ))}
                 </View>
               )}
