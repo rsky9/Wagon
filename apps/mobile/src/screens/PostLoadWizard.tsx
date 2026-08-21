@@ -80,6 +80,7 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
   const [referenceRate, setReferenceRate] = useState('')
   const [advancePct, setAdvancePct] = useState('')
   const [savedLocations, setSavedLocations] = useState<Array<{ id: string; label: string; address: string; kind: string }>>([])
+  const [facilities, setFacilities] = useState<Array<{ id: string; name: string; city?: string | null; kind: string }>>([])
   const [showSavedPickup, setShowSavedPickup] = useState(false)
   const [showSavedDrop, setShowSavedDrop] = useState(false)
 
@@ -92,6 +93,8 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
     }).catch(() => {})
     api.get<{ locations: Array<{ id: string; label: string; address: string; kind: string }> }>('/addressbook/locations')
       .then((r) => setSavedLocations(r.locations)).catch(() => {})
+    api.get<{ facilities: Array<{ id: string; name: string; city?: string | null; kind: string }> }>('/storage/facilities')
+      .then((r) => setFacilities(r.facilities ?? [])).catch(() => {})
   }, [])
 
   const inputStyle = {
@@ -192,6 +195,15 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
         <>
           <Field label={t('postLoad.whereFrom')}>
             <TextInput style={inputStyle} value={pickup} onChangeText={setPickup} placeholder={t('postLoad.fromExample')} placeholderTextColor={theme.mutedForeground + '88'} />
+            {facilities.length > 0 && (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs }}>
+                {facilities.slice(0, 6).map((f) => (
+                  <Pressable key={f.id} style={{ borderRadius: radius.full, borderWidth: 1, borderColor: theme.border, backgroundColor: pickup === (f.city ?? f.name) ? theme.primary : theme.background, paddingHorizontal: spacing.sm, paddingVertical: 6 }} onPress={() => setPickup(f.city ?? f.name)}>
+                    <Text style={{ color: pickup === (f.city ?? f.name) ? '#fff' : theme.mutedForeground, fontSize: 11, fontWeight: '700' }}>🏭 {f.name}{f.city ? ` · ${f.city}` : ''}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
             {savedLocations.length > 0 && (
               <Pressable onPress={() => setShowSavedPickup((s) => !s)}>
                 <Text style={{ color: theme.primary, fontSize: 13, fontWeight: '700' }}>{showSavedPickup ? 'Hide saved' : '📋 Use saved location'}</Text>
@@ -205,6 +217,15 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
           </Field>
           <Field label={t('postLoad.whereTo')}>
             <TextInput style={inputStyle} value={drop} onChangeText={setDrop} placeholder={t('postLoad.toExample')} placeholderTextColor={theme.mutedForeground + '88'} />
+            {facilities.length > 0 && (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs }}>
+                {facilities.slice(0, 6).map((f) => (
+                  <Pressable key={f.id} style={{ borderRadius: radius.full, borderWidth: 1, borderColor: theme.border, backgroundColor: drop === (f.city ?? f.name) ? theme.primary : theme.background, paddingHorizontal: spacing.sm, paddingVertical: 6 }} onPress={() => setDrop(f.city ?? f.name)}>
+                    <Text style={{ color: drop === (f.city ?? f.name) ? '#fff' : theme.mutedForeground, fontSize: 11, fontWeight: '700' }}>🏭 {f.name}{f.city ? ` · ${f.city}` : ''}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
             {savedLocations.length > 0 && (
               <Pressable onPress={() => setShowSavedDrop((s) => !s)}>
                 <Text style={{ color: theme.primary, fontSize: 13, fontWeight: '700' }}>{showSavedDrop ? 'Hide saved' : '📋 Use saved location'}</Text>
