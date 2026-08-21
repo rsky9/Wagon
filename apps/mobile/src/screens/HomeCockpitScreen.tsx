@@ -8,6 +8,7 @@ import { useActiveMode } from '../mode'
 import { useI18n } from '@wagon/i18n'
 import { useAuth } from '../auth'
 import { api } from '../config'
+import { HomeSkeleton } from '@wagon/components'
 import { Greeting, KpiCard, QuickAction, SectionHeader, StatTile, CapabilityChip } from '../components/ui'
 import { subscribeDataChanged } from '../lib/dataBus'
 
@@ -226,7 +227,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
         contentContainerStyle={styles.body}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetch().finally(() => setRefreshing(false)) }} tintColor={theme.primary} colors={[theme.primary]} />}
       >
-        {loading && <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 40 }}>{t('common.loading')}</Text>}
+        {loading && <HomeSkeleton />}
 
         {/* Greeting + capabilities */}
         <Greeting name={userName ?? ''} role={`You can provide · ${(forYou?.canProvide ?? []).length > 0 ? forYou!.canProvide.map((k) => CAP_LABEL[k] ?? k).join(', ') : 'browse the network'}`} />

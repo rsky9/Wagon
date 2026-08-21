@@ -65,6 +65,28 @@ const styles = StyleSheet.create({
   feedCard: { padding: spacing.lg },
 })
 
+/** Home cockpit skeleton: greeting + quick actions + KPI grid + money strip. */
+export function HomeSkeleton() {
+  const theme = useTheme()
+  return (
+    <View style={{ padding: spacing.lg, gap: spacing.md }}>
+      <Skeleton width="60%" height={22} />
+      <Skeleton width="40%" height={14} />
+      <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+        <Skeleton width={80} height={36} radius={999} />
+        <Skeleton width={80} height={36} radius={999} />
+        <Skeleton width={80} height={36} radius={999} />
+      </View>
+      <View style={{ flexDirection: 'row', gap: spacing.md }}>
+        <Skeleton width="48%" height={90} radius={radius.lg} />
+        <Skeleton width="48%" height={90} radius={radius.lg} />
+      </View>
+      <Skeleton width="100%" height={60} radius={radius.lg} />
+      <Skeleton width="100%" height={80} radius={radius.lg} />
+    </View>
+  )
+}
+
 /** Load-feed skeleton: mimics price, route, meta rows. */
 export function FeedSkeleton({ count = 5 }: { count?: number }) {
   const theme = useTheme()
