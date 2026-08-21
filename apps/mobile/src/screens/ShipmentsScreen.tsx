@@ -43,10 +43,16 @@ export function ShipmentsScreen({ onBack, onOpen }: Props) {
       value: value ? Number(value) : undefined,
       pieces: 1,
     }).then(async (r) => {
-      await api.post(`/foundation/shipments/${r.shipment.id}/legs`, { mode: 'road', pickupAddr: origin.trim(), dropAddr: destination.trim() })
+      try {
+        await api.post(`/foundation/shipments/${r.shipment.id}/legs`, { mode: 'road', pickupAddr: origin.trim(), dropAddr: destination.trim() })
+      } catch (e) {
+        // Roll back the orphaned shipment so the user doesn't see a shipment with no legs.
+        await api.request('DELETE', `/foundation/shipments/${r.shipment.id}`).catch(() => {})
+        throw new Error(e instanceof Error ? e.message : 'Could not add the route — shipment was not created')
+      }
       setCommodity(''); setWeight(''); setValue(''); setOrigin(''); setDestination('')
       fetch()
-    }).catch((e) => Alert.alert('Error', e.message)).finally(() => setCreating(false))
+    }).catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'Failed to create shipment')).finally(() => setCreating(false))
   }
 
   return (

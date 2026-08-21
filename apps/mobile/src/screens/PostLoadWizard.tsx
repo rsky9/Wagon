@@ -31,16 +31,23 @@ const MATERIAL_OPTIONS = ['Packaged Boxes', 'Food And Agriculture', 'Constructio
 const TRUCK_TYPES = ['open', 'container', 'trailer']
 const BODY_TYPES = ['Open body', 'Covered', 'Container', 'Flatbed']
 const DATE_PRESETS = [
-  { key: 'today', label: 'Today' },
-  { key: 'tomorrow', label: 'Tomorrow' },
-  { key: '2d', label: 'In 2 days' },
-  { key: 'week', label: 'This week' },
+  { key: 'today', label: 'Today', days: 0 },
+  { key: 'tomorrow', label: 'Tomorrow', days: 1 },
+  { key: '2d', label: 'In 2 days', days: 2 },
+  { key: 'week', label: 'This week', days: 7 },
 ]
 
 function isoDaysFromNow(n: number) {
   const d = new Date()
   d.setDate(d.getDate() + n)
   return d.toISOString().slice(0, 10)
+}
+
+function formatPickupDate(iso: string) {
+  if (!iso) return ''
+  const d = new Date(iso + 'T00:00:00')
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
 export function PostLoadWizard({ onComplete, onCancel }: Props) {
@@ -275,18 +282,33 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
           <Field label={t('postLoad.pickupDate')}>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
               {DATE_PRESETS.map((p) => {
-                const date = isoDaysFromNow(p.key === 'today' ? 0 : p.key === 'tomorrow' ? 1 : p.key === '2d' ? 2 : 7)
+                const date = isoDaysFromNow(p.days)
                 const active = pickupDate === date
                 return (
                   <Pressable key={p.key} onPress={() => setPickupDate(date)} style={{ borderRadius: radius.full, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: active ? theme.primary : theme.background, borderColor: active ? theme.primary : theme.border }}>
-                    <Text style={{ color: active ? '#fff' : theme.mutedForeground, fontSize: 13, fontWeight: '600' }}>{p.label}</Text>
+                    <Text style={{ color: active ? '#fff' : theme.mutedForeground, fontSize: 13, fontWeight: '600' }}>{p.label} · {formatPickupDate(date)}</Text>
                   </Pressable>
                 )
               })}
             </View>
+            {pickupDate ? <Text style={{ color: theme.mutedForeground, fontSize: 12, marginTop: 4 }}>Selected: {formatPickupDate(pickupDate)}</Text> : null}
           </Field>
           <Field label={t('postLoad.deliveryDate')}>
-            <TextInput style={inputStyle} value={dropDate} onChangeText={setDropDate} placeholder={`e.g. ${isoDaysFromNow(3)}`} placeholderTextColor={theme.mutedForeground + '88'} />
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+              <Pressable onPress={() => setDropDate('')} style={{ borderRadius: radius.full, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: !dropDate ? theme.primary : theme.background, borderColor: !dropDate ? theme.primary : theme.border }}>
+                <Text style={{ color: !dropDate ? '#fff' : theme.mutedForeground, fontSize: 12, fontWeight: '600' }}>No fixed date</Text>
+              </Pressable>
+              {[3, 5, 7, 10].map((n) => {
+                const d = isoDaysFromNow(n)
+                const active = dropDate === d
+                return (
+                  <Pressable key={n} onPress={() => setDropDate(d)} style={{ borderRadius: radius.full, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: active ? theme.primary : theme.background, borderColor: active ? theme.primary : theme.border }}>
+                    <Text style={{ color: active ? '#fff' : theme.mutedForeground, fontSize: 12, fontWeight: '600' }}>{formatPickupDate(d)}</Text>
+                  </Pressable>
+                )
+              })}
+            </View>
+            <TextInput style={[inputStyle, { marginTop: spacing.sm }]} value={dropDate} onChangeText={setDropDate} placeholder="Or type a date (YYYY-MM-DD)" placeholderTextColor={theme.mutedForeground + '88'} />
           </Field>
           <Field label={t('postLoad.loadingNotes')}>
             <TextInput style={inputStyle} value={loadingReq} onChangeText={setLoadingReq} placeholder={t('postLoad.loadingNotesExample')} placeholderTextColor={theme.mutedForeground + '88'} />

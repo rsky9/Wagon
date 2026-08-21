@@ -166,6 +166,21 @@ export function EnablementFinanceScreen({ onBack }: Props) {
                     <Text style={[styles.cardTitle, { color: theme.foreground }]}>{st.type} · ₹{(st.amount ?? 0).toLocaleString('en-IN')}</Text>
                     <Text style={[styles.chip, { color: st.status === 'cleared' ? theme.success : theme.warning, borderColor: st.status === 'cleared' ? theme.success : theme.warning }]}>{st.status}</Text>
                   </View>
+                  {st.status !== 'cleared' && (
+                    <Pressable
+                      style={[styles.smallBtn, { backgroundColor: '#F97316', alignSelf: 'flex-start', marginTop: spacing.sm, opacity: busyId === st.id ? 0.5 : 1 }]}
+                      onPress={() => {
+                        if (busyId) return
+                        Alert.alert('Clear settlement?', `Mark this ${st.type} settlement of ₹${(st.amount ?? 0).toLocaleString('en-IN')} as paid? This charges the payer org.`, [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Clear', onPress: () => { setBusyId(st.id); api.post(`/finance/settlements/${st.id}/clear`).then(() => fetch()).catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'Could not clear settlement')).finally(() => setBusyId(null)) } },
+                        ])
+                      }}
+                      disabled={!!busyId}
+                    >
+                      <Text style={styles.smallBtnText}>{busyId === st.id ? 'Clearing…' : 'Clear'}</Text>
+                    </Pressable>
+                  )}
                 </View>
               )))}
             {item.k === 'policies' && (policies.length === 0

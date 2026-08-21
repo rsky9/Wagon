@@ -73,6 +73,17 @@ export function MyLoads({ onPostLoad, onSelectLoad, onOpenDecisionRoom, onOpenRe
   const manageLoad = (load: Load) => {
     const actions: Array<{ text: string; onPress: () => void; style?: 'destructive' }> = []
     if (load.status === 'posted' || load.status === 'interested') {
+      actions.push({
+        text: 'Reschedule',
+        onPress: () => {
+          const opts: Array<{ text: string; onPress: () => void }> = [
+            { text: 'Tomorrow', onPress: () => { const d = new Date(); d.setDate(d.getDate() + 1); api.patch(`/loads/${load.id}`, { date: d.toISOString(), pickupDate: d.toISOString() }).then(fetchLoads).catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'Could not reschedule')) } },
+            { text: 'In 2 days', onPress: () => { const d = new Date(); d.setDate(d.getDate() + 2); api.patch(`/loads/${load.id}`, { date: d.toISOString(), pickupDate: d.toISOString() }).then(fetchLoads).catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'Could not reschedule')) } },
+            { text: 'This week', onPress: () => { const d = new Date(); d.setDate(d.getDate() + 7); api.patch(`/loads/${load.id}`, { date: d.toISOString(), pickupDate: d.toISOString() }).then(fetchLoads).catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'Could not reschedule')) } },
+          ]
+          Alert.alert('Reschedule pickup', `Move ${load.pickupAddr.split(',')[0]} → ${load.dropAddr.split(',')[0]} to a new date?`, [...opts, { text: 'Cancel', style: 'cancel' } as const])
+        },
+      })
       actions.push({ text: 'Pause', onPress: () => { api.patch(`/loads/${load.id}/pause`).then(fetchLoads).catch(() => {}) } })
       actions.push({
         text: 'Cancel',
