@@ -40,6 +40,40 @@ const KIND_ICON: Record<string, string> = {
 }
 const REQ_KINDS = ['transport', 'warehouse', 'forwarding', 'carrier', 'insurance']
 
+const CAP_TO_LIST_KIND: Record<string, string[]> = {
+  transporter: ['truck_capacity'],
+  warehouse: ['warehouse_space'],
+  carrier: ['carrier_service'],
+  forwarder: ['forwarder_service'],
+}
+const KIND_INFO: Record<string, string> = {
+  truck_capacity: 'Truck space available on a lane',
+  warehouse_space: 'Storage space at your facility',
+  carrier_service: 'Vessel / flight slots on a route',
+  forwarder_service: 'Forwarding & customs handling',
+}
+const REQ_KIND_ICON: Record<string, string> = {
+  transport: '🚛',
+  warehouse: '🏭',
+  forwarding: '📦',
+  carrier: '🚢',
+  insurance: '🛡️',
+}
+const REQ_KIND_LABEL: Record<string, string> = {
+  transport: 'Transport',
+  warehouse: 'Warehouse',
+  forwarding: 'Forwarding',
+  carrier: 'Carrier',
+  insurance: 'Insurance',
+}
+const REQ_KIND_INFO: Record<string, string> = {
+  transport: 'Road freight pickup → delivery',
+  warehouse: 'Short or long-term storage',
+  forwarding: 'End-to-end forwarding & customs',
+  carrier: 'Ocean or air carrier leg',
+  insurance: 'Coverage for the shipment',
+}
+
 export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings' }: Props) {
   const theme = useTheme()
   const [tab, setTab] = useState<Tab>(initialTab)
@@ -60,6 +94,8 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
   const [myQuotes, setMyQuotes] = useState<Array<{ id: string; amount?: number | null; currency: string; etaHours?: number | null; status: string; request?: { id: string; kind: string; originRef?: string | null; destinationRef?: string | null; requesterOrg?: { name: string } | null } | null }>>([])
 
   const canPublishCarrier = capabilities.includes('carrier')
+  const canListKinds = [...new Set(capabilities.flatMap((c) => CAP_TO_LIST_KIND[c] ?? []))]
+  const canListAny = canListKinds.length > 0
 
   // Listing publish modal
   const [showListing, setShowListing] = useState(false)
@@ -72,7 +108,7 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
 
   // Request post modal
   const [showRequest, setShowRequest] = useState(false)
-  const [reqKind, setReqKind] = useState('warehouse')
+  const [reqKind, setReqKind] = useState('transport')
   const [reqOrigin, setReqOrigin] = useState('')
   const [reqDest, setReqDest] = useState('')
   const [reqCity, setReqCity] = useState('')
@@ -460,22 +496,7 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} hitSlop={8}><Text style={{ color: theme.mutedForeground, fontSize: 20 }}>←</Text></Pressable>
         <Text style={[styles.title, { color: theme.foreground }]}>Marketplace</Text>
-        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-          {canPublishCarrier && (
-            <Pressable onPress={() => setShowCarrier(true)} hitSlop={8}><Text style={{ color: '#F97316', fontSize: 14, fontWeight: '800' }}>🚢</Text></Pressable>
-          )}
-          <Pressable onPress={() => setShowRequest(true)} hitSlop={8}><Text style={{ color: '#F97316', fontSize: 14, fontWeight: '800' }}>+ Shipment</Text></Pressable>
-        </View>
-      </View>
-
-      {/* Action-first publish strip */}
-      <View style={[styles.publishStrip, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <Pressable style={[styles.publishBtn, { backgroundColor: '#F97316' }]} onPress={() => setShowListing(true)}>
-          <Text style={styles.publishBtnText}>+ List capacity</Text>
-        </Pressable>
-        <Pressable style={[styles.publishBtn, { backgroundColor: theme.foreground }]} onPress={() => setShowRequest(true)}>
-          <Text style={[styles.publishBtnText, { color: theme.background }]}>+ Post shipment</Text>
-        </Pressable>
+        <Text style={{ color: theme.mutedForeground, fontSize: 12, fontWeight: '700' }}>{tab === 'requests' ? '📦 Shipments' : tab === 'listings' ? '🏗️ Capacity' : tab === 'carriers' ? '🚢 Carriers' : ''}</Text>
       </View>
 
       {/* Category grid: 3 cards per row */}
@@ -505,10 +526,16 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
 
       {tab === 'listings' && (
         <>
+          {canListAny && (
+            <Pressable style={[styles.tabPublishBtn, { backgroundColor: '#F97316' }]} onPress={() => { setListKind(canListKinds[0] ?? 'truck_capacity'); setShowListing(true) }}>
+              <Text style={styles.tabPublishIcon}>🏗️</Text>
+              <Text style={styles.publishBtnText}>List capacity</Text>
+            </Pressable>
+          )}
           <View style={styles.filters}>
             {['', 'truck_capacity', 'warehouse_space', 'carrier_service', 'forwarder_service'].map((k) => (
               <Pressable key={k} style={[styles.filterChip, filterKind === k && styles.filterActive]} onPress={() => setFilterKind(k)}>
-                <Text style={{ color: filterKind === k ? '#fff' : theme.foreground, fontSize: 12, fontWeight: '700' }}>{k === '' ? 'All' : (KIND_LABEL[k] ?? k)}</Text>
+                <Text style={{ color: filterKind === k ? '#fff' : theme.foreground, fontSize: 12, fontWeight: '700' }}>{k === '' ? 'All' : `${KIND_ICON[k] ?? ''} ${KIND_LABEL[k] ?? k}`}</Text>
               </Pressable>
             ))}
           </View>
@@ -524,7 +551,7 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
             contentContainerStyle={styles.list}
             data={listings}
             keyExtractor={(l) => l.id}
-            ListEmptyComponent={loading ? undefined : <EmptyState title="No capacity listed" message="Tap + List capacity to publish available capacity" icon="📦" />}
+            ListEmptyComponent={loading ? undefined : <EmptyState title="No capacity listed" message={canListAny ? 'Tap List capacity above to publish available capacity' : 'Providers publish truck, warehouse & carrier space here'} icon="🏗️" />}
             renderItem={({ item }) => renderListing(item)}
           />
         </>
@@ -538,6 +565,12 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
           keyExtractor={(s) => s.id}
           ListHeaderComponent={
             <View style={{ gap: spacing.sm, marginBottom: spacing.sm }}>
+              {canPublishCarrier && (
+                <Pressable style={[styles.tabPublishBtn, { backgroundColor: '#F97316' }]} onPress={() => setShowCarrier(true)}>
+                  <Text style={styles.tabPublishIcon}>🚢</Text>
+                  <Text style={styles.publishBtnText}>Publish schedule</Text>
+                </Pressable>
+              )}
               <View style={{ flexDirection: 'row', gap: spacing.sm }}>
                 <TextInput style={[styles.input, styles.half, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="From (port)" placeholderTextColor={theme.mutedForeground} value={carOriginSearch} onChangeText={setCarOriginSearch} />
                 <TextInput style={[styles.input, styles.half, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="To (port)" placeholderTextColor={theme.mutedForeground} value={carDestSearch} onChangeText={setCarDestSearch} />
@@ -633,11 +666,17 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
           data={requests}
           keyExtractor={(r) => r.id}
           ListHeaderComponent={
-            <View style={styles.searchRow}>
-              <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Search city, route, description…" placeholderTextColor={theme.mutedForeground} value={searchQ} onChangeText={setSearchQ} />
-            </View>
+            <>
+              <Pressable style={[styles.tabPublishBtn, { backgroundColor: '#F97316' }]} onPress={() => setShowRequest(true)}>
+                <Text style={styles.tabPublishIcon}>📦</Text>
+                <Text style={styles.publishBtnText}>Post shipment</Text>
+              </Pressable>
+              <View style={styles.searchRow}>
+                <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Search city, route, description…" placeholderTextColor={theme.mutedForeground} value={searchQ} onChangeText={setSearchQ} />
+              </View>
+            </>
           }
-          ListEmptyComponent={loading ? undefined : <EmptyState title="No open shipments" message="Tap + Post shipment to post a shipment request" icon="📦" />}
+          ListEmptyComponent={loading ? undefined : <EmptyState title="No open shipments" message="Tap Post shipment above to post a shipment request" icon="📦" />}
           renderItem={({ item }) => renderRequest(item)}
         />
       )}
@@ -711,7 +750,7 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: theme.foreground }]}>My capacity ({myListings.length})</Text>
               {myListings.length === 0
-                ? <EmptyState title="No capacity published" message="Tap + List capacity to publish available capacity" icon="🏗️" />
+                ? <EmptyState title="No capacity published" message="Publish capacity from the Capacity tab" icon="🏗️" />
                 : myListings.map((l) => (
                   <MarketCard
                     key={l.id}
@@ -741,14 +780,15 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
         <KeyboardAvoidingView style={styles.modalWrap} behavior="padding">
           <View style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
-              <Text style={[styles.modalTitle, { color: theme.foreground }]}>Publish capacity</Text>
+              <Text style={[styles.modalTitle, { color: theme.foreground }]}>🏗️ Publish capacity</Text>
               <View style={styles.filters}>
-                {Object.keys(KIND_LABEL).map((k) => (
+                {canListKinds.map((k) => (
                   <Pressable key={k} style={[styles.filterChip, listKind === k && styles.filterActive]} onPress={() => setListKind(k)}>
-                    <Text style={{ color: listKind === k ? '#fff' : theme.foreground, fontSize: 12, fontWeight: '700' }}>{KIND_LABEL[k]}</Text>
+                    <Text style={{ color: listKind === k ? '#fff' : theme.foreground, fontSize: 12, fontWeight: '700' }}>{KIND_ICON[k] ?? ''} {KIND_LABEL[k]}</Text>
                   </Pressable>
                 ))}
               </View>
+              <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>{KIND_INFO[listKind] ?? ''}</Text>
               <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Origin (city)" placeholderTextColor={theme.mutedForeground} value={listOrigin} onChangeText={setListOrigin} />
               <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Destination (city)" placeholderTextColor={theme.mutedForeground} value={listDest} onChangeText={setListDest} />
               <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Or city (e.g. Pune)" placeholderTextColor={theme.mutedForeground} value={listCity} onChangeText={setListCity} />
@@ -770,14 +810,15 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
         <KeyboardAvoidingView style={styles.modalWrap} behavior="padding">
           <View style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
-              <Text style={[styles.modalTitle, { color: theme.foreground }]}>Post shipment</Text>
+              <Text style={[styles.modalTitle, { color: theme.foreground }]}>📦 Post shipment</Text>
               <View style={styles.filters}>
                 {REQ_KINDS.map((k) => (
                   <Pressable key={k} style={[styles.filterChip, reqKind === k && styles.filterActive]} onPress={() => setReqKind(k)}>
-                    <Text style={{ color: reqKind === k ? '#fff' : theme.foreground, fontSize: 12, fontWeight: '700' }}>{k}</Text>
+                    <Text style={{ color: reqKind === k ? '#fff' : theme.foreground, fontSize: 12, fontWeight: '700' }}>{REQ_KIND_ICON[k] ?? ''} {REQ_KIND_LABEL[k] ?? k}</Text>
                   </Pressable>
                 ))}
               </View>
+              <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>{REQ_KIND_INFO[reqKind] ?? ''}</Text>
               <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Origin (city)" placeholderTextColor={theme.mutedForeground} value={reqOrigin} onChangeText={setReqOrigin} />
               <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Destination (city)" placeholderTextColor={theme.mutedForeground} value={reqDest} onChangeText={setReqDest} />
               <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Or city (e.g. Pune)" placeholderTextColor={theme.mutedForeground} value={reqCity} onChangeText={setReqCity} />
@@ -872,7 +913,7 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
       <Modal visible={showCarrier} transparent animationType="slide">
         <KeyboardAvoidingView style={styles.modalWrap} behavior="padding">
           <View style={[styles.modal, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.modalTitle, { color: theme.foreground }]}>Publish carrier service</Text>
+            <Text style={[styles.modalTitle, { color: theme.foreground }]}>🚢 Publish carrier service</Text>
             <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Origin (port/city)" placeholderTextColor={theme.mutedForeground} value={carOrigin} onChangeText={setCarOrigin} />
             <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Destination (port/city)" placeholderTextColor={theme.mutedForeground} value={carDest} onChangeText={setCarDest} />
             <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]} placeholder="Vessel / flight" placeholderTextColor={theme.mutedForeground} value={carVessel} onChangeText={setCarVessel} />
@@ -941,9 +982,9 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1 },
   title: { fontSize: 20, fontWeight: '800' },
-  publishStrip: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderBottomWidth: 1 },
-  publishBtn: { flex: 1, borderRadius: radius.lg, paddingVertical: spacing.sm, alignItems: 'center' },
   publishBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
+  tabPublishBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderRadius: radius.lg, paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, marginHorizontal: spacing.lg, marginBottom: spacing.sm },
+  tabPublishIcon: { fontSize: 16 },
   catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   catCard: { width: '31%', flexGrow: 1, borderRadius: radius.lg, borderWidth: 1, padding: spacing.sm, gap: spacing.xs, alignItems: 'center' },
   catActive: { borderColor: '#F97316' },
