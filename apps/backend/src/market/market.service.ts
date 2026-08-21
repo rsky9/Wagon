@@ -861,6 +861,12 @@ export class MarketService {
     const orgIds = await this.orgAccess.memberOrgIds(user)
     if (!orgIds.includes(quote.request.requesterOrgId)) throw new ForbiddenException('Only the requester can accept')
     if (quote.status !== 'submitted') throw new BadRequestException(`Quote is ${quote.status}`)
+    // A classic trip on the projected load may have booked the demand already —
+    // never let a quote book demand that is committed on the road side.
+    if (quote.request.status !== 'open' && quote.request.status !== 'quoted') {
+      throw new BadRequestException(`Request is already booked (${quote.request.status})`)
+    }
+    let resolvedBidders: Array<{ id: string; name: string | null }> = []
     const updated = await this.prisma.$transaction(async (tx) => {
       // Concurrency-safe: only accept if still submitted (atomic claim).
       const claimed = await tx.marketQuote.updateMany({
@@ -878,6 +884,24 @@ export class MarketService {
       // Keep the projected Load in step: booked request -> accepted load
       // (no zombie 'posted' listing for demand that is already booked).
       await tx.load.updateMany({ where: { marketRequestId: quote.requestId }, data: { status: 'accepted' as never } })
+      // Resolve legacy bids on the projected load: this demand is now booked
+      // through the market, so no legacy bid can ever win. Withdraw the open
+      // ones (mirroring the market's own quote rejection) and notify bidders.
+      const legacyBids = await tx.bid.findMany({
+        where: {
+          load: { marketRequestId: quote.requestId },
+          status: { in: ['pending', 'shortlisted', 'negotiating', 'booking_pending'] },
+        },
+        include: { transporter: { include: { user: true } } },
+      })
+      if (legacyBids.length > 0) {
+        await tx.bid.updateMany({
+          where: { id: { in: legacyBids.map((b) => b.id) } },
+          data: { status: 'withdrawn' },
+        })
+      }
+      resolvedBidders = legacyBids
+        .flatMap((b) => (b.transporter?.user ? [{ id: b.transporter.user.id, name: b.transporter.user.name }] : []))
       // Materialize the booked request into an operational object so the
       // execute/settle layers can run (not just a paper booking).
       const materializedShipmentId = await this.materializeBooking(tx, quote)
@@ -919,6 +943,17 @@ export class MarketService {
       const accepted = await tx.marketQuote.findUniqueOrThrow({ where: { id: quoteId } })
       return { accepted, settlementId }
     })
+    // Legacy bidders on the projected load: tell them their bid lost.
+    for (const b of resolvedBidders) {
+      await this.notifications.create({
+        userId: b.id,
+        type: 'bid_withdrawn',
+        title: 'Your bid lost — shipment booked via marketplace',
+        body: `This demand was booked through the marketplace; your bid was withdrawn`,
+        data: { requestId: quote.requestId },
+        category: 'market',
+      }).catch(() => {})
+    }
     // Notify the provider's org members that their quote was accepted.
     const providerMembers = await this.prisma.organizationMember.findMany({ where: { organizationId: quote.providerOrgId } })
     for (const m of providerMembers) {

@@ -426,6 +426,11 @@ export class BiddingService {
     if (bid.status !== 'booking_pending') {
       throw new BadRequestException('No pending booking to confirm')
     }
+    // Re-check the load: a market quote may have booked this demand between the
+    // supplier's proposal and this confirm — never double-book the same demand.
+    if (load.status !== 'posted') {
+      throw new BadRequestException('This load is no longer open — it was booked through the marketplace')
+    }
 
     let trip: { id: string } | null = null
     try {
@@ -458,7 +463,7 @@ export class BiddingService {
   }
 
   /** Negotiation timeline: full offer history for a load's winning/nominated bid. */
-  private async createTripTx(loadId: string, bidId: string, bid: { transporterId: string; driverId?: string | null; truckId?: string | null; amount: number; advanceAmount?: number | null; balanceAmount?: number | null }, load: { pickupAddr?: string | null; dropAddr?: string | null; paymentTerms?: string | null; extraCharges?: string | null; supplierId: string }) {
+  private async createTripTx(loadId: string, bidId: string, bid: { transporterId: string; driverId?: string | null; truckId?: string | null; amount: number; advanceAmount?: number | null; balanceAmount?: number | null }, load: { pickupAddr?: string | null; dropAddr?: string | null; paymentTerms?: string | null; extraCharges?: string | null; supplierId: string; marketRequestId?: string | null }) {
     return this.prisma.$transaction(async (tx) => {
       const created = await tx.trip.create({
         data: {
@@ -468,6 +473,19 @@ export class BiddingService {
         },
       })
       await tx.load.update({ where: { id: loadId }, data: { status: 'accepted' } })
+      // If this load is a market projection, the demand is now committed on the
+      // road side: close the request + its quotes so the market can't book it
+      // again (submitQuote and acceptQuote both gate on open/quoted).
+      if (load.marketRequestId) {
+        await tx.marketRequest.updateMany({
+          where: { id: load.marketRequestId, status: { in: ['open', 'quoted'] } },
+          data: { status: 'booked' },
+        })
+        await tx.marketQuote.updateMany({
+          where: { requestId: load.marketRequestId, status: 'submitted' },
+          data: { status: 'rejected' },
+        })
+      }
       await tx.bid.update({ where: { id: bidId }, data: { status: 'accepted' } })
       await tx.bookingSnapshot.create({
         data: {

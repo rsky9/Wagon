@@ -807,6 +807,28 @@ describe('Enablement platform (e2e)', () => {
       expect(rejected.body.quote.status).toBe('rejected')
     })
 
+    it('quote-accept withdraws legacy bids on the projected load (no double-book)', async () => {
+      // Transport request -> projected classic load.
+      const req = await api(supToken).post('/market/requests', { kind: 'transport', originRef: 'Delhi', destinationRef: 'Jaipur', capacityNeeded: 2000 }).expect(201)
+      const projected = (await api(supToken).get('/loads?pageSize=50').expect(200)).body.items.find(
+        (l: { marketRequestId?: string }) => l.marketRequestId === req.body.request.id,
+      )
+      expect(projected).toBeDefined()
+      // A legacy transporter bids on the projected load...
+      const bid = await api(trToken).post('/bidding/bid', { loadId: projected.id, amount: 8000 }).expect(201)
+      expect(bid.body.bid.status).toBe('pending')
+      // ...but the demand books through the marketplace instead.
+      const quote = await api(trToken).post(`/market/requests/${req.body.request.id}/quotes`, { amount: 9000 }).expect(201)
+      await api(supToken).post(`/market/quotes/${quote.body.quote.id}/accept`).expect(201)
+      // The legacy bid is withdrawn — no competing path left open.
+      const mine = await api(trToken).get('/bidding/mine').expect(200)
+      const resolved = mine.body.bids.find((b: { id: string }) => b.id === bid.body.bid.id)
+      expect(resolved).toBeDefined()
+      expect(resolved.status).toBe('withdrawn')
+      // The supplier can no longer confirm the classic booking on it either.
+      await api(supToken).post(`/bidding/load/${projected.id}/confirm`, { bidId: bid.body.bid.id }).expect(400)
+    })
+
     it('tracks cargo unit lineage (create/split/merge) and leg lifecycle', async () => {
       const ship = await api(supToken).post('/foundation/shipments', { commodity: 'CargoE2E', weightKg: 10000 }).expect(201)
       const sid = ship.body.shipment.id
