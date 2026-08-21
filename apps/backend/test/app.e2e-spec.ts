@@ -87,6 +87,8 @@ describe('Wagon API (e2e)', () => {
       prisma.load.deleteMany(),
       prisma.dispute.deleteMany(),
       prisma.notification.deleteMany(),
+      prisma.driver.deleteMany(),
+      prisma.vehicle.deleteMany(),
     ])
   })
 
@@ -748,6 +750,13 @@ describe('Wagon API (e2e)', () => {
     })
 
     it('runs provider verification for financial/identity docs (Setu/face mock)', async () => {
+      // Force the supplier to supplier-only so the role gate is deterministic.
+      await request(app.getHttpServer())
+        .patch('/api/v1/auth/capabilities')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ capabilities: ['supplier'] })
+        .expect(200)
+
       // PAN verification via the Setu (mock) provider.
       const pan = await request(app.getHttpServer())
         .post('/api/v1/kyc/verify')
@@ -766,12 +775,29 @@ describe('Wagon API (e2e)', () => {
       expect(selfie.body.verified).toBe(true)
       expect(['face', 'mock']).toContain(selfie.body.source)
 
-      // A supplier must not verify a transporter-only doc.
+      // A supplier-only user must not verify a transporter-only doc.
       await request(app.getHttpServer())
         .post('/api/v1/kyc/verify')
         .set('Authorization', `Bearer ${supToken}`)
         .send({ kind: 'rc', rcNumber: 'KA01AB1234' })
         .expect(400)
+
+      // A transporter verifies vehicle RC (Vahan mock) and driving licence (DigiLocker mock).
+      const rc = await request(app.getHttpServer())
+        .post('/api/v1/kyc/verify')
+        .set('Authorization', `Bearer ${trToken}`)
+        .send({ kind: 'rc', rcNumber: 'KA01AB1234' })
+        .expect(201)
+      expect(rc.body.verified).toBe(true)
+      expect(['vahan', 'ulip', 'mock']).toContain(rc.body.source)
+
+      const license = await request(app.getHttpServer())
+        .post('/api/v1/kyc/verify')
+        .set('Authorization', `Bearer ${trToken}`)
+        .send({ kind: 'license', licenseNumber: 'KA0120210000012' })
+        .expect(201)
+      expect(license.body.verified).toBe(true)
+      expect(['digilocker', 'mock']).toContain(license.body.source)
     })
 
     it('generates an idempotent e-way bill', async () => {

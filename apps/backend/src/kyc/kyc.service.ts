@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException, ForbiddenException 
 import { PrismaService } from '../prisma/prisma.service'
 import { UploadsService, ALLOWED_UPLOAD_MIMES } from '../uploads/uploads.service'
 import { IdentityVerificationService } from './identity-verification.service'
+import { VerificationService } from '../verification/verification.service'
 import { requiredDocsFor, financialDocs } from './kyc-requirements'
 import type { DocumentKind, KycStatus, User } from '@prisma/client'
 
@@ -13,6 +14,7 @@ export class KycService {
     private readonly prisma: PrismaService,
     private readonly uploads: UploadsService,
     private readonly identity: IdentityVerificationService,
+    private readonly vehicleDriver: VerificationService,
   ) {}
 
   private assertMime(mimeType: string) {
@@ -83,7 +85,7 @@ export class KycService {
       throw new BadRequestException(`Document kind '${kind}' is not required for your account`)
     }
 
-    let result: Awaited<ReturnType<typeof this.identity.verifyPan>> | null = null
+    let result: { source: string; verified: boolean } | null = null
     let source = 'manual'
 
     switch (kind) {
@@ -100,8 +102,18 @@ export class KycService {
         result = await this.identity.verifyFace({ selfieKey: input.selfieKey, selfieUri: input.selfieUri })
         source = result.source
         break
+      case 'rc':
+        // Vehicle RC via Vahan/ULIP (mock fallback) — reuses the truck flow.
+        result = await this.vehicleDriver.verifyVehicle(input.rcNumber ?? input.number ?? '', { imageKey: input.storageKey })
+        source = result.source
+        break
+      case 'license':
+        // Driving licence via DigiLocker (mock fallback) — reuses the driver flow.
+        result = await this.vehicleDriver.verifyDriver(input.licenseNumber ?? input.number ?? '', { imageKey: input.storageKey })
+        source = result.source
+        break
       default:
-        throw new BadRequestException(`Kind '${kind}' is verified via a different flow (rc/license use vehicle/driver verification)`)
+        throw new BadRequestException(`Kind '${kind}' is not supported for provider verification`)
     }
 
     const status: KycStatus = result.verified ? 'approved' : 'rejected'
