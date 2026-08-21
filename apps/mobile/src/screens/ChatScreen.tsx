@@ -50,10 +50,15 @@ export function ChatScreen({ onBack, contactName, contactPhone, contactId, tripI
       const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.6 })
       if (picked.canceled || !picked.assets?.[0]) return
       const asset = picked.assets[0]
+      const mime = asset.mimeType ?? 'image/jpeg'
+      if (!['image/jpeg', 'image/png', 'image/webp', 'image/heic'].includes(mime) && !mime.startsWith('image/')) {
+        Alert.alert('Unsupported file', 'Please pick a JPG, PNG or WebP image'); return
+      }
+      if ((asset.fileSize ?? 0) > 10 * 1024 * 1024) { Alert.alert('File too large', 'Images must be under 10 MB'); return }
       const presigned = await api.post<{ uploadUrl: string; key: string }>(`/uploads/presign`, {
-        folder: `chat/${tripId}`, mimeType: asset.mimeType ?? 'image/jpeg', size: asset.fileSize ?? 0,
-      }).catch(() => api.post<{ uploadUrl: string; key: string }>(`/kyc/pod/${tripId}`, { mimeType: asset.mimeType ?? 'image/jpeg', size: asset.fileSize ?? 0 }))
-      await uploadToPresignedUrl(presigned.uploadUrl, { uri: asset.uri, name: 'chat-image.jpg', type: asset.mimeType ?? 'image/jpeg' })
+        folder: `chat/${tripId}`, mimeType: mime, size: asset.fileSize ?? 0,
+      }).catch(() => api.post<{ uploadUrl: string; key: string }>(`/kyc/pod/${tripId}`, { mimeType: mime, size: asset.fileSize ?? 0 }))
+      await uploadToPresignedUrl(presigned.uploadUrl, { uri: asset.uri, name: 'chat-image.jpg', type: mime })
       const key = (presigned as { key?: string }).key ?? asset.uri
       api.post(`/chat/trip/${tripId}`, { body: `[Image] ${key}`, imageKey: key })
         .then(() => fetch())

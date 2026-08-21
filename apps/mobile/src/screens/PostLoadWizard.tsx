@@ -124,6 +124,10 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
       let pickupLat: number | null = null, pickupLng: number | null = null, dropLat: number | null = null, dropLng: number | null = null
       let haltLat: number | null = null, haltLng: number | null = null
       let distanceKm = Number(distance)
+      const haltNorm = halt.trim().toLowerCase()
+      if (haltNorm && (haltNorm === pickup.trim().toLowerCase() || haltNorm === drop.trim().toLowerCase())) {
+        throw new Error('Halt city must be different from pickup and drop')
+      }
       const toGeocode: Array<Promise<{ found: boolean; coords: [number, number] | null }>> = [
         api.get<{ found: boolean; coords: [number, number] | null }>(`/reference/geocode?q=${encodeURIComponent(pickup)}`),
         api.get<{ found: boolean; coords: [number, number] | null }>(`/reference/geocode?q=${encodeURIComponent(drop)}`),

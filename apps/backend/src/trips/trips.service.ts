@@ -523,14 +523,23 @@ export class TripsService {
   async recordWeighbridge(tripId: string, body: { weightKg: number; slipKey?: string; note?: string }, user: User) {
     const trip = await this.prisma.trip.findUnique({ where: { id: tripId }, include: { load: true } })
     if (!trip) throw new NotFoundException('Trip not found')
+    if (trip.status === 'cancelled' || trip.status === 'delivered') {
+      throw new BadRequestException('Cannot record weighbridge on a cancelled or delivered trip')
+    }
     const tTrans = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
     const isT = tTrans?.id === trip.transporterId
     const isD = trip.driverId ? await this.prisma.driver.findFirst({ where: { id: trip.driverId, mobile: user.mobile } }) : null
     if (!isT && !isD) throw new BadRequestException('Only the assigned transporter or driver can record weighbridge')
-    if (!body.weightKg || body.weightKg <= 0) throw new BadRequestException('Weight must be positive')
+    if (!Number.isFinite(body.weightKg) || body.weightKg <= 0) throw new BadRequestException('Weight must be a positive number')
+    if (body.weightKg > 100_000) throw new BadRequestException('Weight exceeds 100 tonnes — check the value')
+    if (body.weightKg < 50) throw new BadRequestException('Weight below 50kg — check the value')
+    // Idempotence: re-recording the same weight is a no-op (don't spam notifications).
+    if (trip.weighbridgeKg === body.weightKg && trip.weighbridgeKey === (body.slipKey ?? null)) {
+      return { trip, mismatch: trip.weighbridgeMismatch ?? false, variance: 0 }
+    }
     const declared = trip.load.weight * 1000
     const measured = body.weightKg
-    const variance = Math.abs(measured - declared) / declared
+    const variance = declared > 0 ? Math.abs(measured - declared) / declared : 0
     const mismatch = variance > 0.1
     const wbUpdated = await this.prisma.trip.update({
       where: { id: tripId },
