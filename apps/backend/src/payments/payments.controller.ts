@@ -35,6 +35,11 @@ export class PaymentsController {
     return this.payments.wallet(user)
   }
 
+  @Get('invoices')
+  invoices(@CurrentUser() user: User) {
+    return this.payments.invoices(user)
+  }
+
   @Get('invoice/:tripId')
   invoice(@Param('tripId') tripId: string, @CurrentUser() user: User) {
     return this.payments.invoice(tripId, user)

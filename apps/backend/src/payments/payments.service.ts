@@ -597,6 +597,31 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     return { pod: updated }
   }
 
+  /** All invoices for the user's trips — one call instead of N per-trip fetches. */
+  async invoices(user: User) {
+    const isTransporter = (user.capabilities?.includes('transporter') as boolean) || user.role === 'transporter'
+    const isSupplier = (user.capabilities?.includes('supplier') as boolean) || user.role === 'supplier'
+    const tids = await (async () => {
+      if (isTransporter) {
+        const tid = await this.transporterId(user)
+        if (!tid) return []
+        const trips = await this.prisma.trip.findMany({ where: { transporterId: tid }, select: { id: true } })
+        return trips.map((t) => t.id)
+      }
+      if (isSupplier) {
+        const sid = await this.supplierId(user)
+        if (!sid) return []
+        const trips = await this.prisma.trip.findMany({ where: { load: { supplierId: sid } }, select: { id: true } })
+        return trips.map((t) => t.id)
+      }
+      return []
+    })()
+    const invoices = await Promise.all(
+      tids.map((id) => this.invoice(id, user).then((r) => r.invoice).catch(() => null)),
+    )
+    return { invoices: invoices.filter((x): x is NonNullable<typeof x> => !!x) }
+  }
+
   /** Invoice for a delivered trip with TDS/GST breakdown. Uses the agreed booking rate. */
   async invoice(tripId: string, user: User) {
     const trip = await this.prisma.trip.findUnique({

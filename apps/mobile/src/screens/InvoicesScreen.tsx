@@ -17,9 +17,7 @@ interface InvoiceRow {
   settled: boolean
 }
 
-interface TripRef {
-  id: string
-}
+
 
 interface Props {
   onBack: () => void
@@ -35,15 +33,10 @@ export function InvoicesScreen({ onBack }: Props) {
 
   const fetch = useCallback(() => {
     setError(null)
-    return api.get<{ trips: TripRef[] }>('/trips/mine').then(async (res) => {
-      const results = await Promise.allSettled(
-        res.trips.map((t) => api.get<{ invoice: InvoiceRow }>(`/payments/invoice/${t.id}`)),
-      )
-      const rows = results
-        .filter((r): r is PromiseFulfilledResult<{ invoice: InvoiceRow }> => r.status === 'fulfilled')
-        .map((r) => r.value.invoice)
-      setInvoices(rows)
-    }).catch((e) => setError(e instanceof Error ? e.message : 'Could not load invoices')).finally(() => { setLoading(false); setRefreshing(false) })
+    return api.get<{ invoices: InvoiceRow[] }>('/payments/invoices')
+      .then((res) => setInvoices(res.invoices ?? []))
+      .catch((e) => setError(e instanceof Error ? e.message : 'Could not load invoices'))
+      .finally(() => { setLoading(false); setRefreshing(false) })
   }, [])
 
   useEffect(() => { fetch() }, [fetch])

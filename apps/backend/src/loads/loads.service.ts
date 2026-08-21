@@ -401,6 +401,31 @@ export class LoadsService {
     return { load: updated }
   }
 
+  async reschedule(id: string, body: { date: string; pickupDate?: string; dropDate?: string }, user: User) {
+    const load = await this.ownedLoad(id, user)
+    if (!['posted', 'interested', 'paused'].includes(load.status)) {
+      throw new BadRequestException('Only posted/interested/paused loads can be rescheduled')
+    }
+    const date = new Date(body.date)
+    if (Number.isNaN(date.getTime())) throw new BadRequestException('Invalid date')
+    if (date.getTime() <= Date.now()) throw new BadRequestException('New pickup date must be in the future')
+    const update: Record<string, unknown> = { date, pickupDate: body.pickupDate ? new Date(body.pickupDate) : date }
+    if (body.dropDate) {
+      const dd = new Date(body.dropDate)
+      if (Number.isNaN(dd.getTime())) throw new BadRequestException('Invalid dropDate')
+      if (dd.getTime() <= date.getTime()) throw new BadRequestException('Delivery date must be after pickup date')
+      update.dropDate = dd
+    }
+    // Bidding deadline must not already be in the past — otherwise the load
+    // would be in an expired-but-still-posted zombie state.
+    if (load.biddingDeadline && new Date(load.biddingDeadline).getTime() <= Date.now()) {
+      throw new BadRequestException('Bidding deadline has passed — cancel and repost instead')
+    }
+    const updated = await this.prisma.load.update({ where: { id }, data: update as never })
+    await this.shipments.syncFromLoad(id, updated.status, 'LOAD_RESCHEDULED', 'SHIPMENT', user.id)
+    return { load: updated }
+  }
+
   async cancel(id: string, reason: string, user: User) {
     if (!reason?.trim()) throw new BadRequestException('Cancellation reason is required')
     const load = await this.ownedLoad(id, user)

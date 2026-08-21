@@ -6,6 +6,8 @@ import { useThemeMode } from '../theme'
 import { useI18n } from '@wagon/i18n'
 import { useAuth } from '../auth'
 import { RupeeIcon } from '../components/RupeeIcon'
+import { StateBanner } from '@wagon/components'
+import { useOffline } from '../hooks/useOffline'
 import { HomeCockpitScreen } from '../screens/HomeCockpitScreen'
 import { DriverHomeScreen } from '../screens/DriverHomeScreen'
 import { MarketScreen } from '../screens/MarketScreen'
@@ -187,14 +189,22 @@ function AccountTab({ navigation }: any) {
 export function UnifiedTabs() {
   const { isDark } = useThemeMode()
   const theme = createTheme(isDark)
+  const { offline, retry } = useOffline()
   return (
-    <Tab.Navigator tabBar={(props) => <FloatingTabBar {...props} />} screenOptions={({ route }) => ({ ...baseTabOptions(theme) })}>
-      <Tab.Screen name="Home" component={HomeTab} />
-      <Tab.Screen name="Marketplace" component={MarketplaceTab} />
-      <Tab.Screen name="Trips" component={TripsTab} />
-      <Tab.Screen name="Finance" component={FinanceTab} />
-      <Tab.Screen name="Account" component={AccountTab} />
-    </Tab.Navigator>
+    <View style={{ flex: 1 }}>
+      {offline && (
+        <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm }}>
+          <StateBanner state="offline" onRetry={retry} />
+        </View>
+      )}
+      <Tab.Navigator tabBar={(props) => <FloatingTabBar {...props} />} screenOptions={({ route }) => ({ ...baseTabOptions(theme) })}>
+        <Tab.Screen name="Home" component={HomeTab} />
+        <Tab.Screen name="Marketplace" component={MarketplaceTab} />
+        <Tab.Screen name="Trips" component={TripsTab} />
+        <Tab.Screen name="Finance" component={FinanceTab} />
+        <Tab.Screen name="Account" component={AccountTab} />
+      </Tab.Navigator>
+    </View>
   )
 }
 

@@ -364,6 +364,30 @@ export class FoundationService {
           ...(event === 'failed' ? { reason } : {}),
         },
       })
+      // Container lifecycle auto-drive: when the physical leg arrives, any
+      // loaded/in-transit containers on that shipment auto-advance to
+      // discharged (goods offloaded) so the operator doesn't have to do it
+      // manually for every container.
+      if (event === 'arrived') {
+        const containers = await tx.cargoUnit.findMany({
+          where: { shipmentId: leg.shipmentId, kind: { in: ['container', 'teu'] }, status: { in: ['loaded', 'in_transit'] } },
+        })
+        for (const c of containers) {
+          await tx.cargoUnit.update({ where: { id: c.id }, data: { status: 'discharged' } })
+          await this.outbox.emit(tx as never, {
+            eventType: 'EQUIPMENT',
+            eventCode: 'STRP',
+            entityType: 'shipment',
+            entityId: leg.shipmentId,
+            orgId: leg.shipment.ownerOrgId ?? null,
+            shipmentId: leg.shipmentId,
+            legId,
+            actorId: user.id,
+            location: leg.dropAddr ?? undefined,
+            payload: { cargoUnit: c.ref, unitStatus: 'discharged', at: ts.toISOString(), equipment: c.equipment, via: 'leg_arrived' },
+          })
+        }
+      }
       return changed
     })
     // Auto re-plan: a failed leg on the active plan should immediately surface an

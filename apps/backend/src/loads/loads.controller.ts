@@ -64,6 +64,12 @@ export class LoadsController {
     return this.loads.complete(id, user)
   }
 
+  @Patch(':id/reschedule')
+  @Roles('supplier')
+  reschedule(@Param('id') id: string, @Body() body: { date: string; pickupDate?: string; dropDate?: string }, @CurrentUser() user: User) {
+    return this.loads.reschedule(id, body, user)
+  }
+
   @Get(':id/contact')
   contact(@Param('id') id: string, @CurrentUser() user: User) {
     return this.loads.contact(id, user)
