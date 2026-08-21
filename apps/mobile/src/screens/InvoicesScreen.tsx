@@ -1,6 +1,6 @@
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useCallback, useEffect, useState } from 'react'
-import { StyleSheet, Text, View, FlatList, Pressable, Alert, Share } from 'react-native'
+import { StyleSheet, Text, View, FlatList, Pressable, Alert, Share, RefreshControl } from 'react-native'
 import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
 import { api } from '../config'
@@ -30,9 +30,12 @@ export function InvoicesScreen({ onBack }: Props) {
   const { t } = useI18n()
   const [invoices, setInvoices] = useState<InvoiceRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const fetch = useCallback(() => {
-    api.get<{ trips: TripRef[] }>('/trips/mine').then(async (res) => {
+    setError(null)
+    return api.get<{ trips: TripRef[] }>('/trips/mine').then(async (res) => {
       const results = await Promise.allSettled(
         res.trips.map((t) => api.get<{ invoice: InvoiceRow }>(`/payments/invoice/${t.id}`)),
       )
@@ -40,7 +43,7 @@ export function InvoicesScreen({ onBack }: Props) {
         .filter((r): r is PromiseFulfilledResult<{ invoice: InvoiceRow }> => r.status === 'fulfilled')
         .map((r) => r.value.invoice)
       setInvoices(rows)
-    }).catch(() => {}).finally(() => setLoading(false))
+    }).catch((e) => setError(e instanceof Error ? e.message : 'Could not load invoices')).finally(() => { setLoading(false); setRefreshing(false) })
   }, [])
 
   useEffect(() => { fetch() }, [fetch])
@@ -53,12 +56,14 @@ export function InvoicesScreen({ onBack }: Props) {
         <View style={{ width: 20 }} />
       </View>
 
+      {error && !loading && <Text style={{ color: theme.danger, textAlign: 'center', padding: spacing.md }}>{error}</Text>}
       {loading ? (
         <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>{t('common.loading')}</Text>
       ) : (
         <FlatList
           data={invoices}
           keyExtractor={(i) => i.invoiceNo}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetch() }} tintColor={theme.primary} colors={[theme.primary]} />}
           contentContainerStyle={styles.list}
           ListEmptyComponent={<EmptyState title={t('invoices.none')} message={t('invoices.hint')} icon="🧾" />}
           renderItem={({ item }) => (

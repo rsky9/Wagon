@@ -84,22 +84,22 @@ export function MyLoads({ onPostLoad, onSelectLoad, onOpenDecisionRoom, onOpenRe
           Alert.alert('Reschedule pickup', `Move ${load.pickupAddr.split(',')[0]} → ${load.dropAddr.split(',')[0]} to a new date?`, [...opts, { text: 'Cancel', style: 'cancel' } as const])
         },
       })
-      actions.push({ text: 'Pause', onPress: () => { api.patch(`/loads/${load.id}/pause`).then(fetchLoads).catch(() => {}) } })
+      actions.push({ text: 'Pause', onPress: () => { api.patch(`/loads/${load.id}/pause`).then(fetchLoads).catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'Could not pause load')) } })
       actions.push({
         text: 'Cancel',
         style: 'destructive' as const,
         onPress: () => {
           Alert.alert(t('ui.cancelLoad'), 'Why are you cancelling?', [
             { text: 'Back', style: 'cancel' },
-            { text: 'No trucks available', onPress: () => { api.patch(`/loads/${load.id}/cancel`, { reason: 'No trucks available' }).then(fetchLoads).catch(() => {}) } },
-            { text: 'Rates too high', onPress: () => { api.patch(`/loads/${load.id}/cancel`, { reason: 'Rates too high' }).then(fetchLoads).catch(() => {}) } },
-            { text: 'Requirement changed', onPress: () => { api.patch(`/loads/${load.id}/cancel`, { reason: 'Requirement changed' }).then(fetchLoads).catch(() => {}) } },
+            { text: 'No trucks available', onPress: () => { api.patch(`/loads/${load.id}/cancel`, { reason: 'No trucks available' }).then(fetchLoads).catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'Could not cancel')) } },
+            { text: 'Rates too high', onPress: () => { api.patch(`/loads/${load.id}/cancel`, { reason: 'Rates too high' }).then(fetchLoads).catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'Could not cancel')) } },
+            { text: 'Requirement changed', onPress: () => { api.patch(`/loads/${load.id}/cancel`, { reason: 'Requirement changed' }).then(fetchLoads).catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'Could not cancel')) } },
           ])
         },
       })
     }
     if (load.status === 'paused') {
-      actions.push({ text: 'Reopen', onPress: () => { api.patch(`/loads/${load.id}/reopen`).then(fetchLoads).catch(() => {}) } })
+      actions.push({ text: 'Reopen', onPress: () => { api.patch(`/loads/${load.id}/reopen`).then(fetchLoads).catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'Could not reopen')) } })
     }
     if (load.status === 'posted' || load.status === 'interested') {
       actions.push({ text: 'Decision Room', onPress: () => onOpenDecisionRoom(load.id) })
@@ -111,7 +111,7 @@ export function MyLoads({ onPostLoad, onSelectLoad, onOpenDecisionRoom, onOpenRe
       }
     }
     if (load.status === 'delivered') {
-      actions.push({ text: 'Complete', onPress: () => { api.patch(`/loads/${load.id}/complete`).then(fetchLoads).catch(() => {}) } })
+      actions.push({ text: 'Complete', onPress: () => { api.patch(`/loads/${load.id}/complete`).then(fetchLoads).catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'Could not complete')) } })
     }
     if (load.status === 'accepted' || load.status === 'in_transit') {
       actions.push({ text: 'Pay booking / track →', onPress: () => onSelectLoad(load.id) })
