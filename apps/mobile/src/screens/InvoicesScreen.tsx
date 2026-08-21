@@ -1,6 +1,6 @@
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useCallback, useEffect, useState } from 'react'
-import { StyleSheet, Text, View, FlatList, Pressable, Alert, Share, RefreshControl } from 'react-native'
+import { StyleSheet, Text, View, FlatList, Pressable, Alert, Share, RefreshControl, Linking } from 'react-native'
 import { useTheme, spacing, radius, formatINR } from '@wagon/design'
 import { EmptyState } from '@wagon/components'
 import { api } from '../config'
@@ -74,15 +74,28 @@ export function InvoicesScreen({ onBack }: Props) {
                 <Row label={t('invoices.tds')} value={`−${formatINR(item.tdsAmount)}`} theme={theme} />
                 <Row label={t('invoices.netAmount')} value={formatINR(item.netAmount)} theme={theme} strong />
               </View>
-              <Pressable
-                style={[styles.shareBtn, { backgroundColor: theme.accent }]}
-                onPress={() => {
-                  const text = `${item.invoiceNo}\n${item.route}\nBase: ${formatINR(item.baseAmount)}\nGST: +${formatINR(item.gstAmount)}\nTDS: -${formatINR(item.tdsAmount)}\nNet: ${formatINR(item.netAmount)}\nStatus: ${item.settled ? 'Settled' : 'Pending'}`
-                  Share.share({ message: text }).catch(() => {})
-                }}
-              >
-                <Text style={{ color: theme.accentForeground, fontWeight: '800', fontSize: 13 }}>Share invoice</Text>
-              </Pressable>
+              <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm }}>
+                <Pressable
+                  style={[styles.shareBtn, { flex: 1, backgroundColor: theme.accent }]}
+                  onPress={() => {
+                    const text = `${item.invoiceNo}\n${item.route}\nBase: ${formatINR(item.baseAmount)}\nGST: +${formatINR(item.gstAmount)}\nTDS: -${formatINR(item.tdsAmount)}\nNet: ${formatINR(item.netAmount)}\nStatus: ${item.settled ? 'Settled' : 'Pending'}`
+                    Share.share({ message: text }).catch(() => {})
+                  }}
+                >
+                  <Text style={{ color: theme.accentForeground, fontWeight: '800', fontSize: 13 }}>Share</Text>
+                </Pressable>
+                {!item.settled && (
+                  <Pressable
+                    style={[styles.shareBtn, { flex: 1, backgroundColor: '#F97316' }]}
+                    onPress={() => {
+                      const upi = `upi://pay?pa=wagon@upi&pn=Wagon&am=${item.netAmount}&cu=INR&tn=${encodeURIComponent(item.invoiceNo)}`
+                      Linking.openURL(upi).catch(() => Alert.alert('UPI not available', 'No UPI app found on this device'))
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>Pay via UPI</Text>
+                  </Pressable>
+                )}
+              </View>
             </View>
           )}
         />

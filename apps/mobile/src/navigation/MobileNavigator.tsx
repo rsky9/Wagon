@@ -149,7 +149,7 @@ const navigationRef = createNavigationContainerRef<RootStackParamList>()
  * `trip/{id}` both go to TripDetail by id (safe path — LoadDetail needs a
  * full load object). Best-effort: unknown/missing params fall back safely.
  */
-function navigateToUrl(nav: any, url: string, item?: { data?: { loadId?: string; tripId?: string; shipmentId?: string; requestId?: string } }) {
+function navigateToUrl(nav: any, url: string, item?: { data?: { loadId?: string; tripId?: string; shipmentId?: string; requestId?: string; invoiceId?: string; disputeId?: string; facilityId?: string } }) {
   if (!url) return
   // Raw stack route names (notification data.route) navigate directly.
   const STACK_ROUTES = new Set([
@@ -162,7 +162,7 @@ function navigateToUrl(nav: any, url: string, item?: { data?: { loadId?: string;
     'TripExceptions', 'Responses', 'Bookings', 'ReturnLoads', 'Track',
     'ShipmentDetail', 'Forwarding', 'Planning', 'EnablementFinance', 'Storage',
     'Global', 'Market', 'Integrations', 'EnablementHub', 'Shipments', 'TripExecute',
-    'LoadDetail', 'TripDetail', 'Contracts',
+    'LoadDetail', 'TripDetail', 'Contracts', 'Invoices', 'Disputes',
   ])
   if (STACK_ROUTES.has(url)) {
     const params: Record<string, unknown> = {}
@@ -191,12 +191,18 @@ function navigateToUrl(nav: any, url: string, item?: { data?: { loadId?: string;
     nav.navigate(url, Object.keys(params).length ? params : undefined)
     return
   }
-  const m = url.match(/^wagon:\/\/(load|trip|shipment)\/(.+)$/)
+  const m = url.match(/^wagon:\/\/(load|trip|shipment|invoice|dispute|facility)\/(.+)$/)
   if (m && m[2]) {
     if (m[1] === 'load') {
       nav.navigate('LoadDetail', { id: m[2] } as never)
     } else if (m[1] === 'shipment') {
       nav.navigate('ShipmentDetail', { shipmentId: m[2] })
+    } else if (m[1] === 'invoice') {
+      nav.navigate('Invoices')
+    } else if (m[1] === 'dispute') {
+      nav.navigate('Disputes')
+    } else if (m[1] === 'facility') {
+      nav.navigate('Storage')
     } else {
       nav.navigate('TripDetail', { tripId: m[2] })
     }
@@ -211,6 +217,14 @@ function navigateToUrl(nav: any, url: string, item?: { data?: { loadId?: string;
   } else if (url.endsWith('tickets')) {
     nav.navigate('Tickets')
   } else if (url.endsWith('notifications')) {
+    nav.navigate('Notifications')
+  } else if (url.endsWith('invoices')) {
+    nav.navigate('Invoices')
+  } else if (url.endsWith('disputes') || url.endsWith('dispute')) {
+    nav.navigate('Disputes')
+  } else if (url.endsWith('facilities') || url.endsWith('storage')) {
+    nav.navigate('Storage')
+  } else if (url.endsWith('broadcast') || url.endsWith('announcements')) {
     nav.navigate('Notifications')
   }
 }

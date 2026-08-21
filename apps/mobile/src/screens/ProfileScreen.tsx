@@ -197,6 +197,19 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
         <SettingRow icon="🧾" label={t('profile.invoices')} sub={t('profile.invoicesSub')} onPress={onOpenInvoices} />
         <SettingRow icon="⚖️" label={t('profile.disputes')} sub={t('profile.disputesSub')} onPress={onOpenDisputes} />
 
+        {/* Invite */}
+        <GroupTitle>Invite</GroupTitle>
+        <SettingRow
+          icon="🎁"
+          label="Invite & earn"
+          sub="Share Wagon · you both earn Wagon Cash"
+          onPress={async () => {
+            const code = `WAGON-${(profile?.mobile ?? '0000').slice(-4)}${Math.random().toString(36).slice(2, 6).toUpperCase()}`
+            const { Share, Alert: RNAlert } = await import('react-native')
+            Share.share({ message: `Join Wagon — truck-hiring marketplace. Use my code ${code} · ${code}` }).catch(() => RNAlert.alert('Invite code', code))
+          }}
+        />
+
         {/* Support & Preferences */}
         <GroupTitle>Support</GroupTitle>
         <SettingRow icon="🔔" label={t('profile.notifications')} onPress={onOpenNotifications} />
