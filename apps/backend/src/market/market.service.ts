@@ -490,12 +490,13 @@ export class MarketService {
   }
 
   /**
-   * Create a classic Load mirroring a transport MarketRequest — but only with
-   * REAL data: both route ends must be present and geocodable, otherwise the
-   * bridge is skipped (the request still lives in the market feed). Never
-   * writes placeholder addresses or fake 0,0 coordinates.
+   * Project a transport MarketRequest onto the classic Load feed — an explicit,
+   * idempotent, one-to-one road projection (Load.marketRequestId @unique).
+   * Both route ends must be present and geocodable, otherwise the projection is
+   * skipped (the request still lives in the market feed). Never writes
+   * placeholder addresses or fake 0,0 coordinates.
    */
-  private async bridgeToLoad(request: { id: string; originRef?: string | null; destinationRef?: string | null; capacityNeeded?: number | null; date?: Date | null }, user: User) {
+  private async bridgeToLoad(request: { id: string; originRef?: string | null; destinationRef?: string | null; capacityNeeded?: number | null; date?: Date | null; status?: string }, user: User) {
     const supplier = await this.prisma.supplier.findUnique({ where: { userId: user.id } })
     if (!supplier) return null
     const material = await this.prisma.material.findFirst()
@@ -511,9 +512,30 @@ export class MarketService {
       console.warn(`[market] bridgeToLoad skipped (unresolvable route): ${originRef ?? '?'} → ${destinationRef ?? '?'}`)
       return null
     }
+    const status = this.requestToLoadStatus(request.status ?? 'open') ?? 'posted'
+    // Idempotent: the projection already exists -> sync route/status, don't duplicate.
+    const existing = await this.prisma.load.findUnique({ where: { marketRequestId: request.id } })
+    if (existing) {
+      await this.prisma.load.update({
+        where: { id: existing.id },
+        data: {
+          pickupAddr: originRef,
+          dropAddr: destinationRef,
+          pickupLat: origin[0],
+          pickupLng: origin[1],
+          dropLat: destination[0],
+          dropLng: destination[1],
+          status: status as never,
+        },
+      })
+      return null
+    }
     const weightT = Math.max(1, Math.round((request.capacityNeeded ?? 1000) / 1000))
     const distanceKm = Math.max(1, Math.round(geoDistanceKm(origin[0], origin[1], destination[0], destination[1])))
     const ratePerKm = model.rateCards[0]?.pricePerKm ?? 15
+    // An open request without a date projects +7 days so the classic expiry
+    // sweep (date < now -> expired) never kills fresh demand at birth.
+    const projectedDate = request.date && request.date.getTime() > Date.now() ? request.date : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     await this.prisma.load.create({
       data: {
         supplierId: supplier.id,
@@ -523,7 +545,7 @@ export class MarketService {
         pickupLng: origin[1],
         dropLat: destination[0],
         dropLng: destination[1],
-        date: request.date ?? new Date(),
+        date: projectedDate,
         truckType: 'open',
         modelId: model.id,
         weight: weightT,
@@ -531,9 +553,34 @@ export class MarketService {
         materialId: material.id,
         fareEstimate: Math.round(weightT * distanceKm * ratePerKm),
         status: 'posted' as never,
+        marketRequestId: request.id,
       } as never,
     })
     return null
+  }
+
+  /** Map a MarketRequest status onto the classic Load status machine. */
+  private requestToLoadStatus(status: string): string | null {
+    switch (status) {
+      case 'open':
+      case 'quoted':
+        return 'posted'
+      case 'booked':
+        return 'accepted'
+      case 'closed':
+        return 'expired'
+      default:
+        return null
+    }
+  }
+
+  /** Keep the projected Load in step with its canonical request (best-effort). */
+  private async syncMirroredLoads(requestIds: string[], status: string) {
+    const loadStatus = this.requestToLoadStatus(status)
+    if (!loadStatus || requestIds.length === 0) return
+    await this.prisma.load
+      .updateMany({ where: { marketRequestId: { in: requestIds } }, data: { status: loadStatus as never } })
+      .catch(() => {})
   }
 
   /**
@@ -614,10 +661,17 @@ export class MarketService {
   }) {
     // Request expiry: open/quoted requests older than 30 days with no booking auto-close.
     const expiryCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-    await this.prisma.marketRequest.updateMany({
+    const stale = await this.prisma.marketRequest.findMany({
       where: { status: { in: ['open', 'quoted'] }, createdAt: { lte: expiryCutoff } },
-      data: { status: 'closed' },
+      select: { id: true },
     })
+    if (stale.length > 0) {
+      await this.prisma.marketRequest.updateMany({
+        where: { id: { in: stale.map((s) => s.id) } },
+        data: { status: 'closed' },
+      })
+      await this.syncMirroredLoads(stale.map((s) => s.id), 'closed')
+    }
     const where: Record<string, unknown> = { status: query?.status ?? 'open' }
     if (query?.kind) where.kind = query.kind
     if (query?.city) where.city = { contains: query.city.toLowerCase(), mode: 'insensitive' }
@@ -677,6 +731,7 @@ export class MarketService {
     if (!orgIds.includes(request.requesterOrgId)) throw new ForbiddenException('Not your request')
     if (request.status === 'booked' || request.status === 'closed') throw new BadRequestException(`Request is ${request.status}`)
     const updated = await this.prisma.marketRequest.update({ where: { id: requestId }, data: { status: 'closed' } })
+    await this.syncMirroredLoads([requestId], 'closed')
     await this.audit.log({ actorId: user.id, action: 'request.close', resource: requestId, after: { status: 'closed' } })
     return { request: updated }
   }
@@ -820,6 +875,9 @@ export class MarketService {
         data: { status: 'rejected' },
       })
       await tx.marketRequest.update({ where: { id: quote.requestId }, data: { status: 'booked' } })
+      // Keep the projected Load in step: booked request -> accepted load
+      // (no zombie 'posted' listing for demand that is already booked).
+      await tx.load.updateMany({ where: { marketRequestId: quote.requestId }, data: { status: 'accepted' as never } })
       // Materialize the booked request into an operational object so the
       // execute/settle layers can run (not just a paper booking).
       const materializedShipmentId = await this.materializeBooking(tx, quote)

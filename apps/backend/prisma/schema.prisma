@@ -433,6 +433,8 @@ model Load {
   shortlistedTransporters String[]
   bids Bid[]
   negotiations NegotiationOffer[]
+  // Canonical source when this load mirrors a MarketRequest (road projection).
+  marketRequestId String? @unique
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
