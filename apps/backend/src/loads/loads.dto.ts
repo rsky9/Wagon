@@ -79,6 +79,11 @@ export class ListLoadsQuery {
   q?: string
 
   @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  mine?: boolean
+
+  @IsOptional()
   @IsString()
   sort?: 'newest' | 'cheapest' | 'priciest' | 'nearest' | 'lightest' | 'heaviest'
 

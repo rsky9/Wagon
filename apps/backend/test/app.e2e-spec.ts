@@ -273,6 +273,16 @@ describe('Wagon API (e2e)', () => {
         .expect(200)
       expect(res.body.items.some((l: { id: string }) => l.id === loadId)).toBe(true)
     })
+
+    it('supplier sees their own loads via the mine query (regression)', async () => {
+      // The `mine` query must be whitelisted on ListLoadsQuery — otherwise the
+      // forbidNonWhitelisted pipe rejects it with "property mine should not exist".
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/loads?mine=true')
+        .set('Authorization', `Bearer ${supToken}`)
+        .expect(200)
+      expect(res.body.items.some((l: { id: string }) => l.id === loadId)).toBe(true)
+    })
   })
 
   describe('trips → payments → tracking (sequential lifecycle)', () => {
