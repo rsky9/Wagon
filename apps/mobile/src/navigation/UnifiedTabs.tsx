@@ -189,12 +189,20 @@ function AccountTab({ navigation }: any) {
 export function UnifiedTabs() {
   const { isDark } = useThemeMode()
   const theme = createTheme(isDark)
-  const { offline, retry } = useOffline()
+  const { offline, queued, retry } = useOffline()
   return (
     <View style={{ flex: 1 }}>
-      {offline && (
-        <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm }}>
-          <StateBanner state="offline" onRetry={retry} />
+      {(offline || queued > 0) && (
+        <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm, gap: spacing.xs }}>
+          {offline && <StateBanner state="offline" onRetry={retry} />}
+          {queued > 0 && !offline && (
+            <StateBanner state="offline" onRetry={async () => { const n = await retry(); if (n > 0) { /* replayed */ } }} />
+          )}
+          {queued > 0 && (
+            <View style={{ alignItems: 'center' }}>
+              <Text style={{ color: '#F97316', fontSize: 12, fontWeight: '700' }}>{queued} queued — will send when online</Text>
+            </View>
+          )}
         </View>
       )}
       <Tab.Navigator tabBar={(props) => <FloatingTabBar {...props} />} screenOptions={({ route }) => ({ ...baseTabOptions(theme) })}>

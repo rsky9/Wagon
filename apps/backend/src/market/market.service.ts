@@ -536,7 +536,7 @@ export class MarketService {
     // An open request without a date projects +7 days so the classic expiry
     // sweep (date < now -> expired) never kills fresh demand at birth.
     const projectedDate = request.date && request.date.getTime() > Date.now() ? request.date : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-    await this.prisma.load.create({
+    const created = await this.prisma.load.create({
       data: {
         supplierId: supplier.id,
         pickupAddr: originRef,
@@ -556,6 +556,48 @@ export class MarketService {
         marketRequestId: request.id,
       } as never,
     })
+    // Canonical Shipment+Leg for this projected load — the road projection is
+    // now a full Shipment, so track/claims/planning see it regardless of
+    // whether the demand entered via Load or via MarketRequest.
+    try {
+      const orgId = (await this.prisma.organizationMember.findFirst({ where: { userId: user.id }, select: { organizationId: true } }))?.organizationId ?? null
+      await this.prisma.$transaction(async (tx) => {
+        const shipment = await tx.shipment.create({
+          data: {
+            ref: created.id,
+            commodity: String(material.id),
+            weightKg: weightT * 1000,
+            pieces: 1,
+            pickupWindow: projectedDate,
+            value: Math.round(weightT * distanceKm * ratePerKm),
+            mode: 'road',
+            status: 'planned' as never,
+            ownerOrgId: orgId,
+          } as never,
+        })
+        await tx.shipmentLeg.create({
+          data: {
+            shipmentId: shipment.id,
+            sequence: 1,
+            mode: 'road',
+            pickupAddr: originRef,
+            dropAddr: destinationRef,
+            distanceKm,
+            equipment: 'open',
+            status: 'planned' as never,
+          },
+        })
+        await this.outbox.emit(tx as never, {
+          eventType: 'SHIPMENT',
+          eventCode: 'LOAD_PROJECTED',
+          entityType: 'shipment',
+          entityId: shipment.id,
+          orgId,
+          shipmentId: shipment.id,
+          payload: { ref: created.id, via: 'market_request', requestId: request.id },
+        })
+      })
+    } catch {}
     return null
   }
 
