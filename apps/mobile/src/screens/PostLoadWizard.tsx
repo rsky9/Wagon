@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { TextInput, Pressable, Text, View, Alert } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useTheme, spacing, radius } from '@wagon/design'
 import { Wizard, Field } from '@wagon/components'
 import { api } from '../config'
@@ -398,13 +399,37 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
       {step === 5 && (
         <View style={{ gap: spacing.sm }}>
           <Field label="Ready to publish — quick check:">{null}</Field>
-          <PreviewRow label="Route" value={`${pickup} → ${drop}`} theme={theme} />
+          <PreviewRow label="Route" value={`${pickup}${halt.trim() ? ` → ${halt}` : ''} → ${drop}`} theme={theme} />
           <PreviewRow label="Cargo" value={`${weight} t · ${material} · ×${Number(truckCount) || 1} trucks`} theme={theme} />
           <PreviewRow label="Truck" value={`${truckType} · ${modelName} · ${bodyType}`} theme={theme} />
           <PreviewRow label="Pickup" value={pickupDate} theme={theme} />
           <PreviewRow label={t('postLoad.stepPricing')} value={commercialModels.find((m) => m.key === commercialModel)?.label ?? ''} theme={theme} />
           <PreviewRow label="Advance" value={advanceAmount ? `₹${advanceAmount}` : advancePct ? `${advancePct}%` : '—'} theme={theme} />
           <PreviewRow label="Payment" value={payLater ? 'Pay later' : 'Advance'} theme={theme} />
+          <Pressable
+            style={{ borderRadius: radius.md, borderWidth: 1, borderColor: theme.border, padding: spacing.md, alignItems: 'center', marginTop: spacing.md }}
+            onPress={async () => {
+              const tpl = { pickup, halt, drop, weight, truckCount, material, truckType, modelId, bodyType }
+              await AsyncStorage.setItem('wagon.loadTemplate', JSON.stringify(tpl)).catch(() => {})
+              Alert.alert('Template saved', 'Next load will pre-fill from this template')
+            }}
+          >
+            <Text style={{ color: theme.primary, fontWeight: '700' }}>Save as template</Text>
+          </Pressable>
+          <Pressable
+            style={{ borderRadius: radius.md, borderWidth: 1, borderColor: theme.border, padding: spacing.md, alignItems: 'center' }}
+            onPress={async () => {
+              const raw = await AsyncStorage.getItem('wagon.loadTemplate').catch(() => null)
+              if (!raw) { Alert.alert('No template', 'Save a template first'); return }
+              const tpl = JSON.parse(raw)
+              setPickup(tpl.pickup ?? ''); setHalt(tpl.halt ?? ''); setDrop(tpl.drop ?? ''); setWeight(tpl.weight ?? '')
+              setTruckCount(tpl.truckCount ?? '1'); setMaterial(tpl.material ?? ''); setTruckType(tpl.truckType ?? 'container')
+              setModelId(tpl.modelId ?? ''); setBodyType(tpl.bodyType ?? 'Open body')
+              Alert.alert('Template loaded', 'Form filled from your saved template')
+            }}
+          >
+            <Text style={{ color: theme.primary, fontWeight: '700' }}>Load template</Text>
+          </Pressable>
         </View>
       )}
     </Wizard>
