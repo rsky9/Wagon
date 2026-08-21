@@ -132,7 +132,7 @@ export function VehicleDetailScreen({ vehicleId, onBack }: Props) {
         rcNumber: vehicle?.rcNumber ?? vehicle?.vehicleNo,
         imageKey: presigned.key,
       })
-      Alert.alert('Verified', `Vehicle verified via ${res.verification.source} · RC ${res.verification.verified ? 'confirmed' : 'pending'}`)
+      Alert.alert('Verified', `Vehicle verified · RC ${res.verification.verified ? 'confirmed' : 'pending'}`)
       fetch()
     } catch (e) {
       Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Verification failed')
