@@ -81,9 +81,10 @@ export function ProfileScreen({ onOpenKyc, onLogout, onOpenTrucks, onOpenDrivers
     profile?.kycStatus === 'approved' ? 100 : profile?.kycStatus === 'pending' ? 60 : profile?.kycStatus === 'rejected' ? 20 : 0
   const caps = profile?.capabilities?.length ? profile.capabilities : [profile?.role ?? '']
   const verified = profile?.verified || profile?.supplierVerified || profile?.transporterVerified
-  const isTransporter = caps.includes('transporter')
-  const isSupplier = caps.includes('supplier')
-  const isEnablement = caps.some((c) => ['forwarder', 'warehouse', 'carrier'].includes(c)) || isSupplier || isTransporter
+  // Every user type sees all account sections — backend enforces authorization.
+  const isTransporter = true
+  const isSupplier = true
+  const isEnablement = true
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>

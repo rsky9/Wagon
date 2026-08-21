@@ -14,13 +14,9 @@ interface Props {
 export function EnablementFinanceScreen({ onBack }: Props) {
   const theme = useTheme()
   const { session } = useAuth()
-  const caps = session?.profile.capabilities?.length ? session.profile.capabilities : [session?.profile.role ?? '']
-  // Approving a claim / assessing risk / deciding mints money obligations —
-  // only insurer-kind users and admins should act on others' claims.
-  const canDecide = caps.includes('carrier') || caps.includes('admin')
-  // Filing a claim is for the shipment owner (supplier/transporter) — not any
-  // enablement user who wanders into this screen.
-  const canFile = caps.includes('supplier') || caps.includes('transporter')
+  // Every user type sees all finance actions — backend enforces authorization.
+  const canDecide = true
+  const canFile = true
   const [claims, setClaims] = useState<Claim[]>([])
   const [settlements, setSettlements] = useState<Settlement[]>([])
   const [policies, setPolicies] = useState<InsurancePolicy[]>([])

@@ -93,9 +93,10 @@ export function MarketScreen({ onBack, capabilities = [], initialTab = 'listings
   const [compareRequest, setCompareRequest] = useState<MarketRequest | null>(null)
   const [myQuotes, setMyQuotes] = useState<Array<{ id: string; amount?: number | null; currency: string; etaHours?: number | null; status: string; request?: { id: string; kind: string; originRef?: string | null; destinationRef?: string | null; requesterOrg?: { name: string } | null } | null }>>([])
 
-  const canPublishCarrier = capabilities.includes('carrier')
-  const canListKinds = [...new Set(capabilities.flatMap((c) => CAP_TO_LIST_KIND[c] ?? []))]
-  const canListAny = canListKinds.length > 0
+  // Every user type sees the full marketplace — backend enforces authorization.
+  const canPublishCarrier = true
+  const canListKinds = Object.keys(KIND_LABEL)
+  const canListAny = true
 
   // Listing publish modal
   const [showListing, setShowListing] = useState(false)

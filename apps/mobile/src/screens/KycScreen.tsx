@@ -253,8 +253,8 @@ export function KycScreen({ onBack }: Props) {
             </Text>
           </View>
         ) : (
-          STAGES.filter((s) => s.kinds.some((k) => required.includes(k))).map((stage) => {
-            const stageKinds = stage.kinds.filter((k) => required.includes(k))
+          STAGES.map((stage) => {
+            const stageKinds = stage.kinds
             const stageDone = stageKinds.filter((k) => statusFor(k) === 'approved').length
             const stageComplete = stageDone === stageKinds.length
             return (

@@ -47,10 +47,8 @@ const TONE: Record<string, StatusTone> = {
 export function TripsScreen({ onBack, onOpenExecution, onReturnLoads, capabilities = [] }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
-  // Transporter-side execution (start/mark-delivered/POD/payout/rate/return loads)
-  // is only valid for users with the transporter capability; suppliers and
-  // others should only track their trips, not run them.
-  const canHaul = capabilities.includes('transporter')
+  // Every user type sees all trip actions — backend enforces authorization.
+  const canHaul = true
   const { stepUp } = useStepUp()
   const [trips, setTrips] = useState<TripInfo[]>([])
   const [pending, setPending] = useState<Array<{ id: string; load: Load }>>([])

@@ -237,13 +237,13 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
           </View>
         )}
 
-        {/* Quick actions */}
+        {/* Quick actions — every user type sees the full set (backend still enforces authorization) */}
         <View style={styles.quickRow}>
-          {isSupplier && <QuickAction icon="➕" label="Add load" onPress={onPostLoad} tone="primary" />}
-          {isTransporter && onOpenLoadFeed && <QuickAction icon="🔎" label="Find loads" onPress={onOpenLoadFeed} tone="primary" />}
-          {isSupplier && onOpenMyLoads && <QuickAction icon="🗂️" label="My loads" onPress={onOpenMyLoads} tone="primary" />}
+          <QuickAction icon="➕" label="Add load" onPress={onPostLoad} tone="primary" />
+          {onOpenLoadFeed && <QuickAction icon="🔎" label="Find loads" onPress={onOpenLoadFeed} tone="primary" />}
+          {onOpenMyLoads && <QuickAction icon="🗂️" label="My loads" onPress={onOpenMyLoads} tone="primary" />}
           <QuickAction icon="🏬" label="Marketplace" onPress={onOpenMarketplace} tone="primary" />
-          {onOpenMarketRequests && (!isSupplier || hasNonTransportCap) && <QuickAction icon="📦" label="Post shipment" onPress={onOpenMarketRequests} tone="primary" />}
+          {onOpenMarketRequests && <QuickAction icon="📦" label="Post shipment" onPress={onOpenMarketRequests} tone="primary" />}
         </View>
 
         {/* KPI hero grid */}

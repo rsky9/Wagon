@@ -43,12 +43,9 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
   const [coverPlanId, setCoverPlanId] = useState<string | null>(null)
   const [coverValue, setCoverValue] = useState('')
 
-  // Role-aware actions: only show what this user's capabilities support.
-  const caps = session?.profile.capabilities?.length ? session.profile.capabilities : [session?.profile.role ?? '']
-  // Operational actions (leg transitions, cargo split/container) belong to the
-  // parties executing the shipment; insurance is a money action.
-  const canOperate = caps.some((c) => ['supplier', 'transporter', 'forwarder', 'warehouse'].includes(c))
-  const canInsure = caps.some((c) => ['supplier', 'carrier', 'forwarder'].includes(c))
+  // Every user type sees all shipment actions — backend enforces authorization.
+  const canOperate = true
+  const canInsure = true
 
   const fetch = useCallback(() => {
     setError(null)
@@ -249,20 +246,11 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
     </SafeAreaView>
   }
 
-  // Role-aware actions: only show what this user's capabilities support.
   const actions: Array<{ label: string; fn: () => void }> = []
-  if (caps.some((c) => ['supplier', 'transporter', 'forwarder', 'warehouse', 'carrier'].includes(c))) {
-    actions.push({ label: '🗺️ Propose plan', fn: proposePlan })
-  }
-  if (caps.includes('forwarder') || caps.includes('supplier')) {
-    actions.push({ label: '🧾 Forward order', fn: createOrder })
-  }
-  if (caps.includes('supplier') || caps.includes('transporter')) {
-    actions.push({ label: '⚖️ File claim', fn: fileClaim })
-  }
-  if (caps.some((c) => ['forwarder', 'carrier', 'supplier'].includes(c))) {
-    actions.push({ label: '🚢 Book carrier', fn: bookCarrier })
-  }
+  actions.push({ label: '🗺️ Propose plan', fn: proposePlan })
+  actions.push({ label: '🧾 Forward order', fn: createOrder })
+  actions.push({ label: '⚖️ File claim', fn: fileClaim })
+  actions.push({ label: '🚢 Book carrier', fn: bookCarrier })
 
   // AI intelligence agents (informational, human-decides; results surfaced as alerts).
   const aiRisk = () => {
@@ -289,11 +277,9 @@ export function ShipmentDetailScreen({ shipmentId, onBack, onOpenLoad }: Props) 
   const draftDoc = (docType: string) => {
     action('draft', () => api.post('/ai/draft-document', { shipmentId, docType }), `Draft ${docType.replace(/_/g, ' ')} ready`)
   }
-  if (caps.some((c) => ['supplier', 'forwarder', 'warehouse', 'transporter'].includes(c))) {
-    actions.push({ label: '🛡️ Risk', fn: aiRisk })
-    actions.push({ label: '⏱️ AI ETA', fn: aiEta })
-    actions.push({ label: '📄 Draft doc', fn: aiDraftDoc })
-  }
+  actions.push({ label: '🛡️ Risk', fn: aiRisk })
+  actions.push({ label: '⏱️ AI ETA', fn: aiEta })
+  actions.push({ label: '📄 Draft doc', fn: aiDraftDoc })
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>

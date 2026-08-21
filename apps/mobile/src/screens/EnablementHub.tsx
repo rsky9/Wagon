@@ -47,12 +47,10 @@ export function EnablementHub({ capabilities = [], onOpen }: Props) {
     api.get<{ plans: Plan[] }>('/planning/plans').then((r) => setPlans(r.plans.length)).catch(() => {})
   }, [])
 
-  // What the user can actually act on: their orgs (authoritative) merged with
-  // their declared capabilities (before orgs load). Backend still enforces the
-  // real gate — this only decides what's visible.
-  const canForward = orgKinds.length ? orgKinds.includes('forwarder') : capabilities.includes('forwarder')
-  const canStore = orgKinds.length ? orgKinds.some((k) => WAREHOUSE_KINDS.includes(k)) : capabilities.includes('warehouse')
-  const isEnablementUser = capabilities.includes('forwarder') || capabilities.includes('warehouse') || capabilities.includes('carrier')
+  // Every user type sees the full enablement hub — backend enforces authorization.
+  const canForward = true
+  const canStore = true
+  const isEnablementUser = true
 
   const stats: Stat[] = [
     { key: 'shipments', label: 'Shipments', value: shipments, icon: '📦' },
@@ -73,14 +71,7 @@ export function EnablementHub({ capabilities = [], onOpen }: Props) {
     { key: 'contracts', title: 'Contracts & Assets', subtitle: 'Agreements, invoices, containers, returns & handovers', icon: '📝', count: 0, screen: 'contracts' },
   ]
 
-  // Gate sections to what the user can actually do.
-  const sections = allSections.filter((s) => {
-    switch (s.key) {
-      case 'forwarding': return canForward
-      case 'storage': return canStore
-      default: return true
-    }
-  })
+  const sections = allSections
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
