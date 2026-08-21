@@ -190,10 +190,11 @@ export function UnifiedTabs() {
   const { isDark } = useThemeMode()
   const theme = createTheme(isDark)
   const { offline, queued, retry } = useOffline()
+  const insets = useSafeAreaInsets()
   return (
     <View style={{ flex: 1 }}>
       {(offline || queued > 0) && (
-        <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm, gap: spacing.xs }}>
+        <View style={{ paddingHorizontal: spacing.md, paddingTop: Math.max(insets.top, spacing.sm), gap: spacing.xs }}>
           {offline && <StateBanner state="offline" onRetry={retry} />}
           {queued > 0 && !offline && (
             <StateBanner state="offline" onRetry={async () => { const n = await retry(); if (n > 0) { /* replayed */ } }} />
