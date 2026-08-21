@@ -23,6 +23,7 @@ export function ShipmentsScreen({ onBack, onOpen }: Props) {
   const [destination, setDestination] = useState('')
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [facilities, setFacilities] = useState<Array<{ id: string; name: string; city?: string | null; kind: string }>>([])
 
   const fetch = useCallback(() => {
     const params = new URLSearchParams()
@@ -30,6 +31,7 @@ export function ShipmentsScreen({ onBack, onOpen }: Props) {
     if (statusFilter) params.set('status', statusFilter)
     const qs = params.toString() ? `?${params.toString()}` : ''
     api.get<{ shipments: Shipment[] }>(`/foundation/shipments${qs}`).then((r) => setShipments(r.shipments)).catch(() => {}).finally(() => setLoading(false))
+    api.get<{ facilities: Array<{ id: string; name: string; city?: string | null; kind: string }> }>('/storage/facilities').then((r) => setFacilities(r.facilities ?? [])).catch(() => {})
   }, [query, statusFilter])
   useEffect(() => { fetch() }, [fetch])
 
@@ -70,14 +72,25 @@ export function ShipmentsScreen({ onBack, onOpen }: Props) {
           placeholder="Commodity" placeholderTextColor={theme.mutedForeground}
           value={commodity} onChangeText={setCommodity}
         />
+        {facilities.length > 0 && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+            {facilities.slice(0, 6).map((f) => (
+              <Pressable key={f.id} style={[styles.facilityChip, { backgroundColor: origin === (f.city ?? f.name) || destination === (f.city ?? f.name) ? theme.primary : theme.background, borderColor: theme.border }]} onPress={() => { if (!origin) setOrigin(f.city ?? f.name); else if (!destination) setDestination(f.city ?? f.name); else setOrigin(f.city ?? f.name) }}>
+                <Text style={{ color: origin === (f.city ?? f.name) || destination === (f.city ?? f.name) ? '#fff' : theme.mutedForeground, fontSize: 12, fontWeight: '700' }}>🏭 {f.name}{f.city ? ` · ${f.city}` : ''}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
         <TextInput
           style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]}
-          placeholder="Origin (city)" placeholderTextColor={theme.mutedForeground}
+          placeholder="Origin (city) — tap a facility above or type"
+          placeholderTextColor={theme.mutedForeground}
           value={origin} onChangeText={setOrigin}
         />
         <TextInput
           style={[styles.input, { backgroundColor: theme.background, color: theme.foreground, borderColor: theme.border }]}
-          placeholder="Destination (city)" placeholderTextColor={theme.mutedForeground}
+          placeholder="Destination (city) — tap a facility above or type"
+          placeholderTextColor={theme.mutedForeground}
           value={destination} onChangeText={setDestination}
         />
         <View style={styles.row}>
@@ -146,6 +159,7 @@ const styles = StyleSheet.create({
   form: { margin: spacing.lg, borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, gap: spacing.sm },
   formTitle: { fontSize: 15, fontWeight: '800', marginBottom: spacing.xs },
   input: { borderRadius: radius.md, borderWidth: 1, padding: spacing.md, fontSize: 14 },
+  facilityChip: { borderRadius: radius.full, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   row: { flexDirection: 'row', gap: spacing.sm },
   half: { flex: 1 },
   createBtn: { borderRadius: radius.md, padding: spacing.md, alignItems: 'center', marginTop: spacing.xs },

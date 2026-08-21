@@ -43,6 +43,7 @@ export function GlobalScreen({ onBack }: Props) {
   const [docCountry, setDocCountry] = useState<Country | null>(null)
   const [docList, setDocList] = useState<string[]>([])
   const [docLoading, setDocLoading] = useState(false)
+  const [compliance, setCompliance] = useState<Array<{ shipmentId: string; ref: string; complete: boolean; missing: string[]; requiredCount: number }>>([])
 
   const setHome = (code: string) => {
     api.post('/countries/home', { code }).then(() => { setHomeCode(code); setFromCode(code); Alert.alert('Home country', `Set to ${code}`) }).catch((e) => Alert.alert('Error', e.message))
@@ -52,10 +53,11 @@ export function GlobalScreen({ onBack }: Props) {
     setDocCountry(country)
     setDocLoading(true)
     setDocList([])
-    api.get<{ documents: string[] }>(`/countries/${country.code}/documents`)
-      .then((r) => setDocList(r.documents ?? []))
-      .catch((e) => Alert.alert('Error', e instanceof Error ? e.message : 'Could not load documents'))
-      .finally(() => setDocLoading(false))
+    setCompliance([])
+    Promise.all([
+      api.get<{ documents: string[] }>(`/countries/${country.code}/documents`).then((r) => setDocList(r.documents ?? [])).catch(() => {}),
+      api.get<{ shipments: Array<{ shipmentId: string; ref: string; complete: boolean; missing: string[]; requiredCount: number }> }>('/global/compliance/overview').then((r) => setCompliance(r.shipments ?? [])).catch(() => {}),
+    ]).finally(() => setDocLoading(false))
   }
 
   return (
@@ -131,12 +133,31 @@ export function GlobalScreen({ onBack }: Props) {
               </View>
             ) : (
               <ScrollView contentContainerStyle={{ gap: spacing.sm, paddingBottom: spacing.lg }}>
-                {docList.map((d, i) => (
-                  <View key={`${d}-${i}`} style={[styles.docRow, { backgroundColor: theme.background, borderColor: theme.border }]}>
-                    <Text style={styles.docIndex}>{String(i + 1).padStart(2, '0')}</Text>
-                    <Text style={[styles.docName, { color: theme.foreground }]}>{d.replace(/_/g, ' ')}</Text>
+                {docList.map((d, i) => {
+                  const missingCount = compliance.filter((c) => c.missing.includes(d)).length
+                  return (
+                    <View key={`${d}-${i}`} style={[styles.docRow, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                      <Text style={styles.docIndex}>{String(i + 1).padStart(2, '0')}</Text>
+                      <Text style={[styles.docName, { color: theme.foreground }]}>{d.replace(/_/g, ' ')}</Text>
+                      {missingCount > 0 && <Text style={{ color: theme.warning, fontSize: 11, fontWeight: '700' }}>{missingCount} shipment(s) missing</Text>}
+                    </View>
+                  )
+                })}
+                {compliance.length > 0 && (
+                  <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+                    <Text style={[styles.sheetSub, { color: theme.foreground, fontWeight: '800' }]}>Your shipments — compliance</Text>
+                    {compliance.slice(0, 6).map((c) => (
+                      <View key={c.shipmentId} style={[styles.docRow, { backgroundColor: c.complete ? theme.success + '1A' : theme.warning + '1A', borderColor: c.complete ? theme.success + '44' : theme.warning + '44' }]}>
+                        <Text style={{ fontSize: 14 }}>{c.complete ? '✅' : '⚠️'}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.docName, { color: theme.foreground, fontSize: 13 }]}>{c.ref}</Text>
+                          <Text style={{ color: theme.mutedForeground, fontSize: 11 }}>{c.complete ? 'All documents ready' : `Missing: ${c.missing.join(', ').replace(/_/g, ' ') || '—'}`}</Text>
+                        </View>
+                        <Text style={{ color: c.complete ? theme.success : theme.warning, fontSize: 11, fontWeight: '700' }}>{c.complete ? 'Complete' : `${c.requiredCount - c.missing.length}/${c.requiredCount}`}</Text>
+                      </View>
+                    ))}
                   </View>
-                ))}
+                )}
               </ScrollView>
             )}
             <Pressable style={[styles.createBtn, { backgroundColor: '#F97316' }]} onPress={() => setDocCountry(null)}>
