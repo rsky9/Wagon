@@ -34,15 +34,15 @@ export const XP_CASH_RATE = 0.1 // ₹ per XP (100 XP = ₹10)
 export const QUESTS: Record<'transporter' | 'supplier', QuestDef[]> = {
   transporter: [
     { id: 'company', title: 'Company profile', description: 'Tell us about your business', icon: '🏢', xp: 40, target: 'Settings' },
-    { id: 'truck', title: 'Add your first truck', description: 'Start building your fleet', icon: '🚚', xp: 60, target: 'MyTrucks', badge: 'fleet' },
+    { id: 'truck', title: 'Add your first vehicle', description: 'Start building your fleet', icon: '🚚', xp: 60, target: 'MyVehicles', badge: 'fleet' },
     { id: 'driver', title: 'Add a driver', description: 'Bring a driver on board', icon: '🧑‍✈️', xp: 40, target: 'Drivers', badge: 'crew' },
-    { id: 'kyc', title: 'Verify your identity', description: 'Complete KYC to unlock more loads', icon: '🛡️', xp: 60, target: 'Kyc', badge: 'verified' },
-    { id: 'bank', title: 'Connect payouts', description: 'Add bank details for settlements', icon: '₹', xp: 40, target: 'Finance', badge: 'paid' },
+    { id: 'kyc', title: 'Verify your identity', description: 'Verify when you\'re ready to bid or get paid', icon: '🛡️', xp: 60, target: 'Kyc', badge: 'verified' },
+    { id: 'bank', title: 'Connect payouts', description: 'Add bank details before your first payout', icon: '₹', xp: 40, target: 'Finance', badge: 'paid' },
   ],
   supplier: [
     { id: 'company', title: 'Company profile', description: 'Complete your business details', icon: '🏢', xp: 40, target: 'Settings' },
     { id: 'load', title: 'Post your first load', description: 'Get trucks bidding for your freight', icon: '📦', xp: 60, target: 'PostLoadWizard', badge: 'firstLoad' },
-    { id: 'kyc', title: 'Verify your identity', description: 'Complete KYC to unlock faster booking', icon: '🛡️', xp: 60, target: 'Kyc', badge: 'verified' },
+    { id: 'kyc', title: 'Verify your identity', description: 'Verify when you\'re ready to post or pay', icon: '🛡️', xp: 60, target: 'Kyc', badge: 'verified' },
     { id: 'pay', title: 'Set payment terms', description: 'Choose advance / pay-later options', icon: '₹', xp: 30, target: 'Settings', badge: 'paid' },
   ],
 }

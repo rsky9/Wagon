@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   StyleSheet,
   Text,
@@ -7,27 +7,21 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  TextInput,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, spacing, radius } from '@wagon/design'
+import { Button } from '@wagon/components'
 import { api } from '../config'
 import { completeQuestWithXp } from '../gamification'
 import { uploadToPresignedUrl } from '@wagon/api-client'
 import * as ImagePicker from 'expo-image-picker'
 import { useI18n } from '@wagon/i18n'
+import { useAuth } from '../auth'
 
 interface Props {
   onBack: () => void
 }
-
-const DOCS = [
-  { kind: 'pan', label: 'PAN card', icon: '🪪' },
-  { kind: 'aadhar', label: 'Aadhaar card', icon: '🆔' },
-  { kind: 'rc', label: 'Vehicle RC', icon: '🚛' },
-  { kind: 'license', label: 'Driving license', icon: '📄' },
-  { kind: 'selfie', label: 'Selfie', icon: '🤳' },
-  { kind: 'bank', label: 'Bank / cheque', icon: '🏦' },
-] as const
 
 interface KycDoc {
   id: string
@@ -35,29 +29,57 @@ interface KycDoc {
   status: string
 }
 
+const DOC_LABELS: Record<string, { label: string; icon: string; hint: string }> = {
+  aadhar: { label: 'Aadhaar', icon: '🆔', hint: 'Person identification (Setu)' },
+  selfie: { label: 'Selfie', icon: '🤳', hint: 'Face verification (face API)' },
+  pan: { label: 'PAN card', icon: '🪪', hint: 'Financial verification (Setu)' },
+  bank: { label: 'Bank / cheque', icon: '🏦', hint: 'Payout account (Setu)' },
+  rc: { label: 'Vehicle RC', icon: '🚛', hint: 'Vehicle verification (Vahan)' },
+  license: { label: 'Driving license', icon: '📄', hint: 'Driver verification (DigiLocker)' },
+  company: { label: 'Company proof', icon: '🏢', hint: 'Business verification (KYB)' },
+}
+
+// Docs that are verified by submitting data (Setu / face) rather than an image review.
+const DATA_DOCS = ['aadhar', 'pan', 'bank']
+const IMAGE_DOCS = ['selfie', 'rc', 'license']
+
 export function KycScreen({ onBack }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
+  const { session } = useAuth()
+  const [required, setRequired] = useState<string[]>([])
   const [docs, setDocs] = useState<KycDoc[]>([])
   const [loading, setLoading] = useState(true)
-  const [uploading, setUploading] = useState<string | null>(null)
+  const [verifyKind, setVerifyKind] = useState<string | null>(null)
+  const [inputs, setInputs] = useState<Record<string, string>>({})
+  const [busy, setBusy] = useState(false)
 
-  const fetchDocs = () => {
-    api
-      .get<{ docs: KycDoc[] }>('/kyc/mine')
-      .then((res) => setDocs(res.docs))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }
-
-  useEffect(() => {
-    fetchDocs()
+  const fetchAll = useCallback(() => {
+    Promise.all([
+      api.get<{ requirements: string[] }>('/kyc/requirements').then((r) => setRequired(r.requirements)).catch(() => {}),
+      api.get<{ docs: KycDoc[] }>('/kyc/mine').then((r) => setDocs(r.docs)).catch(() => {}),
+    ]).finally(() => setLoading(false))
   }, [])
 
-  const done = docs.filter((d) => d.status === 'approved').length
-  const pct = Math.round((done / DOCS.length) * 100)
+  useEffect(() => { fetchAll() }, [fetchAll])
 
-  const upload = async (kind: string) => {
+  const statusFor = (kind: string) => docs.find((d) => d.kind === kind)?.status
+  const done = required.filter((k) => statusFor(k) === 'approved').length
+  const pct = required.length ? Math.round((done / required.length) * 100) : 0
+
+  // Award the KYC quest XP once identity (aadhar + selfie) is verified.
+  const kycQuestAwarded = useRef(false)
+  useEffect(() => {
+    if (kycQuestAwarded.current) return
+    const identity = ['aadhar', 'selfie']
+    const approvedAll = identity.every((k) => required.includes(k) && statusFor(k) === 'approved')
+    if (approvedAll) {
+      kycQuestAwarded.current = true
+      void completeQuestWithXp('kyc', 60)
+    }
+  }, [docs, required])
+
+  const pickAndUpload = async (kind: string) => {
     try {
       const picked = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -65,9 +87,8 @@ export function KycScreen({ onBack }: Props) {
       })
       if (picked.canceled || !picked.assets?.[0]) return
       const asset = picked.assets[0]
-
-      setUploading(kind)
-      const presigned = await api.post<{ uploadUrl: string }>('/kyc/upload', {
+      setBusy(true)
+      const presigned = await api.post<{ uploadUrl: string; documentId: string }>('/kyc/upload', {
         kind,
         mimeType: asset.mimeType ?? 'image/jpeg',
         size: asset.fileSize ?? 0,
@@ -77,29 +98,79 @@ export function KycScreen({ onBack }: Props) {
         name: `${kind}.jpg`,
         type: asset.mimeType ?? 'image/jpeg',
       })
-      Alert.alert(t('ui.submitted'), `${kind} submitted for review`)
-      fetchDocs()
+      // Run provider verification: selfie → face API, rc/license → Vahan/DigiLocker.
+      await api.post('/kyc/verify', {
+        kind,
+        selfieKey: kind === 'selfie' ? `${kind}-uploaded` : undefined,
+        rcNumber: kind === 'rc' ? inputs.rcNumber ?? '' : undefined,
+        licenseNumber: kind === 'license' ? inputs.licenseNumber ?? '' : undefined,
+      })
+      Alert.alert('Verified', `${DOC_LABELS[kind]?.label ?? kind} verified`)
+      fetchAll()
     } catch (e) {
-      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Upload failed')
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Verification failed')
     } finally {
-      setUploading(null)
+      setBusy(false)
     }
   }
 
-  // Only award the KYC quest XP once identity is ACTUALLY verified (pan+aadhar
-  // approved), never for a single document upload. Fires once per session.
-  const kycQuestAwarded = useRef(false)
-  useEffect(() => {
-    if (kycQuestAwarded.current) return
-    const identity = ['pan', 'aadhar']
-    const approvedAll = identity.every((k) => docs.some((d) => d.kind === k && d.status === 'approved'))
-    if (approvedAll) {
-      kycQuestAwarded.current = true
-      void completeQuestWithXp('kyc', 60)
+  const verifyData = async (kind: string) => {
+    setBusy(true)
+    try {
+      const payload: Record<string, string> = { kind }
+      if (kind === 'pan') payload.pan = inputs.pan ?? ''
+      if (kind === 'aadhar') payload.aadhar = inputs.aadhar ?? ''
+      if (kind === 'bank') {
+        payload.account = inputs.account ?? ''
+        payload.ifsc = inputs.ifsc ?? ''
+        payload.upi = inputs.upi ?? ''
+        payload.statementKey = inputs.statementKey ?? ''
+      }
+      const res = await api.post<{ verified: boolean; source: string }>('/kyc/verify', payload)
+      Alert.alert(res.verified ? 'Verified' : 'Not verified', res.verified ? `Verified via ${res.source}` : 'Please check your details and try again')
+      if (res.verified) setVerifyKind(null)
+      fetchAll()
+    } catch (e) {
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Verification failed')
+    } finally {
+      setBusy(false)
     }
-  }, [docs])
+  }
 
-  const statusFor = (kind: string) => docs.find((d) => d.kind === kind)?.status
+  const renderVerifyForm = (kind: string) => {
+    const isImage = IMAGE_DOCS.includes(kind)
+    return (
+      <View style={[styles.form, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        {kind === 'pan' && (
+          <TextInput style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]} value={inputs.pan ?? ''} onChangeText={(v) => setInputs((s) => ({ ...s, pan: v }))} placeholder="PAN number (e.g. ABCDE1234F)" placeholderTextColor={theme.mutedForeground + '88'} autoCapitalize="characters" />
+        )}
+        {kind === 'aadhar' && (
+          <TextInput style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]} value={inputs.aadhar ?? ''} onChangeText={(v) => setInputs((s) => ({ ...s, aadhar: v }))} placeholder="Aadhaar number (12 digits)" placeholderTextColor={theme.mutedForeground + '88'} keyboardType="number-pad" maxLength={12} />
+        )}
+        {kind === 'bank' && (
+          <>
+            <TextInput style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]} value={inputs.account ?? ''} onChangeText={(v) => setInputs((s) => ({ ...s, account: v }))} placeholder="Bank account number" placeholderTextColor={theme.mutedForeground + '88'} keyboardType="number-pad" />
+            <TextInput style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]} value={inputs.ifsc ?? ''} onChangeText={(v) => setInputs((s) => ({ ...s, ifsc: v }))} placeholder="IFSC code" placeholderTextColor={theme.mutedForeground + '88'} autoCapitalize="characters" />
+            <TextInput style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]} value={inputs.upi ?? ''} onChangeText={(v) => setInputs((s) => ({ ...s, upi: v }))} placeholder="UPI ID (optional)" placeholderTextColor={theme.mutedForeground + '88'} />
+          </>
+        )}
+        {kind === 'rc' && (
+          <TextInput style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]} value={inputs.rcNumber ?? ''} onChangeText={(v) => setInputs((s) => ({ ...s, rcNumber: v }))} placeholder="RC / vehicle number" placeholderTextColor={theme.mutedForeground + '88'} autoCapitalize="characters" />
+        )}
+        {kind === 'license' && (
+          <TextInput style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]} value={inputs.licenseNumber ?? ''} onChangeText={(v) => setInputs((s) => ({ ...s, licenseNumber: v }))} placeholder="Driving license number" placeholderTextColor={theme.mutedForeground + '88'} autoCapitalize="characters" />
+        )}
+        {isImage ? (
+          <Button label={`Upload & verify ${DOC_LABELS[kind]?.label ?? kind}`} onPress={() => pickAndUpload(kind)} loading={busy} size="md" />
+        ) : (
+          <Button label="Verify" onPress={() => verifyData(kind)} loading={busy} size="md" />
+        )}
+        <Pressable onPress={() => setVerifyKind(null)} hitSlop={8}>
+          <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: spacing.sm }}>Cancel</Text>
+        </Pressable>
+      </View>
+    )
+  }
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
@@ -114,53 +185,55 @@ export function KycScreen({ onBack }: Props) {
       <ScrollView contentContainerStyle={styles.body}>
         <View style={[styles.progressCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <View style={styles.progressTop}>
-            <Text style={[styles.progressTitle, { color: theme.foreground }]}>KYC {pct}% complete</Text>
+            <Text style={[styles.progressTitle, { color: theme.foreground }]}>Identity {pct}% complete</Text>
             <Text style={[styles.progressSub, { color: theme.mutedForeground }]}>
-              Unlock payments, payouts & full quoting
+              {done}/{required.length} verified
             </Text>
           </View>
           <View style={[styles.progressTrack, { backgroundColor: theme.muted }]}>
             <View style={[styles.progressFill, { width: `${pct}%`, backgroundColor: theme.primary }]} />
           </View>
           <Text style={[styles.waitNote, { color: theme.mutedForeground }]}>
-            Usually approved in under 24 hours
+            Explore the app freely — verification is only needed when you post a load, bid, accept or get paid.
           </Text>
         </View>
 
         {loading ? (
           <ActivityIndicator color={theme.primary} style={{ marginTop: spacing.xxl }} />
+        ) : required.length === 0 ? (
+          <Text style={{ color: theme.mutedForeground, textAlign: 'center', marginTop: 60 }}>
+            No additional verification needed for your account.
+          </Text>
         ) : (
-          DOCS.map((doc) => {
-            const status = statusFor(doc.kind)
+          required.map((kind) => {
+            const status = statusFor(kind)
+            const meta = DOC_LABELS[kind] ?? { label: kind, icon: '📄', hint: '' }
             return (
-              <Pressable
-                key={doc.kind}
-                style={[styles.row, { backgroundColor: theme.card, borderColor: theme.border }]}
-                onPress={() => upload(doc.kind)}
-                disabled={uploading !== null}
-              >
-                <View style={[styles.rowIcon, { backgroundColor: theme.muted }]}>
-                  <Text style={{ fontSize: 20 }}>{doc.icon}</Text>
-                </View>
-                <View style={styles.rowLeft}>
-                  <Text style={[styles.rowLabel, { color: theme.foreground }]}>{doc.label}</Text>
-                  <Text
-                    style={[
-                      styles.rowStatus,
-                      { color: status === 'approved' ? theme.success : status === 'pending' ? theme.warning : status === 'rejected' ? theme.danger : theme.mutedForeground },
-                    ]}
-                  >
-                    {status === 'approved' ? '✓ Verified' : status === 'pending' ? 'Under review' : status === 'rejected' ? 'Rejected — tap to retry' : 'Not uploaded'}
-                  </Text>
-                </View>
-                {uploading === doc.kind ? (
-                  <ActivityIndicator color={theme.primary} />
-                ) : (
-                  <Text style={[styles.uploadText, { color: status === 'approved' ? theme.success : theme.primary }]}>
-                    {status === 'approved' ? '✓' : status === 'pending' ? '•••' : 'Upload'}
-                  </Text>
-                )}
-              </Pressable>
+              <View key={kind}>
+                <Pressable
+                  style={[styles.row, { backgroundColor: theme.card, borderColor: theme.border }]}
+                  onPress={() => { setVerifyKind(kind); setInputs({}) }}
+                  disabled={busy || status === 'approved'}
+                >
+                  <View style={[styles.rowIcon, { backgroundColor: theme.muted }]}>
+                    <Text style={{ fontSize: 20 }}>{meta.icon}</Text>
+                  </View>
+                  <View style={styles.rowLeft}>
+                    <Text style={[styles.rowLabel, { color: theme.foreground }]}>{meta.label}</Text>
+                    <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>{meta.hint}</Text>
+                    <Text
+                      style={[
+                        styles.rowStatus,
+                        { color: status === 'approved' ? theme.success : status === 'pending' ? theme.warning : status === 'rejected' ? theme.danger : theme.mutedForeground },
+                      ]}
+                    >
+                      {status === 'approved' ? '✓ Verified' : status === 'pending' ? 'Under review' : status === 'rejected' ? 'Rejected — tap to retry' : 'Tap to verify'}
+                    </Text>
+                  </View>
+                  {status === 'approved' ? <Text style={{ color: theme.success, fontWeight: '800' }}>✓</Text> : <Text style={{ color: theme.primary, fontWeight: '700' }}>Verify</Text>}
+                </Pressable>
+                {verifyKind === kind && renderVerifyForm(kind)}
+              </View>
             )
           })
         )}
@@ -188,7 +261,7 @@ const styles = StyleSheet.create({
   progressSub: { fontSize: 12, marginTop: 2 },
   progressTrack: { height: 8, borderRadius: 4, marginTop: spacing.md, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 4 },
-  waitNote: { fontSize: 12, marginTop: spacing.sm },
+  waitNote: { fontSize: 12, marginTop: spacing.sm, lineHeight: 16 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -202,5 +275,6 @@ const styles = StyleSheet.create({
   rowLeft: { flex: 1 },
   rowLabel: { fontSize: 15, fontWeight: '600' },
   rowStatus: { fontSize: 13, marginTop: 1 },
-  uploadText: { fontWeight: '700', fontSize: 14 },
+  form: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.lg, gap: spacing.sm, marginBottom: spacing.md },
+  input: { borderRadius: radius.md, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.md, fontSize: 15 },
 })

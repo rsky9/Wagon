@@ -241,18 +241,24 @@ model KycDocument {
   size      Int
   status    KycStatus    @default(pending)
   adminNote String?
+  // Which provider verified this document (setu/face/vahan/mock) vs manual review.
+  verificationSource VerificationSource @default(manual)
   verifiedAt DateTime?
   createdAt DateTime     @default(now())
   @@index([userId, kind])
 }
 
-/// Verification source used to establish a vehicle or driver record's identity.
+/// Verification source used to establish a vehicle, driver or identity record.
+/// Person/financial identity is verified via Setu (aadhar/pan/bank), faces via
+/// a face-verification API, and vehicles/drivers via Vahan/ULIP/DigiLocker.
 enum VerificationSource {
   manual
   image
   vahan
   ulip
   digilocker
+  setu
+  face
   mock
 }
 

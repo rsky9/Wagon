@@ -35,13 +35,13 @@ export const QUESTS: Record<string, Quest[]> = {
     { id: 'company', title: 'Company profile', description: 'Tell us about your business', icon: '🏢', xp: 40, target: 'Settings' },
     { id: 'truck', title: 'Add your first vehicle', description: 'Start building your fleet', icon: '🚚', xp: 60, target: 'MyVehicles' },
     { id: 'driver', title: 'Add a driver', description: 'Bring a driver on board', icon: '🧑‍✈️', xp: 40, target: 'Drivers' },
-    { id: 'kyc', title: 'Verify your identity', description: 'Complete KYC to unlock more loads', icon: '🛡️', xp: 60, target: 'Kyc' },
-    { id: 'bank', title: 'Connect payouts', description: 'Add bank details for settlements', icon: '₹', xp: 40, target: 'Finance' },
+    { id: 'kyc', title: 'Verify your identity', description: 'Verify when you\'re ready to post, bid or get paid', icon: '🛡️', xp: 60, target: 'Kyc' },
+    { id: 'bank', title: 'Connect payouts', description: 'Add bank details before your first payout', icon: '₹', xp: 40, target: 'Finance' },
   ],
   supplier: [
     { id: 'company', title: 'Company profile', description: 'Complete your business details', icon: '🏢', xp: 40, target: 'Settings' },
     { id: 'load', title: 'Post your first load', description: 'Get trucks bidding for your freight', icon: '📦', xp: 60, target: 'PostLoadWizard' },
-    { id: 'kyc', title: 'Verify your identity', description: 'Complete KYC to unlock faster booking', icon: '🛡️', xp: 60, target: 'Kyc' },
+    { id: 'kyc', title: 'Verify your identity', description: 'Verify when you\'re ready to post or pay', icon: '🛡️', xp: 60, target: 'Kyc' },
     { id: 'pay', title: 'Set payment terms', description: 'Choose advance / pay-later options', icon: '₹', xp: 30, target: 'Settings' },
   ],
 }

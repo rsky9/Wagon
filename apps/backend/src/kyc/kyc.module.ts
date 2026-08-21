@@ -2,10 +2,12 @@ import { Module } from '@nestjs/common'
 import { KycController } from './kyc.controller'
 import { KycService } from './kyc.service'
 import { UploadsModule } from '../uploads/uploads.module'
+import { IdentityVerificationModule } from './identity-verification.module'
 
 @Module({
-  imports: [UploadsModule],
+  imports: [UploadsModule, IdentityVerificationModule],
   controllers: [KycController],
   providers: [KycService],
+  exports: [KycService],
 })
 export class KycModule {}

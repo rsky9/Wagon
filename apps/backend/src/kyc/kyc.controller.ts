@@ -10,12 +10,33 @@ import type { User } from '@prisma/client'
 export class KycController {
   constructor(private readonly kyc: KycService) {}
 
+  /** The doc kinds this user's role must verify (identity, financial, operational). */
+  @Get('requirements')
+  requirements(@CurrentUser() user: User) {
+    return this.kyc.requirements(user)
+  }
+
+  /** Whether the user's required docs are all approved. */
+  @Get('status')
+  status(@CurrentUser() user: User) {
+    return this.kyc.requirementsMet(user)
+  }
+
   @Post('upload')
   requestUpload(
     @Body() body: { kind: string; mimeType: string; size: number },
     @CurrentUser() user: User,
   ) {
     return this.kyc.requestUpload(body.kind, body.mimeType, body.size, user)
+  }
+
+  /** Run provider verification (Setu/face/Vahan) for an uploaded document. */
+  @Post('verify')
+  verify(
+    @Body() body: { kind: string; [k: string]: string },
+    @CurrentUser() user: User,
+  ) {
+    return this.kyc.verify(body.kind, body, user)
   }
 
   @Post('pod/:tripId')

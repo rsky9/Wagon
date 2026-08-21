@@ -700,6 +700,80 @@ describe('Wagon API (e2e)', () => {
         .expect(500)
     })
 
+    it('serves role-specific KYC requirements and gates doc kinds per role', async () => {
+      // Force the supplier to supplier-only so the role gate is deterministic.
+      await request(app.getHttpServer())
+        .patch('/api/v1/auth/capabilities')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ capabilities: ['supplier'] })
+        .expect(200)
+
+      // A supplier needs identity + financial docs, never vehicle rc/licence.
+      const req = await request(app.getHttpServer())
+        .get('/api/v1/kyc/requirements')
+        .set('Authorization', `Bearer ${supToken}`)
+        .expect(200)
+      expect(req.body.requirements).toContain('aadhar')
+      expect(req.body.requirements).toContain('selfie')
+      expect(req.body.requirements).toContain('pan')
+      expect(req.body.requirements).toContain('bank')
+      expect(req.body.requirements).not.toContain('rc')
+      expect(req.body.requirements).not.toContain('license')
+
+      // A supplier must not upload a transporter-only doc (rc).
+      await request(app.getHttpServer())
+        .post('/api/v1/kyc/upload')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ kind: 'rc', mimeType: 'image/jpeg', size: 100 })
+        .expect(400)
+
+      // Restore the combined capabilities for later tests.
+      await request(app.getHttpServer())
+        .patch('/api/v1/auth/capabilities')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ capabilities: ['supplier', 'transporter'] })
+        .expect(200)
+
+      // A transporter (with transporter capability) may upload rc.
+      await request(app.getHttpServer())
+        .patch('/api/v1/auth/capabilities')
+        .set('Authorization', `Bearer ${trToken}`)
+        .send({ capabilities: ['transporter'] })
+        .expect(200)
+      await request(app.getHttpServer())
+        .post('/api/v1/kyc/upload')
+        .set('Authorization', `Bearer ${trToken}`)
+        .send({ kind: 'rc', mimeType: 'image/jpeg', size: 100 })
+        .expect(201)
+    })
+
+    it('runs provider verification for financial/identity docs (Setu/face mock)', async () => {
+      // PAN verification via the Setu (mock) provider.
+      const pan = await request(app.getHttpServer())
+        .post('/api/v1/kyc/verify')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ kind: 'pan', pan: 'ABCDE1234F', name: 'Supplier' })
+        .expect(201)
+      expect(pan.body.verified).toBe(true)
+      expect(['setu', 'mock']).toContain(pan.body.source)
+
+      // Selfie verification via the face (mock) provider.
+      const selfie = await request(app.getHttpServer())
+        .post('/api/v1/kyc/verify')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ kind: 'selfie', selfieKey: 'kyc/selfie.jpg' })
+        .expect(201)
+      expect(selfie.body.verified).toBe(true)
+      expect(['face', 'mock']).toContain(selfie.body.source)
+
+      // A supplier must not verify a transporter-only doc.
+      await request(app.getHttpServer())
+        .post('/api/v1/kyc/verify')
+        .set('Authorization', `Bearer ${supToken}`)
+        .send({ kind: 'rc', rcNumber: 'KA01AB1234' })
+        .expect(400)
+    })
+
     it('generates an idempotent e-way bill', async () => {
       const first = await request(app.getHttpServer())
         .post(`/api/v1/ewb/loads/${loadId}`)
