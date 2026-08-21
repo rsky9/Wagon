@@ -142,6 +142,29 @@ export function DriverHomeScreen({ onOpenTrip }: Props) {
         <Switch value={available && !missingProfile} onValueChange={toggleAvailability} disabled={missingProfile} trackColor={{ true: theme.primary, false: theme.border }} thumbColor="#fff" />
       </View>
 
+      {!missingProfile && (
+        <View style={[styles.calendarCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[styles.calendarTitle, { color: theme.foreground }]}>Next 7 days</Text>
+          <View style={styles.calendarGrid}>
+            {Array.from({ length: 7 }).map((_, i) => {
+              const d = new Date(); d.setDate(d.getDate() + i)
+              const label = d.toLocaleDateString('en-IN', { weekday: 'short' })
+              const day = d.getDate()
+              const isToday = i === 0
+              const dayAvailable = isToday ? available : true
+              return (
+                <View key={i} style={[styles.calendarDay, { backgroundColor: dayAvailable ? theme.success + '1A' : theme.muted, borderColor: isToday ? theme.primary : theme.border }]}>
+                  <Text style={[styles.calendarLabel, { color: theme.mutedForeground }]}>{label}</Text>
+                  <Text style={[styles.calendarDayNum, { color: dayAvailable ? theme.success : theme.mutedForeground }]}>{day}</Text>
+                  <Text style={{ color: dayAvailable ? theme.success : theme.mutedForeground, fontSize: 10, fontWeight: '700' }}>{dayAvailable ? '●' : '○'}</Text>
+                </View>
+              )
+            })}
+          </View>
+          <Text style={[styles.calendarHint, { color: theme.mutedForeground }]}>Tap the switch above to go offline. Future-day scheduling coming soon.</Text>
+        </View>
+      )}
+
       {missingProfile && (
         <View style={[styles.joinBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <Text style={[styles.joinTitle, { color: theme.foreground }]}>Join your transporter's fleet</Text>
@@ -325,4 +348,11 @@ const styles = StyleSheet.create({
   ledgerEarned: { fontSize: 14, fontWeight: '800' },
   payoutBtn: { borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, alignItems: 'center' },
   ledgerFare: { fontSize: 11 },
+  calendarCard: { marginHorizontal: spacing.lg, marginBottom: spacing.md, borderRadius: radius.xl, borderWidth: 1, padding: spacing.md },
+  calendarTitle: { fontSize: 13, fontWeight: '800', marginBottom: spacing.sm },
+  calendarGrid: { flexDirection: 'row', gap: spacing.xs },
+  calendarDay: { flex: 1, alignItems: 'center', borderRadius: radius.md, borderWidth: 1, paddingVertical: spacing.sm, gap: 2 },
+  calendarLabel: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase' },
+  calendarDayNum: { fontSize: 16, fontWeight: '800' },
+  calendarHint: { fontSize: 11, marginTop: spacing.sm, textAlign: 'center' },
 })

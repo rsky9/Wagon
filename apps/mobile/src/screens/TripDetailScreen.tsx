@@ -337,6 +337,26 @@ export function TripDetailScreen({ loadId, tripId, onBack, onTrack, onOpenShipme
           </View>
         )}
 
+        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[styles.cardTitle, { color: theme.foreground }]}>💰 Escrow timeline</Text>
+          {[
+            { label: 'Escrow captured', done: !!snapshot, hint: snapshot ? `₹${(snapshot?.rate ?? trip.load.fareEstimate).toLocaleString('en-IN')} held` : 'Awaiting booking' },
+            { label: 'POD uploaded', done: !!trip.podUrl, hint: trip.podUrl ? 'Delivery proof on file' : 'Upload after delivery' },
+            { label: 'POD confirmed', done: !!trip.podUrl && trip.status === 'delivered', hint: trip.podUrl && trip.status === 'delivered' ? 'Consignee confirmed' : 'Waiting for consignee' },
+            { label: 'Payout released', done: trip.status === 'delivered' && !!trip.podUrl, hint: 'Released after POD confirmation' },
+          ].map((s, i) => (
+            <View key={s.label} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 6 }}>
+              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: s.done ? theme.success : theme.muted, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: s.done ? '#fff' : theme.mutedForeground, fontSize: 12, fontWeight: '800' }}>{s.done ? '✓' : `${i + 1}`}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: s.done ? theme.foreground : theme.mutedForeground, fontSize: 13, fontWeight: s.done ? '700' : '500' }}>{s.label}</Text>
+                <Text style={{ color: theme.mutedForeground, fontSize: 11 }}>{s.hint}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+
         <Pressable
           style={[styles.ewbBtn, { borderColor: theme.primary, backgroundColor: ewb != null ? theme.accent : 'transparent' }]}
           onPress={generateEwb}
