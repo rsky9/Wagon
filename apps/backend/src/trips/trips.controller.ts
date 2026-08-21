@@ -63,6 +63,16 @@ export class TripsController {
     return this.trips.assignDriver(id, body.driverId, user)
   }
 
+  @Post(':id/weighbridge')
+  @Roles('transporter', 'driver')
+  weighbridge(
+    @Param('id') id: string,
+    @Body() body: { weightKg: number; slipKey?: string; note?: string },
+    @CurrentUser() user: User,
+  ) {
+    return this.trips.recordWeighbridge(id, body, user)
+  }
+
   @Post(':id/otp/:kind')
   @Roles('transporter', 'driver')
   generateOtp(@Param('id') id: string, @Param('kind') kind: 'pickup' | 'delivery', @CurrentUser() user: User) {

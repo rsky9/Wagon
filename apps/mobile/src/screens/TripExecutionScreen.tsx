@@ -135,6 +135,38 @@ export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
     } catch (e) { Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed') } finally { setBusy(false) }
   }
 
+  const uploadWeighbridge = async () => {
+    try {
+      const picked = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], copyToCacheDirectory: true })
+      if (picked.canceled || !picked.assets?.[0]) return
+      const asset = picked.assets[0]
+      setBusy(true)
+      // Ask for measured weight before uploading the slip.
+      const weightStr: string | null = await new Promise((resolve) => {
+        Alert.prompt?.('Weighbridge weight', 'Enter measured weight in kg', [
+          { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
+          { text: 'Continue', onPress: (v?: string) => resolve(v ?? null) },
+        ])
+        // Fallback for Android where Alert.prompt is unavailable — use quick input via prompt helper.
+        if (!Alert.prompt) {
+          const { prompt } = require('../components/Prompt')
+          prompt({ title: 'Weighbridge weight', placeholder: 'e.g. 5200' }).then((v: string | null) => resolve(v))
+        }
+      })
+      const weightKg = weightStr ? Number(weightStr) : NaN
+      if (!weightKg || weightKg <= 0) { setBusy(false); Alert.alert('Weight required', 'Enter the measured weight in kg'); return }
+      const presigned = await api.post<{ uploadUrl: string; key: string }>(`/uploads/presign`, {
+        folder: `weighbridge/${tripId}`, mimeType: asset.mimeType ?? 'image/jpeg', size: asset.size ?? 0,
+      }).catch(() => api.post<{ uploadUrl: string; key: string }>(`/kyc/pod/${tripId}`, { mimeType: asset.mimeType ?? 'image/jpeg', size: asset.size ?? 0 }))
+      await uploadToPresignedUrl(presigned.uploadUrl, { uri: asset.uri, name: asset.name ?? 'weighbridge.jpg', type: asset.mimeType ?? 'image/jpeg' })
+      const res = await api.post<{ mismatch: boolean; variance: number }>(`/trips/${tripId}/weighbridge`, { weightKg, slipKey: (presigned as { key?: string }).key ?? asset.uri, note: `Weighbridge ${weightKg}kg` })
+      Alert.alert(res.mismatch ? 'Weight mismatch' : 'Weighbridge recorded', res.mismatch ? `Declared vs measured variance ${res.variance}% — supplier notified` : `Measured ${weightKg}kg recorded`)
+      fetch()
+    } catch (e) {
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to record weighbridge')
+    } finally { setBusy(false) }
+  }
+
   const uploadPod = async () => {
     try {
       const picked = await DocumentPicker.getDocumentAsync({
@@ -153,11 +185,28 @@ export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
         name: asset.name ?? 'pod.pdf',
         type: asset.mimeType ?? 'application/pdf',
       })
+      // Consignee signature is captured as a second image when available (otherwise POD photo serves as proof).
       await api.post(`/payments/pod/${tripId}`, { photoKey: presigned.key })
-      Alert.alert('POD uploaded', 'Delivery evidence recorded — the consignee will confirm receipt.')
+      Alert.alert('POD uploaded', 'Delivery evidence recorded — the consignee will confirm receipt. Add signature if available.')
       fetch()
     } catch (e) {
       Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to upload POD')
+    } finally { setBusy(false) }
+  }
+
+  const captureSignature = async () => {
+    try {
+      const picked = await DocumentPicker.getDocumentAsync({ type: 'image/*', copyToCacheDirectory: true })
+      if (picked.canceled || !picked.assets?.[0]) return
+      const asset = picked.assets[0]
+      setBusy(true)
+      const presigned = await api.post<{ uploadUrl: string; key: string }>(`/kyc/pod/${tripId}`, { mimeType: asset.mimeType ?? 'image/jpeg', size: asset.size ?? 0 })
+      await uploadToPresignedUrl(presigned.uploadUrl, { uri: asset.uri, name: 'signature.jpg', type: asset.mimeType ?? 'image/jpeg' })
+      await api.post(`/payments/pod/${tripId}`, { photoKey: presigned.key, signatureKey: presigned.key })
+      Alert.alert('Signature captured', 'Consignee signature recorded')
+      fetch()
+    } catch (e) {
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to capture signature')
     } finally { setBusy(false) }
   }
 
@@ -251,6 +300,9 @@ export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
               Waiting for the supplier to verify the delivery OTP
             </Text>
           )}
+          {!isDriverOnly && (trip.status === 'in_transit' || trip.status === 'arrived_pickup' || trip.status === 'loading') && (
+            <Button label="Weighbridge slip ⚖️" onPress={uploadWeighbridge} loading={busy} variant="secondary" />
+          )}
           {isDelivered && (
             <View style={[styles.done, { backgroundColor: theme.success + '1A' }]}>
               <Text style={{ color: theme.success, fontWeight: '800', fontSize: 16, textAlign: 'center' }}>✓ Trip completed</Text>
@@ -264,7 +316,10 @@ export function TripExecutionScreen({ tripId, onBack, onExceptions }: Props) {
               ) : (
               <>
               {!trip.podUrl && (
-                <Button label="Upload delivery proof" onPress={uploadPod} loading={busy} variant="secondary" />
+                <>
+                  <Button label="Upload delivery proof" onPress={uploadPod} loading={busy} variant="secondary" />
+                  <Button label="Capture signature ✍️" onPress={captureSignature} loading={busy} variant="secondary" />
+                </>
               )}
               {trip.podUrl && trip.pod?.status && trip.pod.status !== 'confirmed' && trip.pod.status !== 'verified' && (
                 <Text style={{ color: theme.warning, fontSize: 13, textAlign: 'center', marginTop: 4 }}>

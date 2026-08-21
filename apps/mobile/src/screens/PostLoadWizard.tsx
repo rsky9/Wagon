@@ -62,6 +62,7 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
   const [materials, setMaterials] = useState<Material[]>([])
 
   const [pickup, setPickup] = useState('')
+  const [halt, setHalt] = useState('')
   const [drop, setDrop] = useState('')
   const [weight, setWeight] = useState('')
   const [truckCount, setTruckCount] = useState('1')
@@ -120,20 +121,33 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
       // Geocode pickup/drop to real coordinates; compute distance from the route.
       // Never publish with wrong coordinates — block if geocoding fails.
       let pickupLat: number | null = null, pickupLng: number | null = null, dropLat: number | null = null, dropLng: number | null = null
+      let haltLat: number | null = null, haltLng: number | null = null
       let distanceKm = Number(distance)
-      const [gPick, gDrop] = await Promise.all([
+      const toGeocode: Array<Promise<{ found: boolean; coords: [number, number] | null }>> = [
         api.get<{ found: boolean; coords: [number, number] | null }>(`/reference/geocode?q=${encodeURIComponent(pickup)}`),
         api.get<{ found: boolean; coords: [number, number] | null }>(`/reference/geocode?q=${encodeURIComponent(drop)}`),
-      ])
+      ]
+      if (halt.trim()) toGeocode.push(api.get<{ found: boolean; coords: [number, number] | null }>(`/reference/geocode?q=${encodeURIComponent(halt)}`))
+      const geos = await Promise.all(toGeocode)
+      const gPick = geos[0]!, gDrop = geos[1]!, gHalt = halt.trim() ? geos[2] : null
       if (!gPick.found || !gPick.coords || !gDrop.found || !gDrop.coords) {
         const missing = [gPick.found ? null : 'pickup', gDrop.found ? null : 'drop'].filter(Boolean).join(' and ')
         throw new Error(`Could not geocode the ${missing} address. Please use a more specific place name.`)
       }
+      if (gHalt && (!gHalt.found || !gHalt.coords)) throw new Error('Could not geocode the halt address. Please use a more specific place name.')
       pickupLat = gPick.coords[0]; pickupLng = gPick.coords[1]
       dropLat = gDrop.coords[0]; dropLng = gDrop.coords[1]
+      if (gHalt?.coords) { haltLat = gHalt.coords[0]; haltLng = gHalt.coords[1] }
       if (!distanceKm || distanceKm <= 0) {
-        const dist = await api.get<{ found: boolean; distanceKm: number | null }>(`/reference/distance?from=${encodeURIComponent(pickup)}&to=${encodeURIComponent(drop)}`)
-        if (dist.found && dist.distanceKm) distanceKm = dist.distanceKm
+        if (halt.trim() && gHalt?.coords) {
+          const d1 = await api.get<{ found: boolean; distanceKm: number | null }>(`/reference/distance?from=${encodeURIComponent(pickup)}&to=${encodeURIComponent(halt)}`)
+          const d2 = await api.get<{ found: boolean; distanceKm: number | null }>(`/reference/distance?from=${encodeURIComponent(halt)}&to=${encodeURIComponent(drop)}`)
+          if (d1.found && d1.distanceKm && d2.found && d2.distanceKm) distanceKm = d1.distanceKm + d2.distanceKm
+        }
+        if (!distanceKm || distanceKm <= 0) {
+          const dist = await api.get<{ found: boolean; distanceKm: number | null }>(`/reference/distance?from=${encodeURIComponent(pickup)}&to=${encodeURIComponent(drop)}`)
+          if (dist.found && dist.distanceKm) distanceKm = dist.distanceKm
+        }
       }
       if (!distanceKm || distanceKm <= 0) {
         throw new Error('Could not estimate the route distance — please enter it manually')
@@ -142,6 +156,8 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
       await api.post('/loads', {
         pickupAddr: pickup,
         dropAddr: drop,
+        haltAddr: halt.trim() || undefined,
+        haltLat, haltLng,
         pickupLat, pickupLng, dropLat, dropLng,
         date: new Date(pickupDate).toISOString(),
         pickupDate: new Date(pickupDate).toISOString(),
@@ -236,6 +252,10 @@ export function PostLoadWizard({ onComplete, onCancel }: Props) {
                 <Text style={{ color: theme.foreground, fontSize: 14 }}>{l.label} · {l.address}</Text>
               </Pressable>
             ))}
+          </Field>
+          <Field label="Intermediate halt (optional)">
+            <TextInput style={inputStyle} value={halt} onChangeText={setHalt} placeholder="City for a stop en route" placeholderTextColor={theme.mutedForeground + '88'} />
+            {halt.trim() && <Text style={{ color: theme.mutedForeground, fontSize: 11, marginTop: 2 }}>Route: {pickup || '—'} → {halt} → {drop || '—'}</Text>}
           </Field>
           <Field label={t('postLoad.distance')}>
             <TextInput style={inputStyle} value={distance} onChangeText={setDistance} placeholder={t('postLoad.distanceExample')} keyboardType="decimal-pad" placeholderTextColor={theme.mutedForeground + '88'} />

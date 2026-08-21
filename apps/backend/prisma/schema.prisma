@@ -540,8 +540,11 @@ model Trip {
   pickupOtpAt  DateTime?
   pickupOtpVerifiedAt DateTime?
   deliveryOtp  String?
-  deliveryOtpAt DateTime?
+  deliveryOtpAt  DateTime?
   deliveryOtpVerifiedAt DateTime?
+  weighbridgeKg Float?
+  weighbridgeKey String?
+  weighbridgeMismatch Boolean?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 

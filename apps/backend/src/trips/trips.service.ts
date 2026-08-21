@@ -520,6 +520,35 @@ export class TripsService {
     return { trip: updated }
   }
 
+  async recordWeighbridge(tripId: string, body: { weightKg: number; slipKey?: string; note?: string }, user: User) {
+    const trip = await this.prisma.trip.findUnique({ where: { id: tripId }, include: { load: true } })
+    if (!trip) throw new NotFoundException('Trip not found')
+    const tTrans = await this.prisma.transporter.findUnique({ where: { userId: user.id } })
+    const isT = tTrans?.id === trip.transporterId
+    const isD = trip.driverId ? await this.prisma.driver.findFirst({ where: { id: trip.driverId, mobile: user.mobile } }) : null
+    if (!isT && !isD) throw new BadRequestException('Only the assigned transporter or driver can record weighbridge')
+    if (!body.weightKg || body.weightKg <= 0) throw new BadRequestException('Weight must be positive')
+    const declared = trip.load.weight * 1000
+    const measured = body.weightKg
+    const variance = Math.abs(measured - declared) / declared
+    const mismatch = variance > 0.1
+    const wbUpdated = await this.prisma.trip.update({
+      where: { id: tripId },
+      data: { weighbridgeKg: measured, weighbridgeKey: body.slipKey ?? null, weighbridgeMismatch: mismatch } as never,
+    })
+    if (mismatch) {
+      await this.notifications.create({
+        userId: (await this.prisma.supplier.findUnique({ where: { id: trip.load.supplierId }, include: { user: true } }))!.userId,
+        type: 'trip_exception',
+        title: 'Weighbridge mismatch',
+        body: `Declared ${declared}kg, measured ${measured}kg (${Math.round(variance * 100)}% variance) on trip ${tripId.slice(-6)}`,
+        data: { tripId },
+        category: 'trip',
+      }).catch(() => {})
+    }
+    return { trip: wbUpdated, mismatch, variance: Math.round(variance * 100) }
+  }
+
   /** Transporter assigns a fleet driver to their trip. Driver is matched to a
    *  mobile account so the driver can execute it from the driver app. */
   async assignDriver(tripId: string, driverId: string, user: User) {
