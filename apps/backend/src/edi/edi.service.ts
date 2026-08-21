@@ -156,7 +156,7 @@ export class EdiService {
   }
 
   /** Generate an outbound X12 message for a document type + payload. */
-  generate(input: { orgId: string; partnerOrgId?: string; documentType: string; payload: Record<string, unknown> }, user: User) {
+  generate(input: { orgId: string; partnerOrgId?: string; documentType: string; payload: Record<string, unknown> }, _user: User) {
     const dt = input.documentType.toUpperCase()
     const format: 'X12' | 'EDIFACT' = input.payload.format === 'EDIFACT' ? 'EDIFACT' : 'X12'
 
@@ -225,7 +225,7 @@ export class EdiService {
     return { messages }
   }
 
-  async get(id: string, user: User) {
+  async get(id: string, _user: User) {
     const message = await this.prisma.ediMessage.findUnique({
       where: { id },
       include: { org: { select: { id: true, name: true } }, partnerOrg: { select: { id: true, name: true } } },

@@ -90,7 +90,7 @@ export class ContainersService {
     return { containers }
   }
 
-  async get(containerId: string, user: User) {
+  async get(containerId: string, _user: User) {
     const container = await this.prisma.container.findUnique({
       where: { id: containerId },
       include: { ownerOrg: { select: { id: true, name: true } }, operatorOrg: { select: { id: true, name: true } }, currentFacility: true },

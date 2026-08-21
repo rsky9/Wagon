@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { MarketService } from '../market/market.service'
 import { UploadsService, ALLOWED_UPLOAD_MIMES } from '../uploads/uploads.service'
 import { VerificationService } from '../verification/verification.service'
-import type { User, TruckType, KycStatus, VerificationSource } from '@prisma/client'
+import type { User, TruckType, KycStatus } from '@prisma/client'
 
 const VALID_TYPES: TruckType[] = ['open', 'container', 'trailer']
 

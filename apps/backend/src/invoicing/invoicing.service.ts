@@ -166,7 +166,7 @@ export class InvoicingService {
     return { invoices }
   }
 
-  async get(invoiceId: string, user: User) {
+  async get(invoiceId: string, _user: User) {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id: invoiceId },
       include: {

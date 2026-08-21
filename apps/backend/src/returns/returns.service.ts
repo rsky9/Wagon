@@ -85,7 +85,7 @@ export class ReturnsService {
     return { returns: records }
   }
 
-  async get(returnId: string, user: User) {
+  async get(returnId: string, _user: User) {
     const record = await this.prisma.returnOrder.findUnique({ where: { id: returnId } })
     if (!record) throw new NotFoundException('Return not found')
     return { return: record }

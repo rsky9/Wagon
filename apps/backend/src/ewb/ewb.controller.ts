@@ -35,7 +35,7 @@ export class EwbController {
   }
 
   @Post('sweep-expired')
-  sweepExpired(@CurrentUser() user: User) {
+  sweepExpired(@CurrentUser() _user: User) {
     return this.ewb.sweepExpired()
   }
 }

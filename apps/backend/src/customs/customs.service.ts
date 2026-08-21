@@ -106,7 +106,7 @@ export class CustomsService {
     return { declarations }
   }
 
-  async get(declarationId: string, user: User) {
+  async get(declarationId: string, _user: User) {
     const declaration = await this.prisma.customsDeclaration.findUnique({ where: { id: declarationId } })
     if (!declaration) throw new NotFoundException('Declaration not found')
     return { declaration }

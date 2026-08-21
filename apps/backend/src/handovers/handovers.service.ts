@@ -95,7 +95,7 @@ export class HandoversService {
     return { handovers }
   }
 
-  async get(handoverId: string, user: User) {
+  async get(handoverId: string, _user: User) {
     const handover = await this.prisma.handover.findUnique({
       where: { id: handoverId },
       include: { fromOrg: { select: { id: true, name: true } }, toOrg: { select: { id: true, name: true } }, facility: true },

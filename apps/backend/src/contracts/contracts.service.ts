@@ -109,7 +109,7 @@ export class ContractsService {
     return { contracts }
   }
 
-  async get(contractId: string, user: User) {
+  async get(contractId: string, _user: User) {
     const contract = await this.prisma.contract.findUnique({
       where: { id: contractId },
       include: {
