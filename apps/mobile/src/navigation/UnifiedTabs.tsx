@@ -6,8 +6,6 @@ import { useThemeMode } from '../theme'
 import { useI18n } from '@wagon/i18n'
 import { useAuth } from '../auth'
 import { RupeeIcon } from '../components/RupeeIcon'
-import { StateBanner } from '@wagon/components'
-import { useOffline } from '../hooks/useOffline'
 import { HomeCockpitScreen } from '../screens/HomeCockpitScreen'
 import { DriverHomeScreen } from '../screens/DriverHomeScreen'
 import { MarketScreen } from '../screens/MarketScreen'
@@ -189,31 +187,14 @@ function AccountTab({ navigation }: any) {
 export function UnifiedTabs() {
   const { isDark } = useThemeMode()
   const theme = createTheme(isDark)
-  const { offline, queued, retry } = useOffline()
-  const insets = useSafeAreaInsets()
   return (
-    <View style={{ flex: 1 }}>
-      {(offline || queued > 0) && (
-        <View style={{ paddingHorizontal: spacing.md, paddingTop: Math.max(insets.top, spacing.sm), gap: spacing.xs }}>
-          {offline && <StateBanner state="offline" onRetry={retry} />}
-          {queued > 0 && !offline && (
-            <StateBanner state="offline" onRetry={async () => { const n = await retry(); if (n > 0) { /* replayed */ } }} />
-          )}
-          {queued > 0 && (
-            <View style={{ alignItems: 'center' }}>
-              <Text style={{ color: '#F97316', fontSize: 12, fontWeight: '700' }}>{queued} queued — will send when online</Text>
-            </View>
-          )}
-        </View>
-      )}
-      <Tab.Navigator tabBar={(props) => <FloatingTabBar {...props} />} screenOptions={({ route }) => ({ ...baseTabOptions(theme) })}>
-        <Tab.Screen name="Home" component={HomeTab} />
-        <Tab.Screen name="Marketplace" component={MarketplaceTab} />
-        <Tab.Screen name="Trips" component={TripsTab} />
-        <Tab.Screen name="Finance" component={FinanceTab} />
-        <Tab.Screen name="Account" component={AccountTab} />
-      </Tab.Navigator>
-    </View>
+    <Tab.Navigator tabBar={(props) => <FloatingTabBar {...props} />} screenOptions={({ route }) => ({ ...baseTabOptions(theme) })}>
+      <Tab.Screen name="Home" component={HomeTab} />
+      <Tab.Screen name="Marketplace" component={MarketplaceTab} />
+      <Tab.Screen name="Trips" component={TripsTab} />
+      <Tab.Screen name="Finance" component={FinanceTab} />
+      <Tab.Screen name="Account" component={AccountTab} />
+    </Tab.Navigator>
   )
 }
 
