@@ -4,6 +4,8 @@ import { StyleSheet, Text, TextInput, View, FlatList, Pressable, Linking, Keyboa
 import { useTheme, spacing, radius } from '@wagon/design'
 import { api } from '../config'
 import { useAuth } from '../auth'
+import * as ImagePicker from 'expo-image-picker'
+import { uploadToPresignedUrl } from '@wagon/api-client'
 import { useI18n } from '@wagon/i18n'
 
 interface Props {
@@ -41,6 +43,24 @@ export function ChatScreen({ onBack, contactName, contactPhone, contactId, tripI
     api.post(`/chat/trip/${tripId}`, { body: draft.trim() })
       .then(() => { setDraft(''); fetch() })
       .catch((e) => Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to send'))
+  }
+
+  const sendImage = async () => {
+    try {
+      const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.6 })
+      if (picked.canceled || !picked.assets?.[0]) return
+      const asset = picked.assets[0]
+      const presigned = await api.post<{ uploadUrl: string; key: string }>(`/uploads/presign`, {
+        folder: `chat/${tripId}`, mimeType: asset.mimeType ?? 'image/jpeg', size: asset.fileSize ?? 0,
+      }).catch(() => api.post<{ uploadUrl: string; key: string }>(`/kyc/pod/${tripId}`, { mimeType: asset.mimeType ?? 'image/jpeg', size: asset.fileSize ?? 0 }))
+      await uploadToPresignedUrl(presigned.uploadUrl, { uri: asset.uri, name: 'chat-image.jpg', type: asset.mimeType ?? 'image/jpeg' })
+      const key = (presigned as { key?: string }).key ?? asset.uri
+      api.post(`/chat/trip/${tripId}`, { body: `[Image] ${key}`, imageKey: key })
+        .then(() => fetch())
+        .catch((e) => Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to send image'))
+    } catch (e) {
+      Alert.alert(t('ui.error'), e instanceof Error ? e.message : 'Failed to send image')
+    }
   }
 
   useEffect(() => { fetch() }, [tripId])
@@ -120,6 +140,9 @@ export function ChatScreen({ onBack, contactName, contactPhone, contactId, tripI
       />
 
       <View style={[styles.inputBar, { borderTopColor: theme.border, backgroundColor: theme.card }]}>
+        <Pressable onPress={sendImage} hitSlop={8} style={[styles.attachBtn, { borderColor: theme.border }]}>
+          <Text style={{ fontSize: 18 }}>📎</Text>
+        </Pressable>
         <TextInput
           style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.foreground }]}
           placeholder={t('chat.typeMessage')}
@@ -148,4 +171,5 @@ const styles = StyleSheet.create({
   inputBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, paddingBottom: 24, borderTopWidth: 1 },
   input: { flex: 1, borderRadius: radius.full, borderWidth: 1, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, fontSize: 15 },
   sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  attachBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 })
