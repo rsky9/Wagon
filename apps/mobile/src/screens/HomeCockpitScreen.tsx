@@ -91,6 +91,8 @@ interface Props {
   onOpenMarket?: () => void
   onOpenMarketRequests?: () => void
   onOpenMarketMine?: () => void
+  onOpenLoadFeed?: () => void
+  onOpenMyLoads?: () => void
   onOpenNotifications?: () => void
   onOpenKyc?: () => void
   onOpenFleet?: () => void
@@ -122,7 +124,7 @@ const KIND_ICON: Record<string, string> = {
   transport: '🚚', warehouse: '🏭', forwarding: '📦', carrier: '🚢', insurance: '🛡️',
 }
 
-export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, onPostLoad, onOpenMarket, onOpenMarketRequests, onOpenMarketMine, onOpenNotifications, onOpenKyc, onOpenFleet }: Props) {
+export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, onPostLoad, onOpenMarket, onOpenMarketRequests, onOpenMarketMine, onOpenLoadFeed, onOpenMyLoads, onOpenNotifications, onOpenKyc, onOpenFleet }: Props) {
   const theme = useTheme()
   const { t } = useI18n()
   const { session } = useAuth()
@@ -236,7 +238,9 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
         {/* Quick actions */}
         <View style={styles.quickRow}>
           {isSupplier && <QuickAction icon="➕" label="Add load" onPress={onPostLoad} tone="primary" />}
-          <QuickAction icon="🔎" label={isTransporter ? 'Find loads' : isSupplier ? 'My loads' : 'Marketplace'} onPress={onOpenMarketplace} tone="primary" />
+          {isTransporter && onOpenLoadFeed && <QuickAction icon="🔎" label="Find loads" onPress={onOpenLoadFeed} tone="primary" />}
+          {isSupplier && onOpenMyLoads && <QuickAction icon="🗂️" label="My loads" onPress={onOpenMyLoads} tone="primary" />}
+          <QuickAction icon="🏬" label="Marketplace" onPress={onOpenMarketplace} tone="primary" />
           {onOpenMarket && <QuickAction icon="🏗️" label="List capacity" onPress={onOpenMarket} tone="primary" />}
           {onOpenMarketRequests && <QuickAction icon="📦" label="Post shipment" onPress={onOpenMarketRequests} tone="primary" />}
         </View>

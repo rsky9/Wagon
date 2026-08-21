@@ -67,6 +67,8 @@ import { ContractsScreen } from '../screens/ContractsScreen'
 import { StorageScreen } from '../screens/StorageScreen'
 import { GlobalScreen } from '../screens/GlobalScreen'
 import { MarketScreen } from '../screens/MarketScreen'
+import { LoadFeedScreen } from '../screens/LoadFeedScreen'
+import { MyLoads } from '../screens/MyLoadsScreen'
 import { IntegrationsScreen } from '../screens/IntegrationsScreen'
 import { SplashScreen, LanguageSelection, RoleSelection, CapabilitySelection } from '@wagon/components'
 import { AppLogo } from '../components/AppLogo'
@@ -127,6 +129,8 @@ export type RootStackParamList = {
   Shipments: undefined
   ShipmentDetail: { shipmentId: string }
   Market: undefined
+  LoadFeed: undefined
+  MyLoads: undefined
   Integrations: undefined
   Forwarding: undefined
   Planning: undefined
@@ -153,7 +157,7 @@ function navigateToUrl(nav: any, url: string, item?: { data?: { loadId?: string;
     'Notifications', 'MyVehicles', 'AddVehicle', 'Drivers', 'RateCard', 'Settings',
     'Search', 'Filters', 'Finance', 'Reviews', 'Tickets', 'Emergency', 'Chat',
     'ChatList', 'Fleet', 'NotifPrefs', 'Invoices', 'LoadHistory', 'Quests',
-    'AddressBook', 'LaneAlerts',
+    'AddressBook', 'LaneAlerts', 'LoadFeed', 'MyLoads',
     'RoleChange', 'PostLoadWizard', 'DecisionRoom', 'BidForm', 'Negotiation',
     'TripExceptions', 'Responses', 'Bookings', 'ReturnLoads', 'Track',
     'ShipmentDetail', 'Forwarding', 'Planning', 'EnablementFinance', 'Storage',
@@ -197,7 +201,7 @@ function navigateToUrl(nav: any, url: string, item?: { data?: { loadId?: string;
       nav.navigate('TripDetail', { tripId: m[2] })
     }
   } else if (url.endsWith('loads')) {
-    nav.navigate('UnifiedTabs', { screen: 'Marketplace' } as never)
+    nav.navigate('LoadFeed')
   } else if (url.endsWith('trips')) {
     nav.navigate('UnifiedTabs', { screen: 'Trips' } as never)
   } else if (url.endsWith('kyc')) {
@@ -223,9 +227,9 @@ const linking: LinkingOptions<RootStackParamList> = {
       Notifications: 'notifications',
       Search: 'search',
       Tickets: 'tickets',
+      LoadFeed: 'loads',
       UnifiedTabs: {
         screens: {
-          Marketplace: 'loads',
           Trips: 'trips',
         },
       },
@@ -465,6 +469,32 @@ function MarketRoute({ navigation, route }: any) {
   const { session } = useAuth()
   const initialTab = (route?.params as { initialTab?: 'listings' | 'requests' | 'carriers' | 'mine' | 'partners' | 'ai' } | undefined)?.initialTab
   return <MarketScreen onBack={() => navigation.goBack()} capabilities={session?.profile?.capabilities ?? []} initialTab={initialTab} />
+}
+
+function LoadFeedRoute({ navigation }: any) {
+  const root = navigation.getParent()
+  const filters = useLoadFilters()
+  return (
+    <LoadFeedScreen
+      onSelect={(load) => root?.navigate('LoadDetail', { load })}
+      filters={filters}
+      onOpenFilters={() => navigation.navigate('Filters')}
+      onOpenSearch={() => navigation.navigate('Search', {})}
+    />
+  )
+}
+
+function MyLoadsRoute({ navigation }: any) {
+  const root = navigation.getParent()
+  return (
+    <MyLoads
+      onPostLoad={() => root?.navigate('PostLoadWizard')}
+      onSelectLoad={(loadId) => root?.navigate('TripDetail', { loadId })}
+      onOpenDecisionRoom={(loadId) => root?.navigate('DecisionRoom', { loadId })}
+      onOpenResponses={() => root?.navigate('Responses')}
+      onOpenBookings={() => root?.navigate('Bookings')}
+    />
+  )
 }
 
 function IntegrationsRoute({ navigation }: any) {
@@ -797,6 +827,8 @@ export function MobileNavigator() {
                 <Stack.Screen name="Global" component={GlobalRoute} />
                 <Stack.Screen name="Contracts" component={ContractsRoute} />
                 <Stack.Screen name="Market" component={MarketRoute} />
+                <Stack.Screen name="LoadFeed" component={LoadFeedRoute} />
+                <Stack.Screen name="MyLoads" component={MyLoadsRoute} />
                 <Stack.Screen name="Integrations" component={IntegrationsRoute} />
               </Stack.Navigator>
             </NavigationContainer>

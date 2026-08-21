@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet, Pressable } from 'react-native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -6,15 +5,10 @@ import { createTheme, useTheme, spacing, radius } from '@wagon/design'
 import { useThemeMode } from '../theme'
 import { useI18n } from '@wagon/i18n'
 import { useAuth } from '../auth'
-import { useActiveMode } from '../mode'
-import { useLoadFilters } from '../filters'
-import { AppLogo } from '../components/AppLogo'
 import { RupeeIcon } from '../components/RupeeIcon'
 import { HomeCockpitScreen } from '../screens/HomeCockpitScreen'
 import { DriverHomeScreen } from '../screens/DriverHomeScreen'
-import { LoadFeedScreen } from '../screens/LoadFeedScreen'
 import { MarketScreen } from '../screens/MarketScreen'
-import { MyLoads } from '../screens/MyLoadsScreen'
 import { TripsScreen } from '../screens/TripsScreen'
 import { PassbookScreen } from '../screens/PassbookScreen'
 import { ProfileScreen } from '../screens/ProfileScreen'
@@ -119,6 +113,8 @@ function HomeTab({ navigation }: any) {
       onOpenMarket={() => root?.navigate('Market')}
       onOpenMarketRequests={() => root?.navigate('Market', { initialTab: 'requests' } as never)}
       onOpenMarketMine={() => root?.navigate('Market', { initialTab: 'mine' } as never)}
+      onOpenLoadFeed={() => root?.navigate('LoadFeed')}
+      onOpenMyLoads={() => root?.navigate('MyLoads')}
       onOpenNotifications={() => root?.navigate('Notifications')}
       onOpenKyc={() => root?.navigate('Kyc')}
       onOpenFleet={() => root?.navigate('Fleet')}
@@ -126,92 +122,13 @@ function HomeTab({ navigation }: any) {
   )
 }
 
-/** Marketplace adapts: transporters browse the feed, suppliers manage their loads. */
+/** Marketplace is the cross-type capability exchange and is shown to EVERY
+ *  user type from the nav bar. The classic road-load feed and "My loads" live
+ *  on the Home screen quick actions, not here — so a supplier, transporter or
+ *  enablement user always sees the same marketplace surface. */
 function MarketplaceTab({ navigation }: any) {
-  const { t } = useI18n()
   const { session } = useAuth()
-  const activeMode = useActiveMode()
-  const filters = useLoadFilters()
   const caps = session?.profile.capabilities?.length ? session.profile.capabilities : [session?.profile.role ?? '']
-  const isSupplier = caps.includes('supplier')
-  const isTransporter = caps.includes('transporter')
-  // Sync the working surface with the persisted active mode.
-  const initialMode = activeMode === 'supplier' ? 'myloads' : 'browse'
-  const [mode, setMode] = useState<'browse' | 'myloads'>(isTransporter ? initialMode : 'myloads')
-  const root = navigation.getParent()
-
-  // Re-sync when the user switches supplier/transporter mode on Home — the tab
-  // stays mounted, so without this the Marketplace surface keeps the old mode.
-  useEffect(() => {
-    if (isTransporter) setMode(activeMode === 'supplier' ? 'myloads' : 'browse')
-  }, [activeMode, isTransporter])
-
-  if (isTransporter && isSupplier) {
-    return (
-      <View style={{ flex: 1 }}>
-        <SafeAreaTop>
-          <View style={styles.marketHeader}>
-            <AppLogo height={22} />
-          </View>
-          <View style={styles.segWrap}>
-            <Segmented
-              value={mode}
-              onChange={setMode}
-              left={{ key: 'browse', label: t('nav.browse') }}
-              right={{ key: 'myloads', label: t('nav.myLoads') }}
-            />
-          </View>
-        </SafeAreaTop>
-        {mode === 'browse' ? (
-          <LoadFeedScreen
-            onSelect={(load) => root?.navigate('LoadDetail', { load })}
-            filters={filters}
-            onOpenFilters={() => root?.navigate('Filters')}
-            onOpenSearch={() => root?.navigate('Search')}
-            embedded
-          />
-        ) : (
-          <MyLoads
-            onPostLoad={() => root?.navigate('PostLoadWizard')}
-            onSelectLoad={(loadId) => root?.navigate('TripDetail', { loadId })}
-            onOpenDecisionRoom={(loadId) => root?.navigate('DecisionRoom', { loadId })}
-            onOpenResponses={() => root?.navigate('Responses')}
-            onOpenBookings={() => root?.navigate('Bookings')}
-            embedded
-          />
-        )}
-      </View>
-    )
-  }
-
-  if (isTransporter) {
-    return (
-      <LoadFeedScreen
-        onSelect={(load) => root?.navigate('LoadDetail', { load })}
-        filters={filters}
-        onOpenFilters={() => root?.navigate('Filters')}
-        onOpenSearch={() => root?.navigate('Search')}
-      />
-    )
-  }
-
-  // Suppliers see their own loads. Transporters see the load feed. Everyone
-  // else (forwarder/warehouse/carrier/enablement) sees the cross-type capability
-  // marketplace — the road-load feed isn't actionable for them.
-  if (isSupplier) {
-    return (
-      <MyLoads
-        onPostLoad={() => root?.navigate('PostLoadWizard')}
-        onSelectLoad={(loadId) => root?.navigate('TripDetail', { loadId })}
-        onOpenDecisionRoom={(loadId) => root?.navigate('DecisionRoom', { loadId })}
-        onOpenResponses={() => root?.navigate('Responses')}
-        onOpenBookings={() => root?.navigate('Bookings')}
-      />
-    )
-  }
-
-  // Forwarder/warehouse/carrier/enablement-only users see the cross-type
-  // capability marketplace (road-load feed isn't actionable for them).
   return <MarketScreen onBack={() => navigation.navigate('Home')} capabilities={caps} />
 }
 
@@ -266,30 +183,6 @@ function AccountTab({ navigation }: any) {
     />
   )
 }
-function SafeAreaTop({ children }: { children: React.ReactNode }) {
-  const insets = useSafeAreaInsets()
-  return <View style={{ paddingTop: insets.top }}>{children}</View>
-}
-
-function Segmented({ value, onChange, left, right }: { value: string; onChange: (v: any) => void; left: { key: string; label: string }; right: { key: string; label: string } }) {
-  const theme = useTheme()
-  return (
-    <View style={[styles.seg, { backgroundColor: theme.muted, borderColor: theme.border }]}>
-      {[left, right].map((o) => {
-        const active = value === o.key
-        return (
-          <Pressable
-            key={o.key}
-            style={[styles.segBtn, active && { backgroundColor: theme.primary }]}
-            onPress={() => onChange(o.key)}
-          >
-            <Text style={[styles.segLabel, active ? { color: '#fff', fontWeight: '800' } : { color: theme.mutedForeground, fontWeight: '700' }]}>{o.label}</Text>
-          </Pressable>
-        )
-      })}
-    </View>
-  )
-}
 
 export function UnifiedTabs() {
   const { isDark } = useThemeMode()
@@ -306,24 +199,6 @@ export function UnifiedTabs() {
 }
 
 const styles = StyleSheet.create({
-  seg: {
-    flexDirection: 'row',
-    borderWidth: 1,
-    borderRadius: radius.xl,
-    padding: 4,
-    overflow: 'hidden',
-  },
-  segBtn: { flex: 1, alignItems: 'center', paddingVertical: spacing.md, borderRadius: radius.lg },
-  segLabel: { fontSize: 14, textAlign: 'center' },
-  segWrap: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
-  marketHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
   floatingWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   floatingBar: {
     flexDirection: 'row',
