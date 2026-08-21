@@ -154,6 +154,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
   const caps = session?.profile.capabilities?.length ? session.profile.capabilities : [session?.profile.role ?? '']
   const isSupplier = caps.includes('supplier')
   const isTransporter = caps.includes('transporter')
+  const hasNonTransportCap = caps.some((c) => ['forwarder', 'warehouse', 'carrier'].includes(c))
   const isBoth = isSupplier && isTransporter
   const surface: 'supplier' | 'transporter' =
     activeMode === 'supplier' ? 'supplier' : activeMode === 'transporter' ? 'transporter' : isSupplier ? 'supplier' : 'transporter'
@@ -241,7 +242,7 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
           {isTransporter && onOpenLoadFeed && <QuickAction icon="🔎" label="Find loads" onPress={onOpenLoadFeed} tone="primary" />}
           {isSupplier && onOpenMyLoads && <QuickAction icon="🗂️" label="My loads" onPress={onOpenMyLoads} tone="primary" />}
           <QuickAction icon="🏬" label="Marketplace" onPress={onOpenMarketplace} tone="primary" />
-          {onOpenMarketRequests && <QuickAction icon="📦" label="Post shipment" onPress={onOpenMarketRequests} tone="primary" />}
+          {onOpenMarketRequests && (!isSupplier || hasNonTransportCap) && <QuickAction icon="📦" label="Post shipment" onPress={onOpenMarketRequests} tone="primary" />}
         </View>
 
         {/* KPI hero grid */}

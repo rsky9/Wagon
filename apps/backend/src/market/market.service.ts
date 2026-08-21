@@ -6,6 +6,7 @@ import { NotificationsService } from '../notifications/notifications.service'
 import { PlanningService } from '../planning/planning.service'
 import { LoadMatchingService } from '../matching/matching.service'
 import { AuditService } from '../audit/audit.service'
+import { geocodePlace, haversineKm as geoDistanceKm } from '../reference/geo'
 import type { User } from '@prisma/client'
 import type { Prisma } from '@prisma/client'
 
@@ -488,30 +489,47 @@ export class MarketService {
     return { request }
   }
 
-  /** Create a classic Load mirroring a transport MarketRequest. */
-  private async bridgeToLoad(request: { id: string; originRef?: string | null; destinationRef?: string | null; capacityNeeded?: number | null }, user: User) {
+  /**
+   * Create a classic Load mirroring a transport MarketRequest — but only with
+   * REAL data: both route ends must be present and geocodable, otherwise the
+   * bridge is skipped (the request still lives in the market feed). Never
+   * writes placeholder addresses or fake 0,0 coordinates.
+   */
+  private async bridgeToLoad(request: { id: string; originRef?: string | null; destinationRef?: string | null; capacityNeeded?: number | null; date?: Date | null }, user: User) {
     const supplier = await this.prisma.supplier.findUnique({ where: { userId: user.id } })
     if (!supplier) return null
     const material = await this.prisma.material.findFirst()
-    const model = await this.prisma.vehicleModel.findFirst()
+    const model = await this.prisma.vehicleModel.findFirst({
+      include: { rateCards: { where: { status: true }, take: 1 } },
+    })
     if (!material || !model) return null
+    const originRef = request.originRef?.trim()
+    const destinationRef = request.destinationRef?.trim()
+    const origin = originRef ? geocodePlace(originRef) : null
+    const destination = destinationRef ? geocodePlace(destinationRef) : null
+    if (!originRef || !destinationRef || !origin || !destination) {
+      console.warn(`[market] bridgeToLoad skipped (unresolvable route): ${originRef ?? '?'} → ${destinationRef ?? '?'}`)
+      return null
+    }
     const weightT = Math.max(1, Math.round((request.capacityNeeded ?? 1000) / 1000))
+    const distanceKm = Math.max(1, Math.round(geoDistanceKm(origin[0], origin[1], destination[0], destination[1])))
+    const ratePerKm = model.rateCards[0]?.pricePerKm ?? 15
     await this.prisma.load.create({
       data: {
         supplierId: supplier.id,
-        pickupAddr: request.originRef ?? 'Origin',
-        dropAddr: request.destinationRef ?? 'Destination',
-        pickupLat: 0,
-        pickupLng: 0,
-        dropLat: 0,
-        dropLng: 0,
-        date: new Date(),
+        pickupAddr: originRef,
+        dropAddr: destinationRef,
+        pickupLat: origin[0],
+        pickupLng: origin[1],
+        dropLat: destination[0],
+        dropLng: destination[1],
+        date: request.date ?? new Date(),
         truckType: 'open',
         modelId: model.id,
         weight: weightT,
-        distanceKm: 100,
+        distanceKm,
         materialId: material.id,
-        fareEstimate: weightT * 100 * 15,
+        fareEstimate: Math.round(weightT * distanceKm * ratePerKm),
         status: 'posted' as never,
       } as never,
     })

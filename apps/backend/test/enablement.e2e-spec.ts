@@ -773,11 +773,17 @@ describe('Enablement platform (e2e)', () => {
     })
 
     it('bridges transport request to classic load + quote withdraw/reject lifecycle', async () => {
-      // Direct transport request also creates a Load in the classic feed.
+      // A direct transport request with a geocodable route also creates a Load
+      // in the classic feed (real coords/distance — never placeholders).
       const before = (await api(supToken).get('/loads?pageSize=50').expect(200)).body.total
-      await api(supToken).post('/market/requests', { kind: 'transport', originRef: 'E2ECity', destinationRef: 'E2EDrop', capacityNeeded: 3000 }).expect(201)
+      await api(supToken).post('/market/requests', { kind: 'transport', originRef: 'Mumbai', destinationRef: 'Pune', capacityNeeded: 3000 }).expect(201)
       const after = (await api(supToken).get('/loads?pageSize=50').expect(200)).body.total
       expect(after).toBeGreaterThan(before)
+      // An unresolvable route is NOT bridged — no fake sentinel loads.
+      const beforeUnresolvable = (await api(supToken).get('/loads?pageSize=50').expect(200)).body.total
+      await api(supToken).post('/market/requests', { kind: 'transport', originRef: 'E2ECity', destinationRef: 'E2EDrop', capacityNeeded: 3000 }).expect(201)
+      const afterUnresolvable = (await api(supToken).get('/loads?pageSize=50').expect(200)).body.total
+      expect(afterUnresolvable).toBe(beforeUnresolvable)
       // Quote lifecycle: provider withdraws -> request reverts; requester rejects.
       const req = await api(supToken).post('/market/requests', { kind: 'warehouse', city: 'E2ECity', capacityNeeded: 200, budget: 2000 }).expect(201)
       const q1 = await api(trToken).post(`/market/requests/${req.body.request.id}/quotes`, { amount: 1800 }).expect(201)
