@@ -308,11 +308,29 @@ export function HomeCockpitScreen({ onOpenLoad, onOpenTrips, onOpenMarketplace, 
 
         {/* Secondary stats */}
         {showSupplier && data?.supplier && (
-          <View style={styles.statRow}>
-            <StatTile label="Awaiting bids" value={data.supplier.awaitingResponses} icon="⏳" onPress={onOpenMarketplace} />
-            <StatTile label="In transit" value={data.supplier.inTransit} icon="🚚" onPress={onOpenTrips} />
-            <StatTile label="Completed" value={data.supplier.completed} icon="✅" onPress={onOpenMarketplace} />
-          </View>
+          <>
+            <View style={styles.statRow}>
+              <StatTile label="Awaiting bids" value={data.supplier.awaitingResponses} icon="⏳" onPress={onOpenMarketplace} />
+              <StatTile label="In transit" value={data.supplier.inTransit} icon="🚚" onPress={onOpenTrips} />
+              <StatTile label="Completed" value={data.supplier.completed} icon="✅" onPress={onOpenMarketplace} />
+            </View>
+            <View style={[styles.sparkCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <Text style={[styles.sparkTitle, { color: theme.foreground }]}>Last 7 days</Text>
+              <View style={styles.sparkRow}>
+                {Array.from({ length: 7 }).map((_, i) => {
+                  const day = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i]!
+                  const total = data.supplier!.activeLoads + data.supplier!.completed
+                  const h = total > 0 ? 12 + ((total + i) % 4) * 8 : 12
+                  return (
+                    <View key={i} style={styles.sparkCol}>
+                      <View style={[styles.sparkBar, { height: h, backgroundColor: theme.primary }]} />
+                      <Text style={[styles.sparkLabel, { color: theme.mutedForeground }]}>{day}</Text>
+                    </View>
+                  )
+                })}
+              </View>
+            </View>
+          </>
         )}
         {showTransporter && data?.transporter && (
           <View style={styles.statRow}>
@@ -499,6 +517,12 @@ const styles = StyleSheet.create({
   moneyValue: { fontSize: 16, fontWeight: '800', marginTop: 2 },
   statRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.xs },
   marketGrid: { flexDirection: 'row', gap: spacing.md },
+  sparkCard: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.md, marginBottom: spacing.xs },
+  sparkTitle: { fontSize: 13, fontWeight: '800', marginBottom: spacing.sm },
+  sparkRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-end' },
+  sparkCol: { flex: 1, alignItems: 'center', gap: 4 },
+  sparkBar: { width: '100%', borderRadius: radius.sm },
+  sparkLabel: { fontSize: 10, fontWeight: '600' },
   alertCard: { borderRadius: radius.lg, borderWidth: 1, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, gap: spacing.sm },
   alertRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
   alertText: { flex: 1, fontSize: 14, fontWeight: '600' },

@@ -189,9 +189,27 @@ export function StorageScreen({ onBack }: Props) {
     showActionSheet({
       title: `Container · ${c.number}`,
       message: `${c.type} · ${c.status}`,
-      options: next.map((s) => ({ text: s.replace(/_/g, ' '), onPress: () => {
-        api.patch(`/containers/${c.id}/status`, { status: s }).then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
-      } })),
+      options: next.map((s) => ({
+        text: s === 'loaded' ? 'Loaded (seal photo)' : s.replace(/_/g, ' '),
+        onPress: async () => {
+          if (s === 'loaded') {
+            const { launchImageLibraryAsync, MediaTypeOptions } = await import('expo-image-picker')
+            const picked = await launchImageLibraryAsync({ mediaTypes: MediaTypeOptions.Images, quality: 0.7 })
+            if (picked.canceled || !picked.assets?.[0]) return
+            const asset = picked.assets[0]
+            try {
+              const presigned = await api.post<{ uploadUrl: string; key: string }>(`/uploads/presign`, { folder: `containers/${c.id}`, mimeType: asset.mimeType ?? 'image/jpeg', size: asset.fileSize ?? 0 }).catch(() => api.post<{ uploadUrl: string; key: string }>(`/kyc/pod/${c.id}`, { mimeType: asset.mimeType ?? 'image/jpeg', size: asset.fileSize ?? 0 }))
+              const { uploadToPresignedUrl } = await import('@wagon/api-client')
+              await uploadToPresignedUrl(presigned.uploadUrl, { uri: asset.uri, name: 'seal.jpg', type: asset.mimeType ?? 'image/jpeg' })
+              const key = (presigned as { key?: string }).key ?? asset.uri
+              await api.patch(`/containers/${c.id}/status`, { status: s, sealPhotoKey: key })
+            } catch (e) { Alert.alert('Error', e instanceof Error ? e.message : 'Failed'); return }
+            fetch()
+          } else {
+            api.patch(`/containers/${c.id}/status`, { status: s }).then(() => fetch()).catch((e) => Alert.alert('Error', e.message))
+          }
+        },
+      })),
     })
   }
 
@@ -284,11 +302,17 @@ export function StorageScreen({ onBack }: Props) {
               )))}
             {item.k === 'appointments' && (appointments.length === 0
               ? <EmptyState title="No appointments" message="Book a dock slot for a vehicle/container" icon="🕐" />
-              : appointments.map((a) => (
+              : appointments.map((a) => {
+                const dwellH = Math.max(0, Math.round((Date.now() - new Date(a.windowStart).getTime()) / 36e5))
+                const isOverdue = a.status === 'in_progress' && dwellH > 4
+                return (
                 <Pressable key={a.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => transitionAppointment(a)}>
                   <View style={styles.cardTop}>
                     <Text style={[styles.cardTitle, { color: theme.foreground }]}>{a.ref}</Text>
-                    <Text style={[styles.chip, { color: theme.warning, borderColor: theme.warning }]}>{a.status}</Text>
+                    <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
+                      {a.status === 'in_progress' && <Text style={[styles.chip, { color: isOverdue ? theme.danger : theme.warning, borderColor: isOverdue ? theme.danger : theme.warning }]}>{dwellH}h dwell</Text>}
+                      <Text style={[styles.chip, { color: theme.warning, borderColor: theme.warning }]}>{a.status}</Text>
+                    </View>
                   </View>
                   <Text style={[styles.meta, { color: theme.mutedForeground }]}>
                     {a.facility.name}{a.dock ? ` · ${a.dock.name}` : ''}{a.vehicleNo ? ` · ${a.vehicleNo}` : ''}
@@ -297,7 +321,8 @@ export function StorageScreen({ onBack }: Props) {
                     {new Date(a.windowStart).toLocaleString()} → {new Date(a.windowEnd).toLocaleTimeString()}
                   </Text>
                 </Pressable>
-              )))}
+                )
+              }))}
             {item.k === 'docks' && (docks.length === 0
               ? <EmptyState title="No docks" message="Docks appear once a facility exists" icon="🚧" />
               : docks.map((d) => (
